@@ -235,7 +235,7 @@ def genres():
         FROM track_tags
         GROUP BY tag
         ORDER BY cnt DESC
-        LIMIT 100
+        LIMIT 200
     ''').fetchall()
     conn.close()
     return jsonify([{'tag': r[0], 'count': r[1]} for r in rows])
