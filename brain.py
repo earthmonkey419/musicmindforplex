@@ -26,7 +26,6 @@ DEFAULT_FILTERS = {
     "country":        None,
     "era":            None,
     "instrumental":   None,
-    "genre_require":  False,
 }
 
 # --- Prompt Expansion ---
@@ -88,13 +87,7 @@ def search_tracks(tags, filters=None):
 
     params = []
 
-    if tags and f.get("genre") and not f.get("genre_require"):
-        # Boost mode with prompt — match prompt tags OR genre tags
-        keyword_conditions = " OR ".join(["tt.tag LIKE ?" for _ in tags])
-        genre_condition = "tt.tag LIKE ?"
-        params = [f"%{tag}%" for tag in tags] + [f"%{f['genre'].lower()}%"]
-        where_tags = f"({keyword_conditions} OR {genre_condition})"
-    elif tags:
+    if tags:
         keyword_conditions = " OR ".join(["tt.tag LIKE ?" for _ in tags])
         params = [f"%{tag}%" for tag in tags]
         where_tags = f"({keyword_conditions})"
@@ -124,16 +117,18 @@ def search_tracks(tags, filters=None):
     if f["unplayed"]:
         query += " AND t.play_count = 0"
     if f["genre"]:
-        if f.get("genre_require"):
-            # Hard filter — track must have matching genre tag
-            query += " AND EXISTS (SELECT 1 FROM track_tags WHERE track_tags.rating_key = t.rating_key AND track_tags.tag LIKE ?)"
-            params.append(f"%{f['genre'].lower()}%")
+        genre_val = f["genre"].lower().strip()
+        # Detect decade patterns: "50s", "60s", "1950s", "1960s" etc
+        import re
+        decade_match = re.match(r'^(?:19)?(\d0)s', genre_val)
+        if decade_match:
+            decade = decade_match.group(1) + 's'  # normalize to "50s", "60s" etc
+            query += " AND am.era = ?"
+            params.append(decade)
         else:
-            # Boost mode — add to match score but don't exclude
-            query = query.replace(
-                "COUNT(DISTINCT tt.tag) as match_score",
-                f"COUNT(DISTINCT tt.tag) + (SELECT COUNT(*) FROM track_tags gt WHERE gt.rating_key = t.rating_key AND gt.tag LIKE '%{f['genre'].lower()}%') * 2 as match_score"
-            )
+            # Match any tag containing the genre string
+            query += " AND EXISTS (SELECT 1 FROM track_tags WHERE track_tags.rating_key = t.rating_key AND track_tags.tag LIKE ?)"
+            params.append(f"%{genre_val}%")
     if f["min_year"]:
         query += " AND t.year >= ?"
         params.append(f["min_year"])

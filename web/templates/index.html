@@ -10,7 +10,7 @@
     <div class="container">
         <div class="site-header">
             <h1>🎵 Plex Music Brain</h1>
-            <div class="tagline">Dig through the stacks.</div>
+            <div class="tagline">Dig into your stacks.</div>
         </div>
         <div class="nav">
             <a href="/gaps">📋 Missing From Your Collection</a>
@@ -31,7 +31,7 @@
                     <option value="">Any</option>
                 </select>
             </label>
-            <label style="font-size:0.8rem;"><input type="checkbox" id="genre_require"> Require</label>
+
             <label>From year <input type="number" id="min_year" placeholder="1970"></label>
             <label>To year <input type="number" id="max_year" placeholder="2024"></label>
             <label>Limit <input type="number" id="limit" value="30"></label>
@@ -125,7 +125,7 @@
                 max_per_artist: document.getElementById('max_per_artist').value,
                 min_rating:     document.getElementById('min_rating').value || null,
                 instrumental:   document.getElementById('instrumental').checked ? 1 : null,
-                genre_require:  document.getElementById('genre_require').checked,
+
                 gender:         document.getElementById('gender').value || null,
                 country:        document.getElementById('country').value || null,
                 era:            document.getElementById('era').value || null,

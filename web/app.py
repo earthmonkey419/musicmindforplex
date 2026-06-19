@@ -38,7 +38,7 @@ def preview():
             'country':        data.get('country') or None,
             'era':            data.get('era') or None,
             'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
-            'genre_require':  data.get('genre_require', False),
+
         }
         tracks = search_tracks(tags, filters)
         return jsonify({'tags': tags, 'tracks': tracks})
