@@ -114,6 +114,14 @@
                 <div class="log-box" id="log-context"></div>
             </div>
         <div class="admin-card">
+                <h3>🎼 Tag Instrumentals</h3>
+                <p>Uses OpenAI to classify tracks as instrumental or vocal. Skips already-classified tracks. ~$0.50-1.00 one-time.</p>
+                <button onclick="runScript('instrumental', this)">Run Now</button>
+                <div class="status" id="status-instrumental"></div>
+                <div class="log-box" id="log-instrumental"></div>
+            </div>
+
+        <div class="admin-card">
                 <h3>📋 Refresh Gap Analysis</h3>
                 <p>Re-runs gap analysis against current library. Removes acquired artists, adds new ones.</p>
                 <button onclick="runScript('gaps', this)">Run Now</button>

@@ -25,9 +25,23 @@ DEFAULT_FILTERS = {
     "gender":         None,
     "country":        None,
     "era":            None,
+    "instrumental":   None,
+    "genre_require":  False,
 }
 
 # --- Prompt Expansion ---
+
+INSTRUMENTAL_KEYWORDS = ['instrumental', 'no vocals', 'no singing', 'without vocals', 'music only']
+VOCAL_KEYWORDS = ['vocal', 'with vocals', 'singing', 'singer', 'with lyrics']
+
+def detect_instrumental_intent(prompt):
+    """Returns 1 for instrumental, 0 for vocal, None for no preference."""
+    p = prompt.lower()
+    if any(k in p for k in INSTRUMENTAL_KEYWORDS):
+        return 1
+    if any(k in p for k in VOCAL_KEYWORDS):
+        return 0
+    return None
 
 def expand_prompt(prompt):
     """
@@ -74,7 +88,13 @@ def search_tracks(tags, filters=None):
 
     params = []
 
-    if tags:
+    if tags and f.get("genre") and not f.get("genre_require"):
+        # Boost mode with prompt — match prompt tags OR genre tags
+        keyword_conditions = " OR ".join(["tt.tag LIKE ?" for _ in tags])
+        genre_condition = "tt.tag LIKE ?"
+        params = [f"%{tag}%" for tag in tags] + [f"%{f['genre'].lower()}%"]
+        where_tags = f"({keyword_conditions} OR {genre_condition})"
+    elif tags:
         keyword_conditions = " OR ".join(["tt.tag LIKE ?" for _ in tags])
         params = [f"%{tag}%" for tag in tags]
         where_tags = f"({keyword_conditions})"
@@ -104,8 +124,16 @@ def search_tracks(tags, filters=None):
     if f["unplayed"]:
         query += " AND t.play_count = 0"
     if f["genre"]:
-        query += " AND EXISTS (SELECT 1 FROM track_tags WHERE track_tags.rating_key = t.rating_key AND track_tags.tag LIKE ?)"
-        params.append(f"%{f['genre'].lower()}%")
+        if f.get("genre_require"):
+            # Hard filter — track must have matching genre tag
+            query += " AND EXISTS (SELECT 1 FROM track_tags WHERE track_tags.rating_key = t.rating_key AND track_tags.tag LIKE ?)"
+            params.append(f"%{f['genre'].lower()}%")
+        else:
+            # Boost mode — add to match score but don't exclude
+            query = query.replace(
+                "COUNT(DISTINCT tt.tag) as match_score",
+                f"COUNT(DISTINCT tt.tag) + (SELECT COUNT(*) FROM track_tags gt WHERE gt.rating_key = t.rating_key AND gt.tag LIKE '%{f['genre'].lower()}%') * 2 as match_score"
+            )
     if f["min_year"]:
         query += " AND t.year >= ?"
         params.append(f["min_year"])
@@ -133,6 +161,9 @@ def search_tracks(tags, filters=None):
     if f.get("era"):
         query += " AND am.era = ?"
         params.append(f["era"])
+    if f.get("instrumental") is not None:
+        query += " AND t.is_instrumental = ?"
+        params.append(f["instrumental"])
 
     query += """
         GROUP BY t.artist, t.title

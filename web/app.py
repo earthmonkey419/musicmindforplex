@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
-from brain import expand_prompt, search_tracks, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB
+from brain import expand_prompt, search_tracks, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent
 from config import DB_PATH, BASE_DIR
 
 app = Flask(__name__)
@@ -37,6 +37,8 @@ def preview():
             'gender':         data.get('gender') or None,
             'country':        data.get('country') or None,
             'era':            data.get('era') or None,
+            'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
+            'genre_require':  data.get('genre_require', False),
         }
         tracks = search_tracks(tags, filters)
         return jsonify({'tags': tags, 'tracks': tracks})
@@ -78,6 +80,7 @@ def run_script(script):
         'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py'),
         'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
         'context':  os.path.join(BASE_DIR, 'listening_context.py'),
+        'instrumental': os.path.join(BASE_DIR, 'tag_instrumentals.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400
