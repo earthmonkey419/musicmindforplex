@@ -27,7 +27,7 @@ Type "late night psychedelic soul" and get a playlist. Filter by female artists 
 - Synology NAS (tested on DS920+, DSM 7.x) or any Linux box running Plex
 - Python 3.12
 - Plex Media Server
-- OpenAI API key (~$2 one-time cost for initial tagging of 15K tracks, then pennies for new music)
+- OpenAI API key (see [OpenAI pricing](https://openai.com/pricing) for current rates)
 - Last.fm account + free API key
 - PM2 (for running the web app as a service)
 
@@ -77,10 +77,7 @@ Type "late night psychedelic soul" and get a playlist. Filter by female artists 
 
 ## Cost
 
-Initial AI tagging (15K tracks): ~$2 one-time via OpenAI gpt-4o-mini
-Per new track ongoing: ~$0.00001
-Last.fm API: Free
-Everything else: Free
+OpenAI API costs vary depending on your library size and usage. Initial tagging of a large library typically costs a few dollars; ongoing costs for new tracks are minimal. Last.fm API and everything else is free. See [OpenAI pricing](https://openai.com/pricing) for current rates.
 
 ---
 

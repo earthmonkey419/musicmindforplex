@@ -21,4 +21,3 @@ OPENAI_KEY = "YOUR_OPENAI_API_KEY"         # sk-proj-...
 # Last.fm
 LASTFM_KEY  = "YOUR_LASTFM_API_KEY"        # from last.fm/api
 LASTFM_USER = "YOUR_LASTFM_USERNAME"
-\n# Set True on master install to disable update button\nIS_MASTER = False
