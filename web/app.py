@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Plex Music Brain - Flask Web UI
+MusicMind for Plex - Flask Web UI
 """
 
 import sys
@@ -8,14 +8,15 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
+from datetime import datetime
 from brain import expand_prompt, classify_prompt, search_tracks, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent
-from config import DB_PATH, BASE_DIR, IS_MASTER
+from config import DB_PATH, BASE_DIR, IS_MASTER, LASTFM_KEY
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
 
 @app.route('/preview', methods=['POST'])
 def preview():
@@ -93,13 +94,13 @@ running = {}
 
 @app.route('/admin')
 def admin():
-    return render_template('admin.html')
+    return render_template('admin.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
 
 @app.route('/run/<script>')
 def run_script(script):
     scripts = {
         'ingest':   os.path.join(BASE_DIR, 'plex_music_brain_ingest.py'),
-        'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py'),
+        'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py') if LASTFM_KEY else None,
         'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
         'context':  os.path.join(BASE_DIR, 'listening_context.py'),
         'instrumental': os.path.join(BASE_DIR, 'tag_instrumentals.py'),
@@ -323,7 +324,7 @@ def update():
             'path': BASE_DIR,
         }
 
-    return render_template('update.html', git=git_info, is_master=IS_MASTER)
+    return render_template('update.html', git=git_info, is_master=IS_MASTER, year=datetime.now().year)
 
 @app.route('/logs')
 def logs():
@@ -355,11 +356,11 @@ def logs():
             'completion_tokens': row[11] or 0,
             'cost_usd':          row[12] or 0,
         })
-    return render_template('logs.html', entries=entries)
+    return render_template('logs.html', entries=entries, year=datetime.now().year)
 
 @app.route('/stats')
 def stats():
-    return render_template('stats.html')
+    return render_template('stats.html', year=datetime.now().year)
 
 @app.route('/stats/data')
 def stats_data():
@@ -414,7 +415,7 @@ def stats_data():
 
 @app.route('/db')
 def db_console():
-    return render_template('query.html')
+    return render_template('query.html', year=datetime.now().year)
 
 @app.route('/gaps')
 def gaps():
@@ -436,7 +437,7 @@ def gaps():
             'artists': [{'artist': r[0], 'scrobbles': r[1]} for r in rows]
         })
     conn.close()
-    return render_template('gaps.html', buckets=buckets)
+    return render_template('gaps.html', buckets=buckets, year=datetime.now().year)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8787, debug=False)

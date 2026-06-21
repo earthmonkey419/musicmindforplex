@@ -1,8 +1,9 @@
-# 🎵 Plex Music Brain
+# 🎵 MusicMind for Plex
+*formerly Plex Music Brain*
 
 > The AI-powered music companion Plex should have built.
 
-Plex Music Brain connects your Plex music library to OpenAI and Last.fm to generate intelligent playlists, enrich your library with specific genre tags, analyze your listening history, and surface gaps in your collection.
+MusicMind for Plex connects your Plex music library to OpenAI and Last.fm to generate intelligent playlists, enrich your library with specific genre tags, analyze your listening history, and surface gaps in your collection.
 
 Type "late night psychedelic soul" and get a playlist. Filter by female artists from the 70s. Find out you have scrobbled Stereolab 247 times but don't own a single album. It all runs on your NAS — no subscriptions, no cloud, your data stays yours.
 
@@ -125,3 +126,4 @@ See PLEX-MUSIC-BRAIN.md for complete documentation including all script flags, d
 MIT — see LICENSE
 
 Built by @earthmonkey419 (https://github.com/earthmonkey419)
+https://github.com/earthmonkey419/musicmindforplex

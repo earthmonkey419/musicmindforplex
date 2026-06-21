@@ -18,6 +18,7 @@ MUSIC_LIB  = "Music"                       # your Plex music library name
 # OpenAI
 OPENAI_KEY = "YOUR_OPENAI_API_KEY"         # sk-proj-...
 
-# Last.fm
-LASTFM_KEY  = "YOUR_LASTFM_API_KEY"        # from last.fm/api
-LASTFM_USER = "YOUR_LASTFM_USERNAME"
+# Last.fm (optional — leave blank to disable Last.fm features)
+# Get a free API key at https://www.last.fm/api/account/create
+LASTFM_KEY  = ""    # from last.fm/api — leave blank to disable
+LASTFM_USER = ""    # your last.fm username — leave blank to disable

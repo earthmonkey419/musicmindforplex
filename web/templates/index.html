@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plex Music Brain</title>
+    <link rel="icon" type="image/png" href="https://plexmusicbrain.vp-fun.com/assets/logo.png">
+    <title>MusicMind for Plex</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -22,13 +23,13 @@
         </div>
     </div>
     <div class="container">
-        <div class="mobile-note">🖥️ Plex Music Brain is optimized for desktop. Some features may not work well on mobile.</div>
+        <div class="mobile-note">🖥️ MusicMind for Plex is optimized for desktop. Some features may not work well on mobile.</div>
         <div class="site-header">
-            <h1><img src="https://plexmusicbrain.vp-fun.com/assets/logo.png" alt="🎵" style="width:44px;height:44px;border-radius:50%;vertical-align:middle;margin-right:0.5rem;position:relative;top:-2px;">Plex Music Brain</h1>
+            <h1><img src="https://plexmusicbrain.vp-fun.com/assets/logo.png" alt="🎵" style="width:44px;height:44px;border-radius:50%;vertical-align:middle;margin-right:0.5rem;position:relative;top:-2px;">MusicMind for Plex</h1>
             <div class="tagline">Dig into your stacks.</div>
         </div>
         <div class="nav">
-            <a href="/gaps">📋 Missing From Your Collection</a>
+            {% if lastfm_enabled %}<a href="/gaps">📋 Missing From Your Collection</a>{% endif %}
             <a href="/stats">📊 The Collection</a>
             <a href="/admin">⚙️ Admin</a>
             <a href="/db">🗄️ DB Console</a>
@@ -232,6 +233,7 @@
                 const data = await res.json();
                 if (data.success) {
                     showToast(`✅ "${data.name}" created in Plex with ${data.count} tracks!`, 'success');
+                    loadPlaylists();
                 } else {
                     showToast('Error: ' + data.error, 'error');
                 }
@@ -275,6 +277,7 @@
         }
     </script>
 </div><!-- page-wrap -->
+{% include "footer.html" %}
 <script>
 const PLEX_MACHINE_ID = '7bb3b3a55e7261db369f9512ebf7182fcbb4e595';
 let allPlaylists = [];

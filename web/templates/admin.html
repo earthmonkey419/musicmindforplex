@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plex Music Brain — Admin</title>
+    <title>MusicMind for Plex — Admin</title>
+    <link rel="icon" type="image/png" href="https://plexmusicbrain.vp-fun.com/assets/logo.png">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -39,6 +40,7 @@
                 <div class="log-box" id="log-ingest"></div>
             </div>
 
+            {% if lastfm_enabled %}
             <div class="admin-card">
                 <h3>🎵 Sync Last.fm</h3>
                 <p>Pulls new scrobbles since last sync. Updates play counts and loved tracks.</p>
@@ -46,6 +48,7 @@
                 <div class="status" id="status-lastfm"></div>
                 <div class="log-box" id="log-lastfm"></div>
             </div>
+            {% endif %}
 
             <div class="admin-card">
                 <h3>🏷️ Tag New Tracks</h3>
@@ -141,5 +144,6 @@
             };
         }
     </script>
+{% include "footer.html" %}
 </body>
 </html>

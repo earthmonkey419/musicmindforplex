@@ -1,4 +1,4 @@
-/* Plex Music Brain — Record Store Theme */
+/* MusicMind for Plex — Record Store Theme */
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -643,3 +643,20 @@ h1.page-title {
 @media (max-width: 600px) {
     .mobile-note { display: block; }
 }
+
+/* App footer */
+.app-footer {
+    max-width: 860px;
+    margin: 1rem auto 0;
+    padding: 1rem 2rem;
+    font-size: 0.72rem;
+    color: #8b6914;
+    border-top: 1px solid #c9b99a;
+    background: rgba(245,240,232,0.92);
+    border-radius: 0 0 4px 4px;
+    position: relative;
+    z-index: 1;
+}
+
+.app-footer a { color: #8b6914; }
+.app-footer a:hover { text-decoration: underline; }
