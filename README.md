@@ -12,7 +12,7 @@ Type "late night psychedelic soul" and get a playlist. Filter by female artists 
 ## What it does
 
 - Natural language playlists — "quiet and watery", "garagy grungy rock", "sunny day driving with the windows down". OpenAI expands your prompt into specific music tags and scores your library against them.
-- AI genre enrichment — your entire library gets tagged with specific subgenres (shoegaze, dance-punk, balearic, cosmic disco, etc) and written back into Plex. Plexamp genre browser goes from 14 useless buckets to hundreds of meaningful ones.
+- AI genre enrichment — your entire library gets tagged with specific subgenres (shoegaze, dance-punk, balearic, cosmic disco, etc). Tags are stored in the MusicMind database and power the playlist generator. **Plex is not touched.** Optionally, you can write these tags back into Plex to enrich the Plexamp genre browser — but this is entirely optional and fully revertable.
 - Last.fm integration — your scrobble history drives real play counts, listening patterns, and loved track ratings. Plex play counts are unreliable; Last.fm is not.
 - Listening context playlists — "Your Afternoon" (what you actually play 1-5pm), "Weekend Flow", and "Often Together" (tracks that appear in the same listening session, cross-artist, album pairs excluded).
 - Library gap analysis — artists you have scrobbled 50+ times that are not in your library, categorized into Worth Acquiring, Classical, Ambient/Meditation, and Unknown.
@@ -54,8 +54,11 @@ Type "late night psychedelic soul" and get a playlist. Filter by female artists 
     python3.12 lastfm_sync.py
     python3.12 lastfm_gaps.py
     python3.12 listening_context.py
-    sudo python3.12 write_genres_to_plex.py --test
-    sudo python3.12 write_genres_to_plex.py --run
+    # Optional — writes AI genres back into Plex (Plexamp genre browser)
+    # Skip these if you don't want to modify your Plex metadata
+    sudo python3.12 write_genres_to_plex.py --test   # preview only, nothing written
+    sudo python3.12 write_genres_to_plex.py --run    # actually writes to Plex
+    # To undo: sudo python3.12 write_genres_to_plex.py --revert
 
 4. Start the web app
 
