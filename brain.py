@@ -48,37 +48,93 @@ def detect_instrumental_intent(prompt):
 
 def classify_prompt(prompt):
     """
-    Classify a prompt into intent type before processing.
-    Returns dict: {intent, search_term}
-    Intents: mood, title_search, artist_search, year_search
+    Multi-dimensional prompt analysis. Returns structured dict with:
+    - intent: "mood", "title_search", "artist_search", or "filter_only"
+    - mood: mood/vibe description if present (for expand_prompt)
+    - genre: explicit genre mentioned if any
+    - title_search: specific title words to search for
+    - artist_search: specific artist name to search for
+    - filters: dict of detected filters {gender, country, era, year}
     """
     import json
+
+    country_map = {
+        'brazilian': 'BR', 'brazil': 'BR',
+        'jamaican': 'JM', 'jamaica': 'JM',
+        'british': 'UK', 'uk': 'UK', 'english': 'UK',
+        'american': 'US', 'usa': 'US',
+        'french': 'FR', 'france': 'FR',
+        'nigerian': 'NG', 'nigeria': 'NG',
+        'cuban': 'CU', 'cuba': 'CU',
+        'japanese': 'JP', 'japan': 'JP',
+        'german': 'DE', 'germany': 'DE',
+        'australian': 'AU', 'australia': 'AU',
+    }
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0,
         messages=[{
             "role": "user",
-            "content": f"""Classify this music search prompt into exactly one intent:
-
-- "title_search" — user wants songs with specific words in the title (e.g. "songs with ocean in the name", "tracks with love in the title")
-- "artist_search" — user wants songs by a specific artist (e.g. "songs by Miles Davis", "tracks by The Beatles")
-- "year_search" — user wants songs from a specific year or range (e.g. "music from 1975", "songs from the 80s")
-- "mood" — user describes a feeling, vibe, activity, or situation (e.g. "late night jazz", "driving to the airport", "sunny day cooking")
+            "content": f"""Analyze this music search prompt across multiple dimensions.
 
 Prompt: "{prompt}"
 
-Respond ONLY with JSON: {{"intent": "mood", "search_term": null}}
-For title_search, artist_search, year_search: extract the search term.
-Example: {{"intent": "title_search", "search_term": "ocean"}}
-Example: {{"intent": "artist_search", "search_term": "Miles Davis"}}
-Example: {{"intent": "year_search", "search_term": "1975"}}
-Example: {{"intent": "mood", "search_term": null}}"""
+Answer each dimension:
+
+1. INTENT: What is the primary intent?
+   - "title_search" — searching for songs with specific words IN THE TITLE (e.g. "songs with ocean in the name")
+   - "artist_search" — searching for songs BY A SPECIFIC NAMED ARTIST (e.g. "songs by Miles Davis", "tracks by The Beatles"). ONLY use this if a specific artist name is mentioned.
+   - "filter_only" — filtering by attributes with no mood (e.g. "female Brazilian artists from the 1970s", "unplayed reggae")
+   - "mood" — describing a feeling, vibe, activity, or situation
+
+2. MOOD: If there is a mood/vibe/feeling/activity, describe it in 3-5 words. null if none.
+
+3. GENRE: Is a specific genre explicitly mentioned? (e.g. "jazz", "reggae", "classical"). null if none.
+
+4. TITLE_SEARCH: If intent is title_search, what words to search for in track titles? null if not title search.
+
+5. ARTIST_SEARCH: If a SPECIFIC artist name is mentioned, what is it? null if no specific artist named. Do NOT use this for demographic descriptions like "female artists" or "Brazilian artists".
+
+6. FILTERS: Detect any of these filters from the prompt:
+   - gender: "female", "male", or "mixed" if mentioned. null if not mentioned.
+   - country: 2-letter country code if a nationality/country is mentioned. null if not.
+   - era: decade like "70s", "80s" if mentioned. null if not.
+   - year: specific year like "1975" if mentioned. null if not.
+
+Respond ONLY with valid JSON, no explanation:
+{{
+  "intent": "mood",
+  "mood": "late night intimate jazz",
+  "genre": "jazz",
+  "title_search": null,
+  "artist_search": null,
+  "filters": {{
+    "gender": "female",
+    "country": "BR",
+    "era": "70s",
+    "year": null
+  }}
+}}"""
         }]
     )
+
     raw = response.choices[0].message.content.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    return json.loads(raw)
+
+    result = json.loads(raw)
+
+    # Normalize filters
+    f = result.get("filters", {}) or {}
+    result["filters"] = {
+        "gender":  f.get("gender"),
+        "country": f.get("country"),
+        "era":     f.get("era"),
+        "year":    f.get("year"),
+    }
+
+    return result
 
 
 def expand_prompt(prompt):

@@ -24,7 +24,7 @@
     <div class="container">
         <div class="mobile-note">🖥️ Plex Music Brain is optimized for desktop. Some features may not work well on mobile.</div>
         <div class="site-header">
-            <h1>🎵 Plex Music Brain</h1>
+            <h1><img src="https://plexmusicbrain.vp-fun.com/assets/logo.png" alt="🎵" style="width:44px;height:44px;border-radius:50%;vertical-align:middle;margin-right:0.5rem;position:relative;top:-2px;">Plex Music Brain</h1>
             <div class="tagline">Dig into your stacks.</div>
         </div>
         <div class="nav">
@@ -163,17 +163,28 @@
 
                 // Show tags or intent info
                 const tagsRow = document.getElementById('tags-row');
-                if (data.intent && data.intent !== 'mood') {
-                    const intentLabels = {
-                        'title_search': '🔍 Title search',
-                        'artist_search': '🎤 Artist search',
-                        'year_search': '📅 Year search',
-                    };
-                    const label = intentLabels[data.intent] || data.intent;
-                    tagsRow.innerHTML = `<span class="tag">${label}: "${data.search_term}"</span>`;
-                    tagsRow.style.display = 'flex';
-                } else if (data.tags && data.tags.length > 0) {
-                    tagsRow.innerHTML = data.tags.map(t => `<span class="tag">${t}</span>`).join('');
+                const pills = [];
+
+                // Intent pills
+                if (data.intent === 'title_search' && data.search_term)
+                    pills.push(`🔍 Title: "${data.search_term}"`);
+                else if (data.intent === 'artist_search' && data.search_term)
+                    pills.push(`🎤 Artist: "${data.search_term}"`);
+                else if (data.intent === 'year_search' && data.search_term)
+                    pills.push(`📅 Year: "${data.search_term}"`);
+
+                // Detected filter pills
+                const df = data.detected_filters || {};
+                if (df.gender)  pills.push(`👤 ${df.gender}`);
+                if (df.country) pills.push(`🌍 ${df.country}`);
+                if (df.era)     pills.push(`📅 ${df.era}`);
+
+                // Mood tags
+                if (data.tags && data.tags.length > 0)
+                    data.tags.forEach(t => pills.push(t));
+
+                if (pills.length > 0) {
+                    tagsRow.innerHTML = pills.map(p => `<span class="tag">${p}</span>`).join('');
                     tagsRow.style.display = 'flex';
                 } else {
                     tagsRow.style.display = 'none';

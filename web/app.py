@@ -26,15 +26,21 @@ def preview():
         tags = []
         intent = 'mood'
         search_term = None
+        detected_filters = {}
+        classification = {}
 
         if prompt:
             classification = classify_prompt(prompt)
-            intent = classification.get('intent', 'mood')
-            search_term = classification.get('search_term')
+            intent      = classification.get('intent', 'mood')
+            search_term = classification.get('title_search') or classification.get('artist_search')
+            detected_filters = classification.get('filters', {}) or {}
 
-            if intent == 'mood':
-                tags = expand_prompt(prompt)
-            # title/artist/year handled via filters below
+            # Expand mood if there is a mood component
+            mood = classification.get('mood')
+            if mood and intent in ('mood', 'filter_only'):
+                if intent == 'mood':
+                    tags = expand_prompt(prompt)
+                # for filter_only with no mood, skip expansion
 
         filters = {
             'unplayed':       data.get('unplayed', False),
@@ -46,18 +52,18 @@ def preview():
             'limit':          int(data.get('limit', 30)),
             'max_per_artist': int(data.get('max_per_artist', 3)),
             'min_rating':     float(data['min_rating']) if data.get('min_rating') else None,
-            'gender':         data.get('gender') or None,
-            'country':        data.get('country') or None,
-            'era':            data.get('era') or None,
+            'gender':         data.get('gender') or detected_filters.get('gender') or None,
+            'country':        data.get('country') or detected_filters.get('country') or None,
+            'era':            data.get('era') or detected_filters.get('era') or None,
             'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
-            'title_search':   search_term if intent == 'title_search' else None,
-            'artist_search':  search_term if intent == 'artist_search' else None,
-            'year_search':    search_term if intent == 'year_search' else None,
+            'title_search':   classification.get('title_search'),
+            'artist_search':  classification.get('artist_search'),
+            'year_search':    detected_filters.get('year') or (search_term if intent == 'year_search' else None),
             'intent':         intent,
 
         }
         tracks = search_tracks(tags, filters)
-        return jsonify({'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term})
+        return jsonify({'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
