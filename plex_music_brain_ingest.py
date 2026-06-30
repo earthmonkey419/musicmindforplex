@@ -48,6 +48,11 @@ def init_db(conn):
 def ingest(conn, plex):
     music = plex.library.section(MUSIC_LIBRARY)
     artists = music.searchArtists()
+    last_ingest = get_last_ingest(conn)
+    if last_ingest:
+        print(f"Incremental ingest since {last_ingest}\n")
+    else:
+        print("No previous ingest found. Running full ingest.\n")
     total_artists = len(artists)
     print(f"Found {total_artists} artists. Starting ingest...\n")
 
@@ -62,6 +67,12 @@ def ingest(conn, plex):
                 if not track.title and not artist.title:
                     skipped += 1
                     continue
+
+                # Incremental skip — only process tracks added since last ingest
+                if last_ingest and track.addedAt:
+                    if track.addedAt.isoformat() <= last_ingest:
+                        skipped += 1
+                        continue
 
                 genre = None
                 if artist.genres:
@@ -102,6 +113,7 @@ def ingest(conn, plex):
                     print(f"  {inserted} tracks ingested... (artist {i}/{total_artists})")
 
     conn.commit()
+    set_last_ingest(conn, now)
     print(f"\nDone. {inserted} tracks ingested, {skipped} skipped.")
     print(f"Database: {DB_PATH}")
 
