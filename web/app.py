@@ -256,18 +256,31 @@ def scan():
 def playlists():
     import urllib.request, json
     try:
+        # Fetch the server's own machine identifier so playlist links work
+        # correctly regardless of which Plex server this instance connects
+        # to. No auth token required for /identity.
+        identity_req = urllib.request.Request(
+            f"{PLEX_URL}/identity",
+            headers={'Accept': 'application/json'}
+        )
+        identity_data = json.loads(urllib.request.urlopen(identity_req).read())
+        machine_id = identity_data.get('MediaContainer', {}).get('machineIdentifier', '')
+
         req = urllib.request.Request(
             f"{PLEX_URL}/playlists?X-Plex-Token={PLEX_TOKEN}&playlistType=audio",
             headers={'Accept': 'application/json'}
         )
         data = json.loads(urllib.request.urlopen(req).read())
         items = data['MediaContainer'].get('Metadata', [])
-        return jsonify([{
-            'title':      p['title'],
-            'key':        p['ratingKey'],
-            'trackCount': p.get('leafCount', 0),
-            'addedAt':    p.get('addedAt', 0),
-        } for p in items])
+        return jsonify({
+            'machineId': machine_id,
+            'playlists': [{
+                'title':      p['title'],
+                'key':        p['ratingKey'],
+                'trackCount': p.get('leafCount', 0),
+                'addedAt':    p.get('addedAt', 0),
+            } for p in items]
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

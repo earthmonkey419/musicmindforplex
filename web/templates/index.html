@@ -279,13 +279,15 @@
 </div><!-- page-wrap -->
 {% include "footer.html" %}
 <script>
-const PLEX_MACHINE_ID = '7bb3b3a55e7261db369f9512ebf7182fcbb4e595';
+let PLEX_MACHINE_ID = '';
 let allPlaylists = [];
 
 async function loadPlaylists() {
     try {
         const res = await fetch('/playlists');
-        allPlaylists = await res.json();
+        const data = await res.json();
+        PLEX_MACHINE_ID = data.machineId || '';
+        allPlaylists = data.playlists || [];
         allPlaylists.sort((a,b) => b.addedAt - a.addedAt);
         renderPlaylists(allPlaylists);
     } catch(e) {
