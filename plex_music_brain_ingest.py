@@ -45,6 +45,40 @@ def init_db(conn):
     conn.commit()
     print(f"Database ready: {DB_PATH}\n")
 
+def reconcile_removed_tracks(conn, seen_rating_keys):
+    """
+    Removes tracks (and their tags/orphaned artist_meta) that no longer
+    exist in Plex. seen_rating_keys must be the COMPLETE set of rating
+    keys observed during a full walk of the Plex library — only call
+    this after a successful, uninterrupted ingest loop.
+    """
+    local_keys = set(row[0] for row in conn.execute("SELECT rating_key FROM tracks").fetchall())
+    removed_keys = local_keys - seen_rating_keys
+
+    if not removed_keys:
+        print("Reconciliation: no removed tracks found.\n")
+        return 0
+
+    placeholders = ",".join("?" for _ in removed_keys)
+    removed_list = list(removed_keys)
+
+    conn.execute(f"DELETE FROM track_tags WHERE rating_key IN ({placeholders})", removed_list)
+    conn.execute(f"DELETE FROM tracks WHERE rating_key IN ({placeholders})", removed_list)
+
+    # Clean up any artist_meta rows for artists with zero tracks remaining
+    conn.execute("""
+        DELETE FROM artist_meta
+        WHERE artist NOT IN (
+            SELECT DISTINCT COALESCE(real_artist, artist) FROM tracks
+            WHERE COALESCE(real_artist, artist) IS NOT NULL
+        )
+    """)
+
+    conn.commit()
+    print(f"Reconciliation: removed {len(removed_keys)} tracks no longer in Plex.\n")
+    return len(removed_keys)
+
+
 def ingest(conn, plex):
     music = plex.library.section(MUSIC_LIBRARY)
     artists = music.searchArtists()
@@ -59,10 +93,13 @@ def ingest(conn, plex):
     inserted = 0
     skipped = 0
     now = datetime.now().isoformat()
+    seen_rating_keys = set()
 
     for i, artist in enumerate(artists, 1):
         for album in artist.albums():
             for track in album.tracks():
+                seen_rating_keys.add(str(track.ratingKey))
+
                 # Skip tracks with no title AND no artist
                 if not track.title and not artist.title:
                     skipped += 1
@@ -115,6 +152,11 @@ def ingest(conn, plex):
     conn.commit()
     set_last_ingest(conn, now)
     print(f"\nDone. {inserted} tracks ingested, {skipped} skipped.")
+
+    # Only reconcile after a fully successful walk of the entire library —
+    # seen_rating_keys is complete and safe to compare against.
+    reconcile_removed_tracks(conn, seen_rating_keys)
+
     print(f"Database: {DB_PATH}")
 
 def main():
