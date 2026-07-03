@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicMind for Plex — User Guide</title>
+    <link rel="icon" type="image/png" href="https://musicmind.vp-fun.com/assets/logo.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav"><a href="/">← Back to the Stacks</a></div>
+        <h1 class="page-title">📖 User Guide</h1>
+        <p class="page-subtitle">Everything you need to know to dig into your stacks — from setup to advanced filtering.</p>
+
+        <div class="guide-nav">
+            <span class="guide-nav-label">Get Started</span>
+            <a href="#quickstart">Quick Start</a>
+            <span class="guide-nav-label">Reference</span>
+            <a href="#playlists">Playlists</a>
+            <a href="#sidebar">Sidebar</a>
+            <a href="#gaps">Missing From Your Collection</a>
+            <a href="#stats">The Collection</a>
+            <a href="#backoffice">Back Office</a>
+            <a href="#enrichment">MusicBrainz &amp; AI</a>
+            <a href="#ledger">The Ledger</a>
+            <a href="#logs">Query Logs</a>
+            <a href="#tests">Tests</a>
+            <a href="#update">Update</a>
+        </div>
+
+        <p class="guide-intro">
+            MusicMind for Plex is a self-hosted AI music companion for your Plex library —
+            natural language playlists, deep listening analysis, and a smarter genre system,
+            all running on your own hardware.
+        </p>
+
+        <!-- ═══════════════════ QUICK START ═══════════════════ -->
+        <div class="guide-section" id="quickstart">
+            <h2>🚀 Quick Start</h2>
+            <div class="guide-steps">
+                <div class="guide-step">
+                    <div class="guide-step-num">1</div>
+                    <div class="guide-step-text">
+                        Install dependencies:
+                        <code>sudo python3.12 -m pip install plexapi openai flask mutagen --break-system-packages</code>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="guide-step-num">2</div>
+                    <div class="guide-step-text">
+                        Get your Plex token — play any item in Plex, click <strong>...</strong> → <strong>Get Info</strong> → <strong>View XML</strong>,
+                        and copy the <code>X-Plex-Token</code> value from the URL.
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="guide-step-num">3</div>
+                    <div class="guide-step-text">
+                        Copy <code>config.example.py</code> to <code>config.py</code> and fill in your Plex URL, token,
+                        OpenAI key, and (optionally) your Last.fm key.
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="guide-step-num">4</div>
+                    <div class="guide-step-text">
+                        Run the initial setup scripts in order — ingest your library, AI-tag your tracks,
+                        enrich artist metadata, and sync Last.fm if configured. See the README for the full sequence.
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="guide-step-num">5</div>
+                    <div class="guide-step-text">
+                        Start the app: <code>sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py</code>
+                        then open <code>http://YOUR_NAS_IP:8787</code> in your browser.
+                    </div>
+                </div>
+            </div>
+            <div class="guide-tip">
+                <strong>Tip:</strong> After setup, use <a href="/admin">⚙️ Back Office</a> → <strong>Full Sync</strong>
+                any time you add new music — it scans Plex, ingests, syncs Last.fm, enriches artists, and tags tracks
+                in one click.
+            </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ PLAYLISTS ═══════════════════ -->
+        <div class="guide-section" id="playlists">
+            <h2>🎵 Generating Playlists</h2>
+            <p>Type anything into the prompt box and hit <strong>Preview</strong>. MusicMind figures out what you mean:</p>
+
+            <div class="guide-card-row">
+                <div class="guide-card">
+                    <span class="guide-card-title">Mood or vibe</span>
+                    <p>"late night psychedelic soul", "grandma's birthday party" — expands into 2-3 focused vibes and searches your library's AI tags.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">Title search</span>
+                    <p>"songs with ocean in the name" — searches track titles directly, no AI needed.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">Artist search</span>
+                    <p>"tracks by Miles Davis" — finds tracks by that specific artist.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">Filter queries</span>
+                    <p>"female Brazilian artists from the 1970s" — detects gender, country, and era, applies them as filters automatically.</p>
+                </div>
+            </div>
+
+            <h3>Filters</h3>
+            <ul>
+                <li><strong>Unplayed only</strong> — restrict to 0-play tracks</li>
+                <li><strong>Instrumental only</strong> — restrict to tracks classified as instrumental</li>
+                <li><strong>Genre</strong> — Decades (search artist era) and Genres (search AI tags), shown as two sections in the dropdown</li>
+                <li><strong>From year / To year</strong> — restrict by release year range</li>
+                <li><strong>Tracks per artist</strong> — cap how many tracks from one artist can appear (default 1)</li>
+                <li><strong>Gender / Country / Era</strong> — filter by artist metadata</li>
+            </ul>
+
+            <div class="guide-tip">
+                <strong>Tip:</strong> Prompt and filters combine. "Late night jazz" + Gender=female + Era=60s finds
+                late night jazz from female artists of the 60s.
+            </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+        <div class="guide-section" id="sidebar">
+            <h2>🎧 Playlist Sidebar</h2>
+            <p>
+                The left sidebar on the main page shows all your Plex music playlists — sortable by
+                <strong>Recent</strong>, <strong>A-Z</strong>, or <strong>Track count</strong>. Click any playlist to
+                open it in the Plex web player. The sidebar refreshes automatically whenever you create a new playlist.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ GAPS ═══════════════════ -->
+        <div class="guide-section" id="gaps">
+            <h2>📋 Missing From Your Collection</h2>
+            <p>
+                Shows artists you've scrobbled 50+ times on Last.fm that aren't in your Plex library — grouped into
+                <strong>Worth Acquiring</strong>, <strong>Classical</strong>, <strong>Ambient / Meditation</strong>, and
+                <strong>Unknown</strong>. Sorted by scrobble count, most played first.
+            </p>
+            <p><em>Requires Last.fm to be configured.</em></p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ STATS ═══════════════════ -->
+        <div class="guide-section" id="stats">
+            <h2>📊 The Collection</h2>
+            <p>Your library and listening history at a glance — six charts covering listening history by year, top artists, top genres, library by era, library by country, and artists by gender.</p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ BACK OFFICE ═══════════════════ -->
+        <div class="guide-section" id="backoffice">
+            <h2>⚙️ Back Office</h2>
+            <p>One-click maintenance jobs. Each streams live output so you can watch progress.</p>
+            <ul>
+                <li><strong>Full Sync</strong> — the complete pipeline: scan → ingest → Last.fm → MusicBrainz enrich → AI fallback enrich → tag tracks</li>
+                <li><strong>Scan / Sync Plex Library</strong> — pull new or changed tracks</li>
+                <li><strong>Sync Last.fm</strong> — update scrobbles, play counts, loved tracks</li>
+                <li><strong>Tag New Tracks</strong> — AI genre tagging</li>
+                <li><strong>Refresh Context Playlists</strong> — rebuild Your Afternoon, Weekend Flow, Often Together</li>
+                <li><strong>Tag Instrumentals</strong> — classify tracks as instrumental or vocal</li>
+                <li><strong>Enrich Artists</strong> — MusicBrainz and AI Fallback (see below)</li>
+                <li><strong>Refresh Gap Analysis</strong> — re-run Missing From Your Collection</li>
+            </ul>
+            <div class="guide-tip">
+                <strong>Tip:</strong> Long-running jobs may time out behind a reverse proxy or tunnel. Use your NAS's
+                direct IP (<code>http://YOUR_NAS_IP:8787/admin</code>) for anything that takes a while.
+            </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ ENRICHMENT ═══════════════════ -->
+        <div class="guide-section" id="enrichment">
+            <h2>🎼 MusicBrainz &amp; AI Enrichment</h2>
+            <p>
+                Every artist gets enriched with gender, country, and era metadata using two layers:
+            </p>
+            <div class="guide-card-row">
+                <div class="guide-card">
+                    <span class="guide-card-title">🔍 MusicBrainz (free, first)</span>
+                    <p>Looks up real, structured data — gender and country — from the free MusicBrainz database. No cost, no API key needed.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">🤖 AI Fallback (OpenAI)</span>
+                    <p>Fills in era for every artist (a judgment call MusicBrainz can't reliably answer), plus gender/country for any artist MusicBrainz couldn't confidently match.</p>
+                </div>
+            </div>
+            <p>
+                Genre tags (the AI subgenre tagging used by the playlist generator) are separate and stay entirely
+                in MusicMind's own database — <strong>Plex is not touched</strong> unless you explicitly run the optional
+                genre write-back script.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ LEDGER ═══════════════════ -->
+        <div class="guide-section" id="ledger">
+            <h2>🗄️ The Ledger (DB Console)</h2>
+            <p>A direct SQL console for your music database — SELECT queries only. Click any example query to load it, then <code>Ctrl+Enter</code> to run.</p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ LOGS ═══════════════════ -->
+        <div class="guide-section" id="logs">
+            <h2>📋 Query Logs</h2>
+            <p>
+                Shows the last 100 preview requests with full detail — expanded tags, API stats (tokens, cost,
+                duration), and the exact request/response sent to OpenAI. Useful for understanding why a query
+                returned what it did.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ TESTS ═══════════════════ -->
+        <div class="guide-section" id="tests">
+            <h2>🧪 Tests</h2>
+            <p>
+                Verifies the enrichment scripts behave correctly — safe to run anytime. <strong>Script Tests</strong> run
+                dry-run and small real passes of the MusicBrainz and AI enrichment scripts. <strong>Data Integrity Checks</strong>
+                run instant SQL assertions confirming your data is internally consistent.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ UPDATE ═══════════════════ -->
+        <div class="guide-section" id="update">
+            <h2>🔄 Update</h2>
+            <p>
+                Shows your current installation's version and update tools. If installed via <code>git clone</code>,
+                you can check for updates and pull the latest version with one click. Manual installs get step-by-step
+                update instructions instead.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+    </div>
+{% include "footer.html" %}
+</body>
+</html>

@@ -448,6 +448,10 @@ def update():
 def tests():
     return render_template('tests.html', year=datetime.now().year)
 
+@app.route('/guide')
+def guide():
+    return render_template('guide.html', year=datetime.now().year)
+
 @app.route('/logs')
 def logs():
     import sqlite3, json
