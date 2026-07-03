@@ -12,6 +12,9 @@
         <div class="nav">
             <a href="/">← Back to the Stacks</a>
             <a href="/db">🗄️ DB Console</a>
+            <a href="/tests">🧪 Tests</a>
+            <a href="/logs">📋 Logs</a>
+            <a href="/update">🔄 Update</a>
         </div>
         <h1 class="page-title">⚙️ Back Office</h1>
         <p class="page-subtitle">Sync jobs and maintenance. Each job streams live output. Use direct IP for long-running jobs.</p>
@@ -71,6 +74,22 @@
                 <button onclick="runScript('instrumental', this)">Run Now</button>
                 <div class="status" id="status-instrumental"></div>
                 <div class="log-box" id="log-instrumental"></div>
+            </div>
+
+        <div class="admin-card">
+                <h3>🎼 Enrich Artists (MusicBrainz)</h3>
+                <p>Looks up artist gender, country, and MusicBrainz ID via the free MusicBrainz API. No cost, ~2 seconds per artist. Skips already-enriched artists.</p>
+                <button onclick="runScript('mbenrich', this)">Run Now</button>
+                <div class="status" id="status-mbenrich"></div>
+                <div class="log-box" id="log-mbenrich"></div>
+            </div>
+
+        <div class="admin-card">
+                <h3>🤖 Enrich Artists (AI Fallback)</h3>
+                <p>Fills in era via OpenAI for all artists, and gender/country/era for any MusicBrainz couldn't match. Run after MusicBrainz enrichment.</p>
+                <button onclick="runScript('aienrich', this)">Run Now</button>
+                <div class="status" id="status-aienrich"></div>
+                <div class="log-box" id="log-aienrich"></div>
             </div>
 
         <div class="admin-card">

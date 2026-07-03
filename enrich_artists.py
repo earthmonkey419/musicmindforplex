@@ -6,6 +6,7 @@ Enriches artist records with gender, country, era, and group type via OpenAI.
 
 import sqlite3
 import json
+import sys
 import time
 from openai import OpenAI
 from datetime import datetime
@@ -31,21 +32,39 @@ def init_table(conn):
     print("Table ready.\n")
 
 def get_unenriched_artists(conn):
-    return [row[0] for row in conn.execute("""
-        SELECT DISTINCT artist FROM tracks
-        WHERE artist IS NOT NULL AND artist != ''
-          AND artist NOT IN (SELECT artist FROM artist_meta)
-        ORDER BY artist
+    """
+    Returns list of (artist, mbid) tuples needing OpenAI enrichment.
+    Includes brand-new artists (mbid=None) and MusicBrainz-matched
+    artists still missing an era value (mbid populated).
+    """
+    return [(row[0], row[1]) for row in conn.execute("""
+        SELECT DISTINCT COALESCE(t.real_artist, t.artist) as effective_artist, am.mbid
+        FROM tracks t
+        LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
+        WHERE COALESCE(t.real_artist, t.artist) IS NOT NULL
+          AND COALESCE(t.real_artist, t.artist) != ''
+          AND (am.artist IS NULL OR am.era IS NULL)
+        ORDER BY effective_artist
     """).fetchall()]
 
 def enrich_batch(batch):
-    artist_list = "\n".join(f"{i+1}. {a}" for i, a in enumerate(batch))
+    """batch is a list of (artist, mbid) tuples."""
+    lines = []
+    for i, (artist, mbid) in enumerate(batch):
+        if mbid:
+            lines.append(f"{i+1}. {artist} [MusicBrainz ID: {mbid}]")
+        else:
+            lines.append(f"{i+1}. {artist}")
+    artist_list = "\n".join(lines)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0.2,
         messages=[{
             "role": "user",
             "content": f"""For each musician/artist/band below, return metadata.
+Some entries include a MusicBrainz ID in brackets — use it to identify the
+specific correct artist and improve accuracy if you recognize it, but every
+artist still needs a full response regardless.
 
 Fields:
 - gender: "female", "male", "mixed" (band with multiple genders), "unknown"
@@ -67,6 +86,13 @@ Artists:
     return json.loads(raw)
 
 def main():
+    test_mode = "--test" in sys.argv
+    limit = None
+    if "--limit" in sys.argv:
+        idx = sys.argv.index("--limit")
+        if idx + 1 < len(sys.argv):
+            limit = int(sys.argv[idx + 1])
+
     print("MusicMind for Plex - Artist Metadata Enrichment")
     print("=" * 50)
 
@@ -75,6 +101,18 @@ def main():
 
     artists = get_unenriched_artists(conn)
     total = len(artists)
+
+    if test_mode:
+        artists = artists[:limit or 10]
+        total = len(artists)
+        print("=" * 50)
+        print("DRY RUN — nothing will be written to the database")
+        print("=" * 50)
+    elif limit:
+        artists = artists[:limit]
+        total = len(artists)
+        print(f"LIMITED RUN — processing only {total} artists\n")
+
     print(f"Artists to enrich: {total}\n")
 
     if total == 0:
@@ -92,12 +130,25 @@ def main():
             for j, result in enumerate(results):
                 if j >= len(batch):
                     break
+                artist_name = batch[j][0]
+
+                if test_mode:
+                    print(f"  ✅ WOULD ENRICH: {artist_name}")
+                    print(f"       gender:       {result.get('gender', 'unknown')}")
+                    print(f"       country:      {result.get('country', 'unknown')}")
+                    print(f"       era:          {result.get('era', 'unknown')}")
+                    print(f"       group_type:   {result.get('group_type', 'unknown')}")
+                    print(f"       active_since: {result.get('active_since')}")
+                    continue
+
+                # Create a full row only if one doesn't already exist
+                # (no-op if MusicBrainz already wrote a row for this artist)
                 conn.execute("""
-                    INSERT OR REPLACE INTO artist_meta
+                    INSERT OR IGNORE INTO artist_meta
                         (artist, gender, country, era, group_type, active_since, enriched_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    batch[j],
+                    artist_name,
                     result.get('gender', 'unknown'),
                     result.get('country', 'unknown'),
                     result.get('era', 'unknown'),
@@ -105,13 +156,39 @@ def main():
                     result.get('active_since'),
                     now
                 ))
-            conn.commit()
-            done += len(batch)
-            print(f"  {done}/{total} artists enriched")
+                # Always fill in era/group_type/active_since — never touches
+                # gender/country/mbid, so MusicBrainz data is preserved.
+                conn.execute("""
+                    UPDATE artist_meta
+                    SET era = ?, group_type = ?, active_since = ?, enriched_at = ?
+                    WHERE artist = ?
+                """, (
+                    result.get('era', 'unknown'),
+                    result.get('group_type', 'unknown'),
+                    result.get('active_since'),
+                    now,
+                    artist_name
+                ))
+
+            if not test_mode:
+                conn.commit()
+                done += len(batch)
+                print(f"  {done}/{total} artists enriched")
+            else:
+                done += len(batch)
+
             time.sleep(0.5)
         except Exception as e:
             print(f"  Batch failed: {e}")
             time.sleep(2)
+
+    if test_mode:
+        print("\n" + "=" * 50)
+        print(f"DRY RUN COMPLETE — {done} artists checked")
+        print("Nothing was written to the database.")
+        print("=" * 50)
+        conn.close()
+        return
 
     print(f"\nDone. Enriched {done} artists.")
 

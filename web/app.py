@@ -104,6 +104,8 @@ def run_script(script):
         'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
         'context':  os.path.join(BASE_DIR, 'listening_context.py'),
         'instrumental': os.path.join(BASE_DIR, 'tag_instrumentals.py'),
+        'mbenrich': os.path.join(BASE_DIR, 'mb_enrich_artists.py'),
+        'aienrich': os.path.join(BASE_DIR, 'enrich_artists.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400
@@ -135,6 +137,107 @@ def run_script(script):
 
     return app.response_class(generate(), mimetype='text/event-stream')
 
+
+@app.route('/run/test/<test_id>')
+def run_test(test_id):
+    """
+    Runs a predefined test command (script + args) and streams output.
+    Separate from /run/<script> so Back Office's fixed script mapping
+    is never at risk from test-specific argument handling.
+    """
+    test_scripts = {
+        'mb_dry_run':     (os.path.join(BASE_DIR, 'mb_enrich_artists.py'), ['--test', '--limit', '3']),
+        'mb_limited_run': (os.path.join(BASE_DIR, 'mb_enrich_artists.py'), ['--limit', '1']),
+        'ai_dry_run':     (os.path.join(BASE_DIR, 'enrich_artists.py'),    ['--test', '--limit', '3']),
+        'ai_limited_run': (os.path.join(BASE_DIR, 'enrich_artists.py'),    ['--limit', '1']),
+    }
+    if test_id not in test_scripts:
+        return jsonify({'error': 'Unknown test'}), 400
+
+    script_path, args = test_scripts[test_id]
+    run_key = f"test_{test_id}"
+    if running.get(run_key):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running[run_key] = True
+        try:
+            proc = subprocess.Popen(
+                ['python3.12', script_path] + args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Test completed.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running[run_key] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/run/assertion/<assertion_id>')
+def run_assertion(assertion_id):
+    """
+    Runs a predefined SQL-based assertion and returns instant pass/fail.
+    Unlike test scripts, these check data invariants directly rather
+    than executing a script.
+    """
+    import sqlite3
+
+    assertions = {
+        'mbid_has_country': {
+            'label': 'Every artist with an mbid also has country set',
+            'query': """
+                SELECT COUNT(*) FROM artist_meta
+                WHERE mbid IS NOT NULL
+                  AND country IS NULL
+            """,
+            'expect_zero': True,
+        },
+        'no_null_era': {
+            'label': 'No artist has a NULL era value',
+            'query': "SELECT COUNT(*) FROM artist_meta WHERE era IS NULL",
+            'expect_zero': True,
+        },
+        'unmatched_artists_not_in_meta': {
+            'label': 'No artist appears in both artist_meta and mb_unmatched_artists',
+            'query': """
+                SELECT COUNT(*) FROM mb_unmatched_artists u
+                JOIN artist_meta m ON m.artist = u.artist
+                WHERE m.mbid IS NOT NULL
+            """,
+            'expect_zero': True,
+        },
+    }
+
+    if assertion_id not in assertions:
+        return jsonify({'error': 'Unknown assertion'}), 400
+
+    a = assertions[assertion_id]
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        result = conn.execute(a['query']).fetchone()[0]
+        conn.close()
+        passed = (result == 0) if a['expect_zero'] else (result > 0)
+        return jsonify({
+            'label': a['label'],
+            'pass': passed,
+            'count': result,
+        })
+    except Exception as e:
+        return jsonify({'label': a['label'], 'pass': False, 'error': str(e)}), 500
+
+
 @app.route('/run/fullsync')
 def run_fullsync():
     import subprocess
@@ -163,6 +266,8 @@ def run_fullsync():
             scripts = [
                 ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'plex_music_brain_ingest.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
+                ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
+                ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
                 ('🏷️ Tagging new tracks...', os.path.join(BASE_DIR, 'plex_tag_tracks.py')),
             ]
             for label, script in scripts:
@@ -338,6 +443,10 @@ def update():
         }
 
     return render_template('update.html', git=git_info, is_master=IS_MASTER, year=datetime.now().year)
+
+@app.route('/tests')
+def tests():
+    return render_template('tests.html', year=datetime.now().year)
 
 @app.route('/logs')
 def logs():

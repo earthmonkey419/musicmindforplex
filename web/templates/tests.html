@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicMind for Plex — Tests</title>
+    <link rel="icon" type="image/png" href="https://musicmind.vp-fun.com/assets/logo.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin">← Back to Back Office</a>
+            <a href="/db">🗄️ DB Console</a>
+            <a href="/tests">🧪 Tests</a>
+            <a href="/logs">📋 Logs</a>
+            <a href="/update">🔄 Update</a>
+        </div>
+        <h1 class="page-title">🧪 Tests</h1>
+        <p class="page-subtitle">Verify enrichment scripts behave correctly. Safe to run anytime — dry runs write nothing, limited runs touch only a few rows.</p>
+
+        <h3 style="margin-top:1.5rem;">Script Tests</h3>
+
+        <div class="admin-card" style="margin-bottom:1rem;">
+            <h3>🔍 MusicBrainz — Dry Run</h3>
+            <p>Runs <code>mb_enrich_artists.py --test --limit 3</code>. Should print DRY RUN and write nothing.</p>
+            <button onclick="runTest('mb_dry_run', this)">Run Test</button>
+            <div class="status" id="status-mb_dry_run"></div>
+            <div class="log-box" id="log-mb_dry_run"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1rem;">
+            <h3>🔍 MusicBrainz — Limited Real Run</h3>
+            <p>Runs <code>mb_enrich_artists.py --limit 1</code>. Writes at most 1 real row (or reports 0 to check if library is fully enriched).</p>
+            <button onclick="runTest('mb_limited_run', this)">Run Test</button>
+            <div class="status" id="status-mb_limited_run"></div>
+            <div class="log-box" id="log-mb_limited_run"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1rem;">
+            <h3>🤖 AI Fallback — Dry Run</h3>
+            <p>Runs <code>enrich_artists.py --test --limit 3</code>. Should print DRY RUN and write nothing.</p>
+            <button onclick="runTest('ai_dry_run', this)">Run Test</button>
+            <div class="status" id="status-ai_dry_run"></div>
+            <div class="log-box" id="log-ai_dry_run"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>🤖 AI Fallback — Limited Real Run</h3>
+            <p>Runs <code>enrich_artists.py --limit 1</code>. Writes/updates at most 1 real row (or reports 0 to check if library is fully enriched).</p>
+            <button onclick="runTest('ai_limited_run', this)">Run Test</button>
+            <div class="status" id="status-ai_limited_run"></div>
+            <div class="log-box" id="log-ai_limited_run"></div>
+        </div>
+
+        <h3>Data Integrity Checks</h3>
+        <p class="page-subtitle" style="margin-top:0;">Instant SQL-based assertions. No changes are made to the database.</p>
+
+        <div id="assertion-mbid_has_country" class="assertion-card">
+            <span class="assertion-label">Every artist with an mbid also has country set</span>
+            <button onclick="runAssertion('mbid_has_country', this)">Check</button>
+            <span class="assertion-result"></span>
+        </div>
+
+        <div id="assertion-no_null_era" class="assertion-card">
+            <span class="assertion-label">No artist has a NULL era value</span>
+            <button onclick="runAssertion('no_null_era', this)">Check</button>
+            <span class="assertion-result"></span>
+        </div>
+
+        <div id="assertion-unmatched_artists_not_in_meta" class="assertion-card">
+            <span class="assertion-label">No artist appears in both artist_meta (matched) and mb_unmatched_artists</span>
+            <button onclick="runAssertion('unmatched_artists_not_in_meta', this)">Check</button>
+            <span class="assertion-result"></span>
+        </div>
+
+    </div>
+
+    <script>
+        function runTest(id, btn) {
+            const log    = document.getElementById('log-' + id);
+            const status = document.getElementById('status-' + id);
+
+            btn.disabled = true;
+            log.textContent = '';
+            log.classList.add('active');
+            status.textContent = '⏳ Running...';
+            status.className = 'status running';
+
+            const es = new EventSource('/run/test/' + id);
+
+            es.onmessage = function(e) {
+                if (e.data === '__DONE__') {
+                    es.close();
+                    btn.disabled = false;
+                    return;
+                }
+                if (e.data.startsWith('✅')) {
+                    status.textContent = e.data;
+                    status.className = 'status done';
+                } else if (e.data.startsWith('❌')) {
+                    status.textContent = e.data;
+                    status.className = 'status error';
+                }
+                log.textContent += e.data + '\n';
+                log.scrollTop = log.scrollHeight;
+            };
+
+            es.onerror = function() {
+                es.close();
+                btn.disabled = false;
+                status.textContent = '❌ Connection error';
+                status.className = 'status error';
+            };
+        }
+
+        async function runAssertion(id, btn) {
+            const card = document.getElementById('assertion-' + id);
+            const result = card.querySelector('.assertion-result');
+            btn.disabled = true;
+            result.textContent = '⏳ Checking...';
+            result.className = 'assertion-result';
+
+            try {
+                const res = await fetch('/run/assertion/' + id);
+                const data = await res.json();
+                if (data.pass) {
+                    result.textContent = `✅ PASS (${data.count})`;
+                    result.className = 'assertion-result pass';
+                } else if (data.error) {
+                    result.textContent = '❌ ERROR: ' + data.error;
+                    result.className = 'assertion-result fail';
+                } else {
+                    result.textContent = `❌ FAIL (${data.count})`;
+                    result.className = 'assertion-result fail';
+                }
+            } catch(e) {
+                result.textContent = '❌ Request failed';
+                result.className = 'assertion-result fail';
+            }
+            btn.disabled = false;
+        }
+    </script>
+{% include "footer.html" %}
+</body>
+</html>

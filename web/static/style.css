@@ -343,6 +343,23 @@ ol li:hover { background: #ede8df; margin: 0 -0.5rem; padding-left: 0.5rem; padd
 .status.done { color: #2d6a4f; }
 .status.error { color: #9b2226; }
 
+/* Tests page */
+.assertion-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background: #fdfaf3;
+    border: 1px solid #e0d5b8;
+    border-radius: 6px;
+}
+.assertion-label { flex: 1; font-size: 0.95rem; }
+.assertion-result { min-width: 100px; text-align: right; font-weight: 600; }
+.assertion-result.pass { color: #2d6a4f; }
+.assertion-result.fail { color: #9b2226; }
+
 /* DB Console */
 textarea {
     width: 100%;
