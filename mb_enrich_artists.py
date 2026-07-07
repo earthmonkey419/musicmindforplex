@@ -189,6 +189,14 @@ def enrich(conn, test_mode=False, limit=None):
             country = area.get("name")
 
         gender = details.get("gender")  # only present for type: Person
+        if gender:
+            # MusicBrainz's API returns "Male"/"Female" capitalized —
+            # normalize to lowercase to match the convention used
+            # elsewhere in artist_meta (the OpenAI fallback writes
+            # lowercase 'male'/'female'). Without this, gender was
+            # effectively split into two separate, uncombined
+            # categories in the stats charts.
+            gender = gender.lower()
         # Note: era intentionally NOT set here — MusicBrainz has no reliable
         # "primary decade of activity" field. Era is left to the OpenAI
         # fallback (enrich_artists.py), which is better suited to that
