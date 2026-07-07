@@ -1,7 +1,7 @@
 # 🎵 MusicMind for Plex
 *formerly Plex Music Brain*
 
-> The AI-powered music companion Plex should have built.
+> The AI-enhanced music companion Plex should have built.
 
 MusicMind for Plex connects your Plex music library to OpenAI and Last.fm to generate intelligent playlists, enrich your library with specific genre tags, analyze your listening history, and surface gaps in your collection.
 

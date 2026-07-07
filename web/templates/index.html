@@ -121,6 +121,14 @@
             <button id="preview-btn" onclick="preview()">Preview</button>
         </div>
 
+        <div class="admin-card" style="margin: 1rem 0;">
+            <h3>📻 On This Day</h3>
+            <p style="font-size:0.85rem;">Pick a date to see what you were actually listening to around that time — an 8-day window centered on your choice, pulled directly from your Last.fm history.</p>
+            <input type="date" id="onthisday_date">
+            <button onclick="findOnThisDay(this)">Find Tracks</button>
+            <div class="status" id="status-onthisday"></div>
+        </div>
+
         <div id="tags-row" class="tags-row" style="display:none"></div>
 
         <div id="results" style="display:none">
@@ -137,6 +145,64 @@
 
     <script>
         let currentTracks = [];
+
+        async function findOnThisDay(btn) {
+            const dateVal = document.getElementById('onthisday_date').value;
+            const status = document.getElementById('status-onthisday');
+            if (!dateVal) {
+                status.textContent = 'Pick a date first.';
+                status.className = 'status error';
+                return;
+            }
+
+            btn.disabled = true;
+            status.textContent = '⏳ Searching...';
+            status.className = 'status running';
+
+            try {
+                const res = await fetch('/onthisday', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        date: dateVal,
+                        limit: document.getElementById('limit').value,
+                        max_per_artist: document.getElementById('max_per_artist').value,
+                        dj_ify: document.getElementById('dj_ify').checked,
+                    })
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                    btn.disabled = false;
+                    return;
+                }
+
+                status.textContent = '';
+                currentTracks = data.tracks;
+
+                const list = document.getElementById('track-list');
+                list.innerHTML = data.tracks.map((t, i) => `
+                    <li>
+                        <span class="track-title">${t.artist} — ${t.title}</span>
+                        <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays</span>
+                    </li>
+                `).join('');
+
+                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+
+                const tagsRow = document.getElementById('tags-row');
+                tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
+                tagsRow.style.display = 'flex';
+
+                document.getElementById('results').style.display = 'block';
+            } catch (e) {
+                status.textContent = '❌ Request failed';
+                status.className = 'status error';
+            }
+            btn.disabled = false;
+        }
 
         async function preview() {
             const prompt = document.getElementById('prompt').value.trim();
@@ -192,6 +258,8 @@
                     pills.push(`🎤 Artist: "${data.search_term}"`);
                 else if (data.intent === 'year_search' && data.search_term)
                     pills.push(`📅 Year: "${data.search_term}"`);
+                else if (data.intent === 'lastfm_range' && data.search_term)
+                    pills.push(`📻 Last.fm: ${data.search_term}`);
 
                 // Detected filter pills
                 const df = data.detected_filters || {};

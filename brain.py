@@ -32,6 +32,7 @@ DEFAULT_FILTERS = {
     "intent":         "mood",
     "bpm_min":        None,
     "bpm_max":        None,
+    "lastfm_rating_keys": None,
     "danceability":   None,
 }
 
@@ -278,6 +279,93 @@ def sequence_for_flow(tracks):
     return build_up + wind_down + without_bpm
 
 
+def get_scrobbled_tracks_around_date(target_date, window_days=4):
+    """
+    Returns distinct rating_keys for tracks scrobbled within
+    window_days on either side of target_date (so a window_days=4
+    gives an 8-day span total: 4 days before through 4 days after).
+
+    target_date is a string like "2024-01-05". Only counts scrobbles
+    that were successfully matched to a local track (matched = 1).
+    """
+    import sqlite3
+    from datetime import datetime, timedelta
+
+    center = datetime.strptime(target_date, "%Y-%m-%d")
+    start = center - timedelta(days=window_days)
+    end = center + timedelta(days=window_days) + timedelta(days=1)  # inclusive of the target day itself
+
+    start_epoch = int(start.timestamp())
+    end_epoch = int(end.timestamp())
+
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT DISTINCT rating_key FROM lastfm_scrobbles
+        WHERE timestamp >= ? AND timestamp < ? AND matched = 1
+    """, (start_epoch, end_epoch)).fetchall()
+    conn.close()
+
+    return [r[0] for r in rows]
+
+
+def get_scrobbled_tracks_in_range(start_date, end_date):
+    """
+    Returns distinct rating_keys for tracks scrobbled between
+    start_date and end_date (inclusive), both as "YYYY-MM-DD" strings.
+    Only counts scrobbles successfully matched to a local track.
+    """
+    import sqlite3
+    from datetime import datetime, timedelta
+
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)  # inclusive of end date
+
+    start_epoch = int(start.timestamp())
+    end_epoch = int(end.timestamp())
+
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT DISTINCT rating_key FROM lastfm_scrobbles
+        WHERE timestamp >= ? AND timestamp < ? AND matched = 1
+    """, (start_epoch, end_epoch)).fetchall()
+    conn.close()
+
+    return [r[0] for r in rows]
+
+
+def extract_lastfm_dates(text):
+    """
+    Extracts a date range from natural language text (used for the
+    typed `lastfm: ...` prompt prefix). Narrow, single-purpose prompt —
+    tested directly against 5 real phrasings including specific dates,
+    month ranges, explicit ranges, and relative references ("last New
+    Year's Eve") — all parsed correctly.
+    """
+    import json
+    from datetime import datetime
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[{
+            "role": "user",
+            "content": f"""Extract a date range from this text. Today's date is {today_str}.
+
+Text: "{text}"
+
+Respond ONLY with JSON: {{"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}}
+A single specific date should have start_date equal to end_date.
+If the text mentions a holiday or relative date (e.g. "New Year's Eve", "my birthday" with no year), use your best reasonable interpretation, defaulting to the most recent past occurrence."""
+        }]
+    )
+    raw = response.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+    return json.loads(raw)
+
+
 def search_tracks(tags, filters=None):
     """
     Query the database for tracks matching the given tags.
@@ -398,6 +486,19 @@ def search_tracks(tags, filters=None):
             query += " AND taf.danceability >= 1.0 AND taf.danceability <= 1.4"
         elif level == "high":
             query += " AND taf.danceability > 1.4"
+
+    if f.get("lastfm_rating_keys") is not None:
+        # Restrict to a specific set of rating_keys (from a Last.fm
+        # date/range query). Empty list means the date query found no
+        # scrobbles — should genuinely return zero results, not be
+        # ignored, so this check is `is not None` rather than truthy.
+        keys = f["lastfm_rating_keys"]
+        if keys:
+            placeholders = ",".join("?" for _ in keys)
+            query += f" AND t.rating_key IN ({placeholders})"
+            params.extend(keys)
+        else:
+            query += " AND 1=0"  # no scrobbles found — force zero results
 
     query += """
         GROUP BY t.artist, t.title

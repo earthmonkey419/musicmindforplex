@@ -1,13 +1,13 @@
 # MusicMind for Plex — User Manual
 
-*The AI-powered music companion your Plex library deserves.*
+*The AI-enhanced music companion your Plex library deserves.*
 *Dig into your stacks.*
 
 ---
 
 ## What is MusicMind for Plex?
 
-MusicMind for Plex is a self-hosted web app that brings AI-powered music discovery to your Plex library. It runs on your NAS alongside Plex and gives you a natural language playlist generator, deep listening history analysis, library gap detection, and more — all from a browser.
+MusicMind for Plex is a self-hosted web app that brings AI-enhanced music discovery to your Plex library. It runs on your NAS alongside Plex and gives you a natural language playlist generator, deep listening history analysis, library gap detection, and more — all from a browser.
 
 You type "late night psychedelic soul" and get a playlist. You ask for "female Brazilian artists from the 1970s" and it filters your library intelligently. You find out you've scrobbled Stereolab 247 times but don't own a single album. Your data stays on your hardware.
 

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date
 from config import DB_PATH, BASE_DIR, IS_MASTER, LASTFM_KEY
 
 app = Flask(__name__)
@@ -17,6 +17,46 @@ app = Flask(__name__)
 @app.route('/')
 def index():
     return render_template('index.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
+
+@app.route('/onthisday', methods=['POST'])
+def onthisday():
+    """
+    Zero-AI-cost complement to the typed lastfm: prefix. User picks a
+    single date via a UI date picker; returns tracks scrobbled within
+    an 8-day window centered on it (get_scrobbled_tracks_around_date
+    already handles the window math). No OpenAI call involved at all —
+    entirely deterministic, since the input is already an unambiguous
+    ISO date, not natural language needing interpretation.
+    """
+    data = request.json
+    target_date = data.get('date', '').strip()
+    if not target_date:
+        return jsonify({'error': 'No date provided'}), 400
+
+    try:
+        rating_keys = get_scrobbled_tracks_around_date(target_date, window_days=4)
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    filters = {
+        **{
+            'limit': int(data.get('limit', 30)),
+            'max_per_artist': int(data.get('max_per_artist', 1)),
+        },
+        'lastfm_rating_keys': rating_keys,
+    }
+
+    tracks = search_tracks([], filters)
+
+    if data.get('dj_ify'):
+        tracks = sequence_for_flow(tracks)
+
+    return jsonify({
+        'tracks': tracks,
+        'intent': 'lastfm_window',
+        'search_term': f"{target_date} ± 4 days",
+    })
+
 
 @app.route('/preview', methods=['POST'])
 def preview():
@@ -29,8 +69,18 @@ def preview():
         search_term = None
         detected_filters = {}
         classification = {}
+        lastfm_rating_keys = None
 
-        if prompt:
+        # Explicit lastfm: prefix — bypasses normal mood/AI classification
+        # entirely, since a date reference is unambiguous once flagged
+        # this way and doesn't need the general-purpose classifier.
+        if prompt.lower().startswith('lastfm:'):
+            date_text = prompt[len('lastfm:'):].strip()
+            dates = extract_lastfm_dates(date_text)
+            lastfm_rating_keys = get_scrobbled_tracks_in_range(dates['start_date'], dates['end_date'])
+            intent = 'lastfm_range'
+            search_term = f"{dates['start_date']} to {dates['end_date']}"
+        elif prompt:
             classification = classify_prompt(prompt)
             intent      = classification.get('intent', 'mood')
             search_term = classification.get('title_search') or classification.get('artist_search')
@@ -60,6 +110,7 @@ def preview():
             'bpm_min':        int(data['bpm_min']) if data.get('bpm_min') else None,
             'bpm_max':        int(data['bpm_max']) if data.get('bpm_max') else None,
             'danceability':   data.get('danceability') or None,
+            'lastfm_rating_keys': lastfm_rating_keys,
             'title_search':   classification.get('title_search'),
             'artist_search':  classification.get('artist_search'),
             'year_search':    detected_filters.get('year') or (search_term if intent == 'year_search' else None),

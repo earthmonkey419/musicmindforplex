@@ -1,6 +1,6 @@
 # Plex Music Brain
 
-An AI-powered music companion for Plex. Generates playlists from natural language prompts, enriches your library with specific genre tags, analyzes your listening history, and surfaces gaps in your collection.
+An AI-enhanced music companion for Plex. Generates playlists from natural language prompts, enriches your library with specific genre tags, analyzes your listening history, and surfaces gaps in your collection.
 
 Built for a Synology NAS running Plex. Self-hosted, self-contained, no subscriptions.
 

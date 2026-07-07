@@ -22,11 +22,13 @@
             <a href="#gaps">Missing From Your Collection</a>
             <a href="#stats">The Collection</a>
             <a href="#backoffice">Back Office</a>
+            <a href="#synapse">Synapse</a>
             <a href="#enrichment">MusicBrainz &amp; AI</a>
             <a href="#ledger">The Ledger</a>
             <a href="#logs">Query Logs</a>
             <a href="#tests">Tests</a>
             <a href="#update">Update</a>
+            <a href="#support">Support</a>
         </div>
 
         <p class="guide-intro">
@@ -105,6 +107,10 @@
                     <span class="guide-card-title">Filter queries</span>
                     <p>"female Brazilian artists from the 1970s" — detects gender, country, and era, applies them as filters automatically.</p>
                 </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">📻 Last.fm date search</span>
+                    <p>Type <code>lastfm: played in december 2023</code> (or any date range in plain English) to pull tracks straight from your real listening history — no genre matching, just what you actually played. Or use the <strong>On This Day</strong> date picker below the Preview button for a quick, AI-free way to see what you were listening to around a specific date (an 8-day window centered on your pick).</p>
+                </div>
             </div>
 
             <h3>Filters</h3>
@@ -175,6 +181,42 @@
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
 
+        <!-- ═══════════════════ SYNAPSE ═══════════════════ -->
+        <div class="guide-section" id="synapse">
+            <h2>🧠 Synapse</h2>
+            <p>
+                Synapse analyzes the actual audio in your library — not metadata, not AI guesses —
+                measuring tempo (BPM), musical key, and danceability directly from the waveform using
+                Essentia. This is completely free (no API calls, no OpenAI cost) and runs entirely on
+                your own hardware.
+            </p>
+            <div class="guide-card-row">
+                <div class="guide-card">
+                    <span class="guide-card-title">📊 Count Audio File Types</span>
+                    <p>Walks your library and shows a format breakdown (MP3, FLAC, etc). Read-only, fast.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">⏱️ Estimate Time</span>
+                    <p>Analyzes a few real sample tracks live, on your hardware, to project how long a full run would take. No permanent writes.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">🔬 Limited Run</span>
+                    <p>Runs the real analysis but capped to a small number of tracks — a safe way to confirm everything works before committing to the full multi-day job.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">🚀 Full Run</span>
+                    <p>Analyzes every track and stores the results. A one-time, multi-day background job — resumable, safe to stop and restart anytime, and runs fully detached from the app itself, so it keeps going even if the app restarts.</p>
+                </div>
+            </div>
+            <div class="guide-tip">
+                <strong>Tip:</strong> Run <strong>Estimate Time</strong> first, then a small <strong>Limited Run</strong> to confirm everything works, before starting the full job. Every NAS performs
+                differently, and it gives you a real number for your specific hardware before you
+                commit to a multi-day background job. This data doesn't power any playlist filters
+                yet — it's the foundation for sonic similarity features coming in a future update.
+            </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
         <!-- ═══════════════════ ENRICHMENT ═══════════════════ -->
         <div class="guide-section" id="enrichment">
             <h2>🎼 MusicBrainz &amp; AI Enrichment</h2>
@@ -236,6 +278,32 @@
                 you can check for updates and pull the latest version with one click. Manual installs get step-by-step
                 update instructions instead.
             </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ SUPPORT ═══════════════════ -->
+        <div class="guide-section" id="support">
+            <h2>💬 Support &amp; Feedback</h2>
+            <p>
+                Found a bug, have a feature idea, or want to share how MusicMind is working for you?
+            </p>
+            <div class="guide-card-row">
+                <div class="guide-card">
+                    <span class="guide-card-title">🐛 Bugs &amp; Feature Requests</span>
+                    <p>
+                        Use <a href="https://github.com/earthmonkey419/musicmindforplex/issues" target="_blank">GitHub Issues</a> —
+                        public and searchable, so you can check if someone's already reported the same thing.
+                    </p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">✉️ Private or Sensitive Feedback</span>
+                    <p>
+                        Email <a href="mailto:info@verbenaprojects.com">info@verbenaprojects.com</a> —
+                        better for anything you'd rather not post publicly (e.g. logs or screenshots
+                        that might contain personal library details).
+                    </p>
+                </div>
+            </div>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
 
