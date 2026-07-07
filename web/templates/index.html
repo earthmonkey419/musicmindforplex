@@ -42,6 +42,7 @@
         <div class="filters">
             <label><input type="checkbox" id="unplayed"> Unplayed only</label>
             <label><input type="checkbox" id="instrumental"> Instrumental only</label>
+            <label><input type="checkbox" id="dj_ify"> 🎧 DJ-ify (sequence for flow)</label>
             <label>Genre
                 <select id="genre">
                     <option value="">Any</option>
@@ -52,6 +53,22 @@
             <label>To year <input type="number" id="max_year" placeholder="2024"></label>
             <label>Limit <input type="number" id="limit" value="30"></label>
             <label>Tracks per artist <input type="number" id="max_per_artist" value="1"></label>
+            <label>Min BPM
+                <input type="number" id="bpm_min" placeholder="60" style="width:60px;" oninput="document.getElementById('bpm_min_slider').value = this.value">
+                <input type="range" id="bpm_min_slider" min="40" max="220" value="60" step="1" style="width:80px; vertical-align:middle;" oninput="document.getElementById('bpm_min').value = this.value">
+            </label>
+            <label>Max BPM
+                <input type="number" id="bpm_max" placeholder="180" style="width:60px;" oninput="document.getElementById('bpm_max_slider').value = this.value">
+                <input type="range" id="bpm_max_slider" min="40" max="220" value="180" step="1" style="width:80px; vertical-align:middle;" oninput="document.getElementById('bpm_max').value = this.value">
+            </label>
+            <label>Danceability
+                <select id="danceability">
+                    <option value="">Any</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </label>
             <label>Min rating
                 <select id="min_rating">
                     <option value="">Any</option>
@@ -140,6 +157,10 @@
                 limit:          document.getElementById('limit').value,
                 max_per_artist: document.getElementById('max_per_artist').value,
                 min_rating:     document.getElementById('min_rating').value || null,
+                dj_ify:         document.getElementById('dj_ify').checked,
+                bpm_min:        document.getElementById('bpm_min').value || null,
+                bpm_max:        document.getElementById('bpm_max').value || null,
+                danceability:   document.getElementById('danceability').value || null,
                 instrumental:   document.getElementById('instrumental').checked ? 1 : null,
 
                 gender:         document.getElementById('gender').value || null,

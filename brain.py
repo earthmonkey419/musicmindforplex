@@ -30,6 +30,9 @@ DEFAULT_FILTERS = {
     "artist_search":  None,
     "year_search":    None,
     "intent":         "mood",
+    "bpm_min":        None,
+    "bpm_max":        None,
+    "danceability":   None,
 }
 
 # --- Prompt Expansion ---
@@ -137,25 +140,47 @@ Respond ONLY with valid JSON, no explanation:
     return result
 
 
+def get_known_tags(limit=200):
+    """Returns the most common tags actually present in track_tags,
+    used to ground OpenAI's tag suggestions in real, matchable vocabulary."""
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    tags = [row[0] for row in conn.execute("""
+        SELECT tag FROM track_tags
+        GROUP BY tag ORDER BY COUNT(*) DESC LIMIT ?
+    """, (limit,)).fetchall()]
+    conn.close()
+    return tags
+
+
 def expand_prompt(prompt):
     """
     Send a natural language prompt to OpenAI and get back
     a list of specific music tags/genres/moods to search for.
+    Tags are constrained to vocabulary that actually exists in this
+    library's track_tags table, so results are guaranteed matchable.
     Logs full request/response to query_log table.
     """
     import json, time, sqlite3
 
-    system_msg = """You are an eclectic music curator who hosts a late-night college radio show. You have deep knowledge of obscure subgenres, world music, jazz, post-punk, electronic, African music, Latin music, and everything in between. When given a theme, vibe, or situation, you think laterally — you find the emotional core and translate it into specific, sometimes unexpected music tags. You never default to the obvious. You favor specificity over breadth."""
+    known_tags = get_known_tags()
+    tag_list = ", ".join(known_tags)
+
+    system_msg = """You are an eclectic music curator who hosts a late-night college radio show. You have deep knowledge of subgenres, world music, jazz, post-punk, electronic, African music, Latin music, and everything in between. When given a theme, vibe, or situation, you think laterally — you find the emotional core and translate it into specific music tags."""
     user_msg = f"""The user wants: "{prompt}"
+
+You may ONLY choose tags from this exact list — do not invent new tags,
+do not modify spelling or wording, use them exactly as written:
+
+{tag_list}
 
 Identify 2-3 specific vibes that best capture this prompt.
 If the prompt describes a situation or activity, identify the emotional feeling of that moment.
-For each vibe, generate 4-5 closely related music tags (subgenres, moods, styles, tempos, eras).
+For each vibe, select 4-5 closely related tags from the list above.
 Be decisive — commit to specific vibes, do not scatter across unrelated genres.
-Total tags: 8-15, all tightly grouped around your chosen vibes.
+Total tags: 8-15, all tightly grouped around your chosen vibes, all from the list above.
 
-Respond ONLY with a flat JSON array of tag strings. No explanation.
-Example: ["sunshine pop", "bossa nova", "upbeat", "60s soul", "feel-good", "tropical", "warmth"]"""
+Respond ONLY with a flat JSON array of tag strings, using exact spelling from the list above. No explanation."""
 
     t_start = time.time()
     response = client.chat.completions.create(
@@ -177,6 +202,16 @@ Example: ["sunshine pop", "bossa nova", "upbeat", "60s soul", "feel-good", "trop
 
     tags = json.loads(raw)
     tags = [t.strip().lower() for t in tags if t.strip()]
+
+    # Safety net: drop anything the model returned that isn't actually
+    # in the allowed vocabulary, in case it didn't perfectly obey the
+    # hard constraint above.
+    known_lower = set(t.lower() for t in known_tags)
+    filtered_tags = [t for t in tags if t in known_lower]
+    if len(filtered_tags) < len(tags):
+        dropped = set(tags) - set(filtered_tags)
+        print(f"expand_prompt: dropped invented tags not in library vocabulary: {dropped}")
+    tags = filtered_tags
 
     # Log to DB
     try:
@@ -210,6 +245,39 @@ Example: ["sunshine pop", "bossa nova", "upbeat", "60s soul", "feel-good", "trop
 
 # --- Track Search ---
 
+def sequence_for_flow(tracks):
+    """
+    Reorders a track list into a genuine tempo arc — ascending BPM to
+    a peak, then descending back down — rather than the default
+    match-score ordering.
+
+    Deliberately deterministic (plain sorting), not AI-reasoned.
+    Tested directly: asking an LLM to reason about BPM numbers and
+    produce a smooth arc produced plausible-sounding but genuinely
+    jagged results (verified by re-plotting its own output); a simple
+    sort produces a mathematically clean, verifiable arc for free, no
+    API call needed. AI is good at generating confident-sounding
+    reasoning about sequencing; it isn't reliably good at actually
+    doing the numeric sequencing itself.
+
+    Tracks with no BPM data (Synapse hasn't analyzed them, or analysis
+    failed) are appended at the end in their original order, since
+    they can't be meaningfully placed on a tempo arc.
+    """
+    with_bpm = [t for t in tracks if t.get("bpm")]
+    without_bpm = [t for t in tracks if not t.get("bpm")]
+
+    if not with_bpm:
+        return tracks  # nothing to sequence, return unchanged
+
+    arc = sorted(with_bpm, key=lambda t: t["bpm"])
+    half = (len(arc) + 1) // 2
+    build_up = arc[:half]
+    wind_down = list(reversed(arc[half:]))
+
+    return build_up + wind_down + without_bpm
+
+
 def search_tracks(tags, filters=None):
     """
     Query the database for tracks matching the given tags.
@@ -238,10 +306,13 @@ def search_tracks(tags, filters=None):
             t.year,
             t.play_count,
             t.user_rating,
+            taf.bpm,
+            taf.danceability,
             COUNT(DISTINCT tt.tag) as match_score
         FROM tracks t
         LEFT JOIN track_tags tt ON t.rating_key = tt.rating_key
         LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
+        LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
         WHERE {where_tags}
           AND t.title IS NOT NULL
           AND t.artist IS NOT NULL
@@ -311,6 +382,22 @@ def search_tracks(tags, filters=None):
         else:
             query += " AND t.year = ?"
             params.append(int(ys))
+    if f.get("bpm_min") is not None:
+        query += " AND taf.bpm >= ?"
+        params.append(f["bpm_min"])
+    if f.get("bpm_max") is not None:
+        query += " AND taf.bpm <= ?"
+        params.append(f["bpm_max"])
+    if f.get("danceability"):
+        # Buckets based on real distribution from full-library analysis:
+        # low < 1.0, medium 1.0-1.4, high > 1.4
+        level = f["danceability"]
+        if level == "low":
+            query += " AND taf.danceability < 1.0 AND taf.danceability IS NOT NULL"
+        elif level == "medium":
+            query += " AND taf.danceability >= 1.0 AND taf.danceability <= 1.4"
+        elif level == "high":
+            query += " AND taf.danceability > 1.4"
 
     query += """
         GROUP BY t.artist, t.title
@@ -325,21 +412,23 @@ def search_tracks(tags, filters=None):
     artist_counts = {}
     results = []
     for row in rows:
-        rating_key, title, artist, album, genre, year, play_count, user_rating, match_score = row
+        rating_key, title, artist, album, genre, year, play_count, user_rating, bpm, danceability, match_score = row
         artist_counts[artist] = artist_counts.get(artist, 0)
         if artist_counts[artist] >= f["max_per_artist"]:
             continue
         artist_counts[artist] += 1
         results.append({
-            "rating_key":  rating_key,
-            "title":       title,
-            "artist":      artist,
-            "album":       album,
-            "genre":       genre,
-            "year":        year,
-            "play_count":  play_count,
-            "user_rating": user_rating,
-            "match_score": match_score,
+            "rating_key":   rating_key,
+            "title":        title,
+            "artist":       artist,
+            "album":        album,
+            "genre":        genre,
+            "year":         year,
+            "play_count":   play_count,
+            "user_rating":  user_rating,
+            "bpm":          bpm,
+            "danceability": danceability,
+            "match_score":  match_score,
         })
         if len(results) >= f["limit"]:
             break

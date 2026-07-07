@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicMind for Plex — Synapse</title>
+    <link rel="icon" type="image/png" href="https://musicmind.vp-fun.com/assets/logo.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/admin">← Back to Back Office</a>
+            <a href="/db">🗄️ DB Console</a>
+            <a href="/tests">🧪 Tests</a>
+            <a href="/guide">📖 Guide</a>
+            <a href="/logs">📋 Logs</a>
+            <a href="/update">🔄 Update</a>
+        </div>
+        <h1 class="page-title">🧠 Synapse</h1>
+        <p class="page-subtitle">Sonic similarity via real audio analysis — tempo, key, and danceability, measured directly from your files.</p>
+
+        <div id="synapse-status-banner" style="padding:0.9rem 1.2rem; border-radius:6px; margin-bottom:1.5rem; font-size:0.9rem; display:flex; align-items:center; gap:0.75rem;">
+            <span id="synapse-status-icon">⏳</span>
+            <span id="synapse-status-text">Checking status...</span>
+        </div>
+
+        <div class="guide-tip" style="margin-bottom:1.5rem;">
+            <strong>What this does:</strong> Synapse analyzes the actual audio in your library —
+            not metadata, not AI guesses — using Essentia to measure tempo (BPM), musical key,
+            and danceability directly from the waveform. This is a one-time, background job.
+            Full-library analysis can take a couple of days depending on your library size and
+            hardware. It's completely free (no API calls) and safe to run in the background —
+            just start it and check back later.
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>📊 Count Audio File Types</h3>
+            <p>Walks your full library and shows a breakdown of file formats (MP3, FLAC, etc). Read-only — no analysis, no writes. Fast.</p>
+            <button onclick="runSynapse('synapse-count', this)">Run Count</button>
+            <div class="status" id="status-synapse-count"></div>
+            <div class="log-box" id="log-synapse-count" style="height:200px;"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>⏱️ Estimate Time</h3>
+            <p>Analyzes a few real sample tracks live, on this hardware, to project how long a full run would actually take for your library. No permanent writes — takes about a minute.</p>
+            <button onclick="runSynapse('synapse-estimate', this)">Run Estimate</button>
+            <div class="status" id="status-synapse-estimate"></div>
+            <div class="log-box" id="log-synapse-estimate" style="height:250px;"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>🔬 Limited Run</h3>
+            <p>Runs the real analysis, but capped to a small number of tracks — a safe way to confirm everything works before committing to the full multi-day job.</p>
+            <label style="font-size:0.85rem; margin-right:0.5rem;">
+                Tracks to analyze: <input type="number" id="synapse-limit-n" value="10" min="1" max="500" style="width:70px; margin-left:0.3rem;">
+            </label>
+            <button onclick="runSynapseLimited(this)">Run Limited</button>
+            <div class="status" id="status-synapse-limited"></div>
+            <div class="log-box" id="log-synapse-limited" style="height:250px;"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>🚀 Full Run</h3>
+            <p>Analyzes every track in your library and stores the results. Resumable — safe to stop and restart anytime, already-analyzed tracks are skipped. Recommend running <strong>Estimate Time</strong> first so you know what to expect.</p>
+            <p style="font-size:0.82rem; color:#8b6914;">
+                This job runs fully detached from the web app — it survives app restarts and doesn't need this page to stay open. Check progress anytime via the status banner above, or click "Refresh Log" below for recent detail.
+            </p>
+            <button onclick="startSynapseFull(this)">Start Full Analysis</button>
+            <button onclick="refreshSynapseLog(this)" style="margin-left:0.5rem;">Refresh Log</button>
+            <div class="status" id="status-synapse-full"></div>
+            <div class="log-box active" id="log-synapse-full" style="height:300px;"></div>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>⚠️ Errors</h3>
+            <p>Tracks Synapse couldn't analyze — corrupted files, unreadable formats, or files that timed out. Safe to ignore; these are skipped automatically on future runs.</p>
+            <button onclick="loadSynapseErrors(this)">Load Errors</button>
+            <div id="synapse-errors-summary" style="font-size:0.85rem; color:#8b6914; margin-top:0.5rem;"></div>
+            <div id="synapse-errors-list" style="margin-top:0.75rem;"></div>
+        </div>
+
+    </div>
+
+    <script>
+        async function refreshSynapseStatus() {
+            const icon = document.getElementById('synapse-status-icon');
+            const text = document.getElementById('synapse-status-text');
+            const banner = document.getElementById('synapse-status-banner');
+            try {
+                const res = await fetch('/synapse-status');
+                const data = await res.json();
+
+                if (data.running) {
+                    icon.textContent = '🟢';
+                    text.textContent = `Running — ${data.analyzed} tracks analyzed so far (${data.errors} errors logged)`;
+                    banner.style.background = '#d8f0e0';
+                    banner.style.border = '1px solid #a8d8b8';
+                    banner.style.color = '#2d6a4f';
+                } else {
+                    icon.textContent = '⚪';
+                    text.textContent = `Not running — ${data.analyzed} tracks analyzed so far (${data.errors} errors logged)`;
+                    banner.style.background = '#f0e8d0';
+                    banner.style.border = '1px solid #d5c896';
+                    banner.style.color = '#5a3e28';
+                }
+            } catch (e) {
+                icon.textContent = '❌';
+                text.textContent = 'Could not check status';
+                banner.style.background = '#f8d7da';
+                banner.style.border = '1px solid #f5c6cb';
+                banner.style.color = '#9b2226';
+            }
+        }
+
+        // Check immediately on page load, then every 10 seconds —
+        // this polls, it does not rely on any single long-lived
+        // connection, so it stays accurate even after page navigation,
+        // browser reconnects, or a stream disconnect elsewhere on this page.
+        refreshSynapseStatus();
+        setInterval(refreshSynapseStatus, 10000);
+
+        async function startSynapseFull(btn) {
+            const status = document.getElementById('status-synapse-full');
+            btn.disabled = true;
+            status.textContent = '⏳ Starting...';
+            status.className = 'status running';
+            try {
+                const res = await fetch('/run/synapse-full');
+                const data = await res.json();
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                } else {
+                    status.textContent = '✅ ' + data.message;
+                    status.className = 'status done';
+                    refreshSynapseStatus();
+                    setTimeout(() => refreshSynapseLog(document.querySelector('[onclick^="refreshSynapseLog"]')), 3000);
+                }
+            } catch (e) {
+                status.textContent = '❌ Request failed';
+                status.className = 'status error';
+            }
+            btn.disabled = false;
+        }
+
+        async function refreshSynapseLog(btn) {
+            const log = document.getElementById('log-synapse-full');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/synapse-full-log');
+                const data = await res.json();
+                log.textContent = data.log || data.error || '(empty)';
+                log.scrollTop = log.scrollHeight;
+            } catch (e) {
+                log.textContent = '❌ Failed to load log';
+            }
+            if (btn) btn.disabled = false;
+        }
+
+        // Load the log once on page load too, so returning to the page
+        // shows recent activity immediately without needing a click.
+        refreshSynapseLog(null);
+
+        async function startSynapseFull(btn) {
+            const status = document.getElementById('status-synapse-full');
+            btn.disabled = true;
+            status.textContent = '⏳ Starting...';
+            status.className = 'status running';
+            try {
+                const res = await fetch('/run/synapse-full');
+                const data = await res.json();
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                } else {
+                    status.textContent = '✅ ' + data.message;
+                    status.className = 'status done';
+                    refreshSynapseStatus();
+                    setTimeout(() => refreshSynapseLog(document.querySelector('[onclick^="refreshSynapseLog"]')), 3000);
+                }
+            } catch (e) {
+                status.textContent = '❌ Request failed';
+                status.className = 'status error';
+            }
+            btn.disabled = false;
+        }
+
+        async function refreshSynapseLog(btn) {
+            const log = document.getElementById('log-synapse-full');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/synapse-full-log');
+                const data = await res.json();
+                log.textContent = data.log || data.error || '(empty)';
+                log.scrollTop = log.scrollHeight;
+            } catch (e) {
+                log.textContent = '❌ Failed to load log';
+            }
+            if (btn) btn.disabled = false;
+        }
+
+        // Load the log once on page load too, so returning to the page
+        // shows recent activity immediately without needing a click.
+        refreshSynapseLog(null);
+
+        function runSynapse(name, btn) {
+            const log    = document.getElementById('log-' + name);
+            const status = document.getElementById('status-' + name);
+
+            btn.disabled = true;
+            log.textContent = '';
+            log.classList.add('active');
+            status.textContent = '⏳ Running...';
+            status.className = 'status running';
+
+            const routeName = name === 'synapse' ? 'synapse' : name;
+            const es = new EventSource('/run/' + routeName);
+
+            es.onmessage = function(e) {
+                if (e.data === '__DONE__') {
+                    es.close();
+                    btn.disabled = false;
+                    return;
+                }
+                if (e.data.startsWith('✅')) {
+                    status.textContent = e.data;
+                    status.className = 'status done';
+                } else if (e.data.startsWith('❌')) {
+                    status.textContent = e.data;
+                    status.className = 'status error';
+                }
+                log.textContent += e.data + '\n';
+                log.scrollTop = log.scrollHeight;
+            };
+
+            es.onerror = function() {
+                es.close();
+                btn.disabled = false;
+                status.textContent = '❌ Connection error';
+                status.className = 'status error';
+            };
+        }
+
+        function runSynapseLimited(btn) {
+            const n = document.getElementById('synapse-limit-n').value;
+            const log    = document.getElementById('log-synapse-limited');
+            const status = document.getElementById('status-synapse-limited');
+
+            btn.disabled = true;
+            log.textContent = '';
+            log.classList.add('active');
+            status.textContent = '⏳ Running...';
+            status.className = 'status running';
+
+            const es = new EventSource('/run/synapse-limited?n=' + encodeURIComponent(n));
+
+            es.onmessage = function(e) {
+                if (e.data === '__DONE__') {
+                    es.close();
+                    btn.disabled = false;
+                    return;
+                }
+                if (e.data.startsWith('✅')) {
+                    status.textContent = e.data;
+                    status.className = 'status done';
+                } else if (e.data.startsWith('❌')) {
+                    status.textContent = e.data;
+                    status.className = 'status error';
+                }
+                log.textContent += e.data + '\n';
+                log.scrollTop = log.scrollHeight;
+            };
+
+            es.onerror = function() {
+                es.close();
+                btn.disabled = false;
+                status.textContent = '❌ Connection error';
+                status.className = 'status error';
+            };
+        }
+
+        async function loadSynapseErrors(btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Loading...';
+            try {
+                const res = await fetch('/synapse-errors');
+                const errors = await res.json();
+
+                const summary = document.getElementById('synapse-errors-summary');
+                const list = document.getElementById('synapse-errors-list');
+
+                summary.textContent = `${errors.length} error${errors.length !== 1 ? 's' : ''} logged` + (errors.length === 200 ? ' (showing most recent 200 — use The Ledger for the full list)' : '');
+
+                if (errors.length === 0) {
+                    list.innerHTML = '<p style="color:#8b6914; font-style:italic;">No errors logged yet.</p>';
+                } else {
+                    list.innerHTML = errors.map(e => {
+                        const filename = e.filepath.split('/').pop();
+                        return `<div class="synapse-error-row">
+                            <div class="error-file">${filename}</div>
+                            <div class="error-msg">${e.error}</div>
+                            <div class="error-time">rating_key: ${e.rating_key} — ${e.failed_at}</div>
+                        </div>`;
+                    }).join('');
+                }
+            } catch (e) {
+                document.getElementById('synapse-errors-summary').textContent = '❌ Failed to load errors';
+            }
+            btn.disabled = false;
+            btn.textContent = 'Load Errors';
+        }
+
+    </script>
+{% include "footer.html" %}
+</body>
+</html>

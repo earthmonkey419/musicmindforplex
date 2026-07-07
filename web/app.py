@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent
 from config import DB_PATH, BASE_DIR, IS_MASTER, LASTFM_KEY
 
 app = Flask(__name__)
@@ -57,6 +57,9 @@ def preview():
             'country':        data.get('country') or detected_filters.get('country') or None,
             'era':            data.get('era') or detected_filters.get('era') or None,
             'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
+            'bpm_min':        int(data['bpm_min']) if data.get('bpm_min') else None,
+            'bpm_max':        int(data['bpm_max']) if data.get('bpm_max') else None,
+            'danceability':   data.get('danceability') or None,
             'title_search':   classification.get('title_search'),
             'artist_search':  classification.get('artist_search'),
             'year_search':    detected_filters.get('year') or (search_term if intent == 'year_search' else None),
@@ -64,7 +67,11 @@ def preview():
 
         }
         tracks = search_tracks(tags, filters)
-        return jsonify({'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters})
+
+        if data.get('dj_ify'):
+            tracks = sequence_for_flow(tracks)
+
+        return jsonify({'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': bool(data.get('dj_ify'))})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -97,6 +104,76 @@ def admin():
     return render_template('admin.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
 
 @app.route('/run/<script>')
+@app.route('/run/synapse-full')
+def run_synapse_full():
+    """
+    Dedicated route for Synapse's Full Run — genuinely different from
+    every other script this app runs, since this one is expected to
+    take DAYS, not seconds/minutes. Two important differences from the
+    generic run_script() route:
+
+    1. Uses start_new_session=True so the subprocess is fully detached
+       from this Flask app's process group. If plex-music-brain
+       restarts (crash, manual restart, deploy), the analysis keeps
+       running unaffected — previously, restarting the app silently
+       killed the analysis too.
+
+    2. Output goes to a log file, NOT a live SSE pipe. A pipe-based
+       live stream assumes the browser tab (and the parent process)
+       stays connected for the whole run, which isn't realistic for a
+       multi-day job. Progress is checked via polling /synapse-status
+       instead — see that route, which already reports analyzed count,
+       error count, and seconds-since-last-write for stall detection.
+    """
+    if running.get('synapse_full_started_flag'):
+        return jsonify({'error': 'Already started this session — check /synapse-status'}), 400
+
+    lock_path = os.path.join(BASE_DIR, 'synapse.lock')
+    if os.path.exists(lock_path):
+        with open(lock_path) as f:
+            existing_pid = f.read().strip()
+        proc_dir = f'/proc/{existing_pid}'
+        if os.path.exists(proc_dir):
+            try:
+                with open(f'{proc_dir}/cmdline', 'rb') as cf:
+                    cmdline = cf.read().decode('utf-8', errors='ignore')
+                if 'synapse_analyze.py' in cmdline:
+                    return jsonify({'error': 'A Synapse run is already active'}), 400
+            except (OSError, IOError):
+                pass
+
+    log_path = os.path.join(BASE_DIR, 'synapse_full_run.log')
+    try:
+        with open(log_path, 'a') as logfile:
+            subprocess.Popen(
+                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py')],
+                stdout=logfile,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,  # detach from this Flask process entirely
+                cwd=BASE_DIR,
+            )
+        running['synapse_full_started_flag'] = True
+        return jsonify({'message': 'Full analysis started. It will keep running even if the app restarts. Check /synapse-status for progress.'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/synapse-full-log')
+def synapse_full_log():
+    """Returns the tail of the detached Full Run's log file, since its
+    output no longer streams live to the browser."""
+    log_path = os.path.join(BASE_DIR, 'synapse_full_run.log')
+    if not os.path.exists(log_path):
+        return jsonify({'log': '(no log yet — run has not started, or log file was cleared)'})
+    try:
+        with open(log_path, 'r', errors='ignore') as f:
+            lines = f.readlines()
+        tail = ''.join(lines[-100:])  # last 100 lines is plenty for a status check
+        return jsonify({'log': tail})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def run_script(script):
     scripts = {
         'ingest':   os.path.join(BASE_DIR, 'plex_music_brain_ingest.py'),
@@ -106,6 +183,7 @@ def run_script(script):
         'instrumental': os.path.join(BASE_DIR, 'tag_instrumentals.py'),
         'mbenrich': os.path.join(BASE_DIR, 'mb_enrich_artists.py'),
         'aienrich': os.path.join(BASE_DIR, 'enrich_artists.py'),
+        'synapse':  os.path.join(BASE_DIR, 'synapse_analyze.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400
@@ -236,6 +314,188 @@ def run_assertion(assertion_id):
         })
     except Exception as e:
         return jsonify({'label': a['label'], 'pass': False, 'error': str(e)}), 500
+
+
+@app.route('/run/synapse-count')
+def run_synapse_count():
+    """Streams a full-library file format count. Read-only, no writes."""
+    if running.get('synapse_count'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['synapse_count'] = True
+        try:
+            proc = subprocess.Popen(
+                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--count'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Count complete.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['synapse_count'] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/run/synapse-estimate')
+def run_synapse_estimate():
+    """Streams a live-sample time estimate. Analyzes a few real tracks
+    on this hardware, no permanent writes to track_audio_features."""
+    if running.get('synapse_estimate'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['synapse_estimate'] = True
+        try:
+            proc = subprocess.Popen(
+                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--estimate'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Estimate complete.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['synapse_estimate'] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/run/synapse-limited')
+def run_synapse_limited():
+    """Streams a real analysis run capped to a user-specified N tracks."""
+    from flask import request
+    n = request.args.get('n', '10')
+    try:
+        n = int(n)
+        if n < 1 or n > 500:
+            return jsonify({'error': 'N must be between 1 and 500'}), 400
+    except ValueError:
+        return jsonify({'error': 'N must be a number'}), 400
+
+    if running.get('synapse_limited'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['synapse_limited'] = True
+        try:
+            proc = subprocess.Popen(
+                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--limit', str(n)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Limited run complete.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['synapse_limited'] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/synapse-status')
+def synapse_status():
+    """Plain status check — is a real run active, and how far along.
+    No streaming, no long-lived connection — safe to poll anytime."""
+    import sqlite3
+    from datetime import datetime as _dt
+
+    lock_path = os.path.join(BASE_DIR, 'synapse.lock')
+    is_running = False
+    if os.path.exists(lock_path):
+        try:
+            with open(lock_path) as f:
+                pid = int(f.read().strip())
+            proc_dir = f'/proc/{pid}'
+            if os.path.exists(proc_dir):
+                # Verify it's genuinely still synapse_analyze.py, not
+                # just some unrelated process that happens to now have
+                # this PID (can happen after the OS reassigns a freed
+                # PID number) — checking existence alone isn't enough.
+                try:
+                    with open(f'{proc_dir}/cmdline', 'rb') as cf:
+                        cmdline = cf.read().decode('utf-8', errors='ignore')
+                    is_running = 'synapse_analyze.py' in cmdline
+                except (OSError, IOError):
+                    is_running = False
+        except ValueError:
+            is_running = False
+
+    conn = sqlite3.connect(DB_PATH)
+    analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
+    errors = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
+    last_write_row = conn.execute("SELECT MAX(analyzed_at) FROM track_audio_features").fetchone()
+    conn.close()
+
+    seconds_since_last_write = None
+    last_write = last_write_row[0] if last_write_row else None
+    if last_write:
+        try:
+            last_dt = _dt.fromisoformat(last_write)
+            seconds_since_last_write = int((_dt.now() - last_dt).total_seconds())
+        except ValueError:
+            pass
+
+    return jsonify({
+        'running': is_running,
+        'analyzed': analyzed,
+        'errors': errors,
+        'seconds_since_last_write': seconds_since_last_write,
+    })
+
+
+@app.route('/synapse-errors')
+def synapse_errors_view():
+    """Returns the current synapse_errors table as JSON, for display on the Synapse page."""
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT rating_key, filepath, error, failed_at
+        FROM synapse_errors
+        ORDER BY failed_at DESC
+        LIMIT 200
+    """).fetchall()
+    conn.close()
+    return jsonify([{
+        'rating_key': r[0],
+        'filepath':   r[1],
+        'error':      r[2],
+        'failed_at':  r[3],
+    } for r in rows])
+
+
+@app.route('/synapse')
+def synapse_page():
+    return render_template('synapse.html', year=datetime.now().year)
 
 
 @app.route('/run/fullsync')
