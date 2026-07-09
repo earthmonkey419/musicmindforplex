@@ -3,6 +3,8 @@
 
 > The AI-enhanced music companion Plex should have built.
 
+[![Support MusicMind](https://img.shields.io/badge/%E2%9D%A4%EF%B8%8F_Support-MusicMind-c56fa4?style=for-the-badge)](https://www.paypal.com/ncp/payment/THHJJDVQRH366)
+
 MusicMind for Plex connects your Plex music library to OpenAI and Last.fm to generate intelligent playlists, enrich your library with specific genre tags, analyze your listening history, and surface gaps in your collection.
 
 Type "late night psychedelic soul" and get a playlist. Filter by female artists from the 70s. Find out you have scrobbled Stereolab 247 times but don't own a single album. It all runs on your NAS — no subscriptions, no cloud, your data stays yours.
