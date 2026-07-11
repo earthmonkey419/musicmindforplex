@@ -154,7 +154,6 @@ running = {}
 def admin():
     return render_template('admin.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
 
-@app.route('/run/<script>')
 @app.route('/run/synapse-full')
 def run_synapse_full():
     """
@@ -225,6 +224,7 @@ def synapse_full_log():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/run/<script>')
 def run_script(script):
     scripts = {
         'ingest':   os.path.join(BASE_DIR, 'plex_music_brain_ingest.py'),
