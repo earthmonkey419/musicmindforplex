@@ -55,6 +55,33 @@ def init_db(conn):
             conn.execute(f"ALTER TABLE tracks ADD COLUMN {col} {decl}")
         except Exception:
             pass  # column already exists
+    # Core tables other pipeline steps depend on — ingest owns the schema
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS track_tags (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            rating_key  TEXT NOT NULL,
+            tag         TEXT NOT NULL,
+            source      TEXT DEFAULT 'openai',
+            created_at  TEXT DEFAULT (datetime('now')),
+            UNIQUE(rating_key, tag)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS artist_meta (
+            artist        TEXT PRIMARY KEY,
+            gender        TEXT,
+            country       TEXT,
+            era           TEXT,
+            group_type    TEXT,
+            active_since  INTEGER,
+            mbid          TEXT,
+            enriched_at   TEXT
+        )
+    """)
+    try:
+        conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
+    except Exception:
+        pass  # column already exists
     conn.commit()
     print(f"Database ready: {DB_PATH}\n")
 
