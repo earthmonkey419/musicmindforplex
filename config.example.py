@@ -22,3 +22,13 @@ OPENAI_KEY = "YOUR_OPENAI_API_KEY"         # sk-proj-...
 # Get a free API key at https://www.last.fm/api/account/create
 LASTFM_KEY  = ""    # from last.fm/api — leave blank to disable
 LASTFM_USER = ""    # your last.fm username — leave blank to disable
+
+# Optional: translate Plex-reported file paths to local paths.
+# Needed when Plex runs on a different OS or machine than MusicMind
+# (e.g. Plex on Windows + MusicMind in WSL or Docker).
+# Longest matching prefix wins; backslashes become forward slashes.
+# Example — Plex on Windows sees J:\Music, MusicMind in WSL sees /mnt/j/Music:
+# PATH_MAP = {
+#     "J:\\Music": "/mnt/j/Music",
+# }
+PATH_MAP = {}

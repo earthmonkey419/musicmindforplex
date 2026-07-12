@@ -12,12 +12,33 @@ from mutagen.mp4 import MP4
 from plexapi.server import PlexServer
 from config import DB_PATH, PLEX_URL, PLEX_TOKEN
 
+# --- Path translation (Plex host paths -> local paths) -----------------
+# Needed when Plex runs on a different OS/machine than MusicMind
+# (e.g. Plex on Windows + MusicMind in WSL or Docker). Configure
+# PATH_MAP in config.py; longest prefix wins; backslashes converted.
+try:
+    from config import PATH_MAP
+except ImportError:
+    PATH_MAP = {}
+
+def translate_path(p):
+    if not p:
+        return p
+    for src in sorted(PATH_MAP, key=len, reverse=True):
+        if p.startswith(src):
+            p = PATH_MAP[src] + p[len(src):]
+            break
+    if "\\" in p:
+        p = p.replace("\\", "/")
+    return p
+
+
 BATCH_SIZE = 100
 
 def get_file_path(plex, rating_key):
     try:
         track = plex.fetchItem(int(rating_key))
-        return track.media[0].parts[0].file
+        return translate_path(track.media[0].parts[0].file)
     except:
         return None
 

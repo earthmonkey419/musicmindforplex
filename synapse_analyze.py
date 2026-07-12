@@ -31,6 +31,27 @@ from datetime import datetime
 from plexapi.server import PlexServer
 from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH
 
+# --- Path translation (Plex host paths -> local paths) -----------------
+# Needed when Plex runs on a different OS/machine than MusicMind
+# (e.g. Plex on Windows + MusicMind in WSL or Docker). Configure
+# PATH_MAP in config.py; longest prefix wins; backslashes converted.
+try:
+    from config import PATH_MAP
+except ImportError:
+    PATH_MAP = {}
+
+def translate_path(p):
+    if not p:
+        return p
+    for src in sorted(PATH_MAP, key=len, reverse=True):
+        if p.startswith(src):
+            p = PATH_MAP[src] + p[len(src):]
+            break
+    if "\\" in p:
+        p = p.replace("\\", "/")
+    return p
+
+
 # Confirmed per-track timing from live testing on reference hardware —
 # used only as a rough fallback label, NOT for real estimates. Real
 # estimates should always come from --estimate's live sample, since
@@ -71,7 +92,7 @@ def get_plex_tracks(plex):
                 for media in track.media:
                     for part in media.parts:
                         if part.file:
-                            yield str(track.ratingKey), part.file
+                            yield str(track.ratingKey), translate_path(part.file)
 
 
 def count_formats(plex):
