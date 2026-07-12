@@ -213,7 +213,7 @@ def estimate(plex, samples_per_format=2, max_candidates_per_format=8):
                 print(f"  {ext}: {elapsed:.1f}s  ({os.path.basename(filepath)})")
                 successes += 1
             except Exception as e:
-                print(f"  {ext}: FAILED ({os.path.basename(filepath)}) — retrying with another file...")
+                print(f"  {ext}: FAILED ({os.path.basename(filepath)}) — {e} — retrying with another file...")
         if successes == 0:
             print(f"  {ext}: all {len(filepaths)} candidate samples failed — no timing available for this format")
         print()

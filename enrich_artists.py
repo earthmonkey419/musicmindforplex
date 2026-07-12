@@ -25,9 +25,14 @@ def init_table(conn):
             era           TEXT,
             group_type    TEXT,
             active_since  INTEGER,
+            mbid          TEXT,
             enriched_at   TEXT
         )
     """)
+    try:
+        conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
+    except Exception:
+        pass  # column already exists (or table just created with it)
     conn.commit()
     print("Table ready.\n")
 

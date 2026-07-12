@@ -30,6 +30,22 @@ REQUEST_DELAY = 1.1  # seconds, slightly over the 1 req/sec limit for safety
 
 def init_tables(conn):
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS artist_meta (
+            artist        TEXT PRIMARY KEY,
+            gender        TEXT,
+            country       TEXT,
+            era           TEXT,
+            group_type    TEXT,
+            active_since  INTEGER,
+            mbid          TEXT,
+            enriched_at   TEXT
+        )
+    """)
+    try:
+        conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
+    except Exception:
+        pass  # column already exists (or table just created with it)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS mb_unmatched_artists (
             artist        TEXT PRIMARY KEY,
             best_score    INTEGER,
