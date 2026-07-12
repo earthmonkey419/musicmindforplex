@@ -39,9 +39,22 @@ def init_db(conn):
             last_played  TEXT,
             user_rating  REAL,
             added_at     TEXT,
-            updated_at   TEXT
+            updated_at   TEXT,
+            real_artist  TEXT,
+            is_instrumental INTEGER,
+            genres_written  INTEGER DEFAULT 0
         )
     """)
+    # Columns added after the original schema — upgrade existing DBs in place
+    for col, decl in [
+        ("real_artist", "TEXT"),
+        ("is_instrumental", "INTEGER"),
+        ("genres_written", "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE tracks ADD COLUMN {col} {decl}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     print(f"Database ready: {DB_PATH}\n")
 
