@@ -84,6 +84,28 @@ def init_db(conn):
         conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
     except Exception:
         pass  # column already exists
+    # track_audio_features is also created by synapse_analyze.py, but
+    # brain.py's core playlist search LEFT JOINs against it unconditionally
+    # — playlist generation must work even if Synapse has never been run.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS track_audio_features (
+            rating_key    TEXT PRIMARY KEY,
+            bpm           REAL,
+            key           TEXT,
+            scale         TEXT,
+            key_strength  REAL,
+            danceability  REAL,
+            analyzed_at   TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS synapse_errors (
+            rating_key    TEXT PRIMARY KEY,
+            filepath      TEXT,
+            error         TEXT,
+            failed_at     TEXT
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS query_log (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
