@@ -9,6 +9,8 @@ import json
 import time
 from openai import OpenAI
 from config import DB_PATH, OPENAI_KEY
+from config_check import check_config
+check_config(OPENAI_KEY=OPENAI_KEY)
 
 BATCH_SIZE = 20
 

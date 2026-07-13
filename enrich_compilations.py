@@ -11,6 +11,8 @@ from mutagen.flac import FLAC
 from mutagen.mp4 import MP4
 from plexapi.server import PlexServer
 from config import DB_PATH, PLEX_URL, PLEX_TOKEN
+from config_check import check_config
+check_config(PLEX_URL=PLEX_URL, PLEX_TOKEN=PLEX_TOKEN)
 
 # --- Path translation (Plex host paths -> local paths) -----------------
 # Needed when Plex runs on a different OS/machine than MusicMind

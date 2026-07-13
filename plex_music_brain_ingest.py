@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from plexapi.server import PlexServer
 from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH
+from config_check import check_config
+check_config(PLEX_URL=PLEX_URL, PLEX_TOKEN=PLEX_TOKEN)
 
 MUSIC_LIBRARY = "Music"
 

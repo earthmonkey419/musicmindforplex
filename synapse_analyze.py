@@ -30,6 +30,8 @@ from collections import Counter
 from datetime import datetime
 from plexapi.server import PlexServer
 from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH
+from config_check import check_config
+check_config(PLEX_URL=PLEX_URL, PLEX_TOKEN=PLEX_TOKEN)
 
 # --- Path translation (Plex host paths -> local paths) -----------------
 # Needed when Plex runs on a different OS/machine than MusicMind

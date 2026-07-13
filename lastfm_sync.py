@@ -276,6 +276,11 @@ def main():
     print("MusicMind for Plex - Last.fm Sync")
     print("=" * 40)
 
+    if not LASTFM_KEY or not LASTFM_USER:
+        print("Last.fm credentials not set in config.py — skipping.")
+        print("(This is optional. Set LASTFM_KEY and LASTFM_USER to enable.)")
+        return
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     init_tables(conn)
     sync_scrobbles(conn)

@@ -11,6 +11,8 @@ import sqlite3
 from datetime import datetime
 from plexapi.server import PlexServer
 from config import DB_PATH, PLEX_URL, PLEX_TOKEN
+from config_check import check_config
+check_config(PLEX_URL=PLEX_URL, PLEX_TOKEN=PLEX_TOKEN)
 
 SESSION_GAP = 1800  # 30 minutes in seconds
 
