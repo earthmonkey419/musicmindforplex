@@ -183,14 +183,14 @@
 
             <div class="btn-row">
                 <button class="btn-outline" onclick="checkUpdate()">🔍 Check for Updates</button>
-                {% if not is_master %}
-                <button id="update-btn" class="btn-outline" onclick="runUpdate(this)" style="display:none;">⬇️ Update Now</button>
-                {% endif %}
                 <button class="btn-outline" onclick="restartApp(this)">🔁 Restart App</button>
             </div>
 
             <div id="update-result" class="update-result"></div>
-            <div id="update-log" class="log-box"></div>
+            <p style="color:#8b6914; font-size:0.85rem; margin-top:0.75rem;">
+                To update: <code>git pull</code> in your install directory, then click
+                "Restart App" above (or restart your PM2 process) to load the new code.
+            </p>
 
             {% else %}
             <div class="version-row"><span class="version-label">Install path</span><span class="version-value">{{ git.path }}</span></div>
@@ -272,6 +272,9 @@
         }
 
         async function runUpdate(btn) {
+            // Self-update via the web UI isn't implemented — see the
+            // "git pull" instructions on this page instead.
+            return;
             const log = document.getElementById('update-log');
             log.textContent = '';
             log.classList.add('active');
