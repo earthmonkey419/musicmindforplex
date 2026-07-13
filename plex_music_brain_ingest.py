@@ -84,6 +84,23 @@ def init_db(conn):
         conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
     except Exception:
         pass  # column already exists
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS query_log (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp         TEXT DEFAULT (datetime('now')),
+            prompt            TEXT,
+            tags              TEXT,
+            filters           TEXT,
+            result_count      INTEGER,
+            duration_ms       INTEGER,
+            error             TEXT,
+            openai_request    TEXT,
+            openai_response   TEXT,
+            prompt_tokens     INTEGER,
+            completion_tokens INTEGER,
+            cost_usd          REAL
+        )
+    """)
     conn.commit()
     print(f"Database ready: {DB_PATH}\n")
 
