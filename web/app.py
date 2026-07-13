@@ -10,7 +10,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date
-from config import DB_PATH, BASE_DIR, IS_MASTER, LASTFM_KEY
+from config import DB_PATH, BASE_DIR, LASTFM_KEY
+try:
+    from config import IS_MASTER
+except ImportError:
+    IS_MASTER = False  # not set in config.py — safe default
 
 app = Flask(__name__)
 

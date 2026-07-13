@@ -32,3 +32,7 @@ LASTFM_USER = ""    # your last.fm username — leave blank to disable
 #     "J:\\Music": "/mnt/j/Music",
 # }
 PATH_MAP = {}
+
+# Internal flag — distinguishes the maintainer's own production instance
+# (enables extra update-page controls). Leave as False.
+IS_MASTER = False
