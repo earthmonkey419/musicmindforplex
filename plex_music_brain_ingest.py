@@ -204,12 +204,17 @@ def ingest(conn, plex):
 def main():
     print("MusicMind for Plex - Library Ingest")
     print("=" * 40)
+
+    # Initialize the database FIRST, before any network calls — a Plex
+    # connection failure should never leave the DB half-set-up and cause
+    # every downstream script to fail with a confusing "no such table".
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    init_db(conn)
+
     print(f"Connecting to Plex...")
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
     print(f"Connected to: {plex.friendlyName}\n")
 
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    init_db(conn)
     ingest(conn, plex)
     conn.close()
 

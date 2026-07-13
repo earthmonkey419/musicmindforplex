@@ -20,7 +20,7 @@ def check_config(**values):
     missing = []
     for name, value in values.items():
         placeholder = PLACEHOLDERS.get(name)
-        if not value or (placeholder and placeholder in str(value)):
+        if not value or (placeholder and placeholder.lower() in str(value).lower()):
             missing.append(name)
     if missing:
         print("=" * 60)
