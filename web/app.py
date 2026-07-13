@@ -759,6 +759,96 @@ def update():
 
     return render_template('update.html', git=git_info, is_master=IS_MASTER, year=datetime.now().year)
 
+
+@app.route('/check-update')
+def check_update():
+    import subprocess
+    if IS_MASTER:
+        return jsonify({'error': 'Updates are managed manually on this installation.'}), 400
+    try:
+        subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=BASE_DIR, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        return jsonify({'error': 'Not a git repository.', 'is_git_repo': False}), 200
+
+    try:
+        subprocess.check_call(
+            ['git', 'fetch', 'origin'],
+            cwd=BASE_DIR, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=30
+        )
+        local = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'], cwd=BASE_DIR
+        ).decode().strip()
+        remote = subprocess.check_output(
+            ['git', 'rev-parse', 'origin/main'], cwd=BASE_DIR
+        ).decode().strip()
+        if local == remote:
+            return jsonify({'up_to_date': True, 'local': local[:7]})
+        message = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%s', 'origin/main'], cwd=BASE_DIR
+        ).decode().strip()
+        date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%ci', 'origin/main'], cwd=BASE_DIR
+        ).decode().strip()[:10]
+        return jsonify({
+            'up_to_date': False,
+            'local': local[:7],
+            'remote': remote[:7],
+            'message': message,
+            'date': date,
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Timed out reaching GitHub.'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 200
+
+
+@app.route('/run/update')
+def run_update():
+    import subprocess
+    if IS_MASTER:
+        return jsonify({'error': 'Updates are managed manually on this installation.'}), 400
+    if running.get('update'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['update'] = True
+        try:
+            status = subprocess.check_output(
+                ['git', 'status', '--porcelain'], cwd=BASE_DIR
+            ).decode().strip()
+            if status:
+                yield "data: Update cancelled: you have local file changes.\n\n"
+                yield "data: Commit, stash, or discard them before updating.\n\n"
+                yield "data: (git status --porcelain showed changes in:)\n\n"
+                for line in status.splitlines():
+                    yield f"data:   {line}\n\n"
+                yield "data: __DONE__\n\n"
+                return
+
+            proc = subprocess.Popen(
+                ['git', 'pull', 'origin', 'main'],
+                cwd=BASE_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: \n\n"
+                yield "data: ✅ Update complete. Click 'Restart App' to load the new code.\n\n"
+            else:
+                yield f"data: ❌ git pull exited with code {proc.returncode}\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['update'] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
 @app.route('/tests')
 def tests():
     return render_template('tests.html', year=datetime.now().year)
