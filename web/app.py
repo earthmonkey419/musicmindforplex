@@ -167,7 +167,7 @@ def run_synapse_full():
     generic run_script() route:
 
     1. Uses start_new_session=True so the subprocess is fully detached
-       from this Flask app's process group. If plex-music-brain
+       from this Flask app's process group. If musicmind
        restarts (crash, manual restart, deploy), the analysis keeps
        running unaffected — previously, restarting the app silently
        killed the analysis too.

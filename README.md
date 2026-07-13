@@ -75,7 +75,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 
 4. Start the web app
 
-    sudo pm2 start python3.12 --name "plex-music-brain" -- ~/plex_music_brain/web/app.py
+    sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
     sudo pm2 save
 
 5. Open in browser
