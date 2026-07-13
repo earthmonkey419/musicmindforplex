@@ -173,6 +173,14 @@ def main():
     print(f"Mode: {mode}\n")
 
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS genre_snapshot (
+            rating_key  TEXT,
+            genre       TEXT,
+            snapped_at  TEXT
+        )
+    """)
+    conn.commit()
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
 
     if mode == '--test':
