@@ -103,7 +103,8 @@ def main():
     print("MusicMind for Plex - Artist Metadata Enrichment")
     print("=" * 50)
 
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = sqlite3.connect(DB_PATH, timeout=60)
+    conn.execute("PRAGMA busy_timeout=60000")
     init_table(conn)
 
     artists = get_unenriched_artists(conn)
