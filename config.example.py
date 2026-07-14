@@ -8,7 +8,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Database
-DB_PATH = os.path.join(BASE_DIR, "plex_music_brain.db")
+DB_PATH = os.path.join(BASE_DIR, "musicmind.db")
 
 # Plex
 PLEX_URL   = "http://YOUR_NAS_IP:32400"   # e.g. http://10.0.0.251:32400

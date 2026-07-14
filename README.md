@@ -56,7 +56,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 
 3. Initial setup (run once, in order)
 
-    python3.12 plex_music_brain_ingest.py
+    python3.12 musicmind_ingest.py
     python3.12 plex_tag_tracks.py
     python3.12 mb_enrich_artists.py
     python3.12 enrich_artists.py
@@ -100,11 +100,11 @@ OpenAI API costs vary depending on your library size and usage. Initial tagging 
 
 ## Project Structure
 
-plex_music_brain/
+musicmind/
     config.py                    Your credentials (never commit this)
     config.example.py            Template — copy to config.py
     brain.py                     Core engine: prompt expansion, search, playlist creation
-    plex_music_brain_ingest.py   Pulls library from Plex into SQLite
+    musicmind_ingest.py          Pulls library from Plex into SQLite
     plex_tag_tracks.py           AI tags tracks via OpenAI
     synapse_analyze.py           Synapse: BPM / key / danceability from audio (Essentia)
     mb_enrich_artists.py         MusicBrainz artist enrichment

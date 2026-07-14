@@ -46,7 +46,7 @@ cp ~/musicmind/config.example.py ~/musicmind/config.py
 
 **4. Run initial setup (in order)**
 ```bash
-python3.12 ~/musicmind/plex_music_brain_ingest.py      # Pull library into database
+python3.12 ~/musicmind/musicmind_ingest.py             # Pull library into database
 python3.12 ~/musicmind/plex_tag_tracks.py              # AI-tag your tracks
 python3.12 ~/musicmind/enrich_artists.py               # Artist metadata
 sudo python3.12 ~/musicmind/enrich_compilations.py     # Fix Various Artists
@@ -360,7 +360,7 @@ Set up Task Scheduler (on Synology DSM) or cron to run the sync pipeline automat
 
 ```bash
 # Runs every 2 hours — ingest, Last.fm sync, tag new tracks, context playlists
-python3.12 /path/to/musicmind/plex_music_brain_ingest.py >> ~/ingest.log 2>&1 && \
+python3.12 /path/to/musicmind/musicmind_ingest.py >> ~/ingest.log 2>&1 && \
 python3.12 /path/to/musicmind/lastfm_sync.py >> ~/lastfm.log 2>&1 && \
 python3.12 /path/to/musicmind/plex_tag_tracks.py >> ~/tagger.log 2>&1 && \
 python3.12 /path/to/musicmind/listening_context.py >> ~/context.log 2>&1

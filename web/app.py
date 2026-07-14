@@ -231,7 +231,7 @@ def synapse_full_log():
 @app.route('/run/<script>')
 def run_script(script):
     scripts = {
-        'ingest':   os.path.join(BASE_DIR, 'plex_music_brain_ingest.py'),
+        'ingest':   os.path.join(BASE_DIR, 'musicmind_ingest.py'),
         'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py') if LASTFM_KEY else None,
         'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
         'context':  os.path.join(BASE_DIR, 'listening_context.py'),
@@ -579,7 +579,7 @@ def run_fullsync():
 
             # Steps 3-5: Run scripts in sequence
             scripts = [
-                ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'plex_music_brain_ingest.py')),
+                ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
