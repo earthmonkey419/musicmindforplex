@@ -200,7 +200,7 @@ def run_synapse_full():
     try:
         with open(log_path, 'a') as logfile:
             subprocess.Popen(
-                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py')],
+                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py')],
                 stdout=logfile,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,  # detach from this Flask process entirely
@@ -249,7 +249,7 @@ def run_script(script):
         running[script] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', scripts[script]],
+                ['python3.12', '-u', scripts[script]],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -296,7 +296,7 @@ def run_test(test_id):
         running[run_key] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', script_path] + args,
+                ['python3.12', '-u', script_path] + args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -381,7 +381,7 @@ def run_synapse_count():
         running['synapse_count'] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--count'],
+                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--count'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -414,7 +414,7 @@ def run_synapse_estimate():
         running['synapse_estimate'] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--estimate'],
+                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--estimate'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -455,7 +455,7 @@ def run_synapse_limited():
         running['synapse_limited'] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--limit', str(n)],
+                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--limit', str(n)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -580,6 +580,7 @@ def run_fullsync():
             # Steps 3-5: Run scripts in sequence
             scripts = [
                 ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
+                ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
@@ -588,7 +589,7 @@ def run_fullsync():
             for label, script in scripts:
                 yield f"data: {label}\n\n"
                 proc = subprocess.Popen(
-                    ['python3.12', script],
+                    ['python3.12', '-u', script],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -618,7 +619,7 @@ def run_gaps():
         running['gaps'] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', os.path.join(BASE_DIR, 'lastfm_gaps.py')],
+                ['python3.12', '-u', os.path.join(BASE_DIR, 'lastfm_gaps.py')],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
