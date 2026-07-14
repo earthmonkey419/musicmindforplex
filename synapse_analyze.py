@@ -23,6 +23,7 @@ namespace-package-looking error, check:
 """
 import sys
 import os
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # silence TF/CUDA noise (no GPU on this NAS; CPU fallback is expected and harmless)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sqlite3
 import time
