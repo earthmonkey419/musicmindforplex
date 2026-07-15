@@ -583,6 +583,7 @@ def run_fullsync():
             scripts = [
                 ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
                 ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
+                ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
