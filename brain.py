@@ -114,6 +114,10 @@ Answer each dimension:
    - country: 2-letter country code if a nationality/country is mentioned. null if not.
    - era: decade like "70s", "80s" if mentioned. null if not.
    - year: specific year like "1975" if mentioned. null if not.
+   - min_plays: if the prompt asks for "comfort picks", "old favorites",
+     "songs I've heard a lot", "on repeat", or similar — set a reasonable
+     minimum play count threshold (5-10 is a sensible default). null if
+     not requested.
 
 Respond ONLY with valid JSON, no explanation:
 {{
@@ -126,7 +130,8 @@ Respond ONLY with valid JSON, no explanation:
     "gender": "female",
     "country": "BR",
     "era": "70s",
-    "year": null
+    "year": null,
+    "min_plays": null
   }}
 }}"""
         }]
@@ -141,10 +146,11 @@ Respond ONLY with valid JSON, no explanation:
     # Normalize filters
     f = result.get("filters", {}) or {}
     result["filters"] = {
-        "gender":  f.get("gender"),
-        "country": f.get("country"),
-        "era":     f.get("era"),
-        "year":    f.get("year"),
+        "gender":     f.get("gender"),
+        "country":    f.get("country"),
+        "era":        f.get("era"),
+        "year":       f.get("year"),
+        "min_plays":  f.get("min_plays"),
     }
 
     return result

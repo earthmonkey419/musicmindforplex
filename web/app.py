@@ -103,7 +103,7 @@ def preview():
             'genre':          data.get('genre') or None,
             'min_year':       int(data['min_year']) if data.get('min_year') else None,
             'max_year':       int(data['max_year']) if data.get('max_year') else None,
-            'min_plays':      int(data['min_plays']) if data.get('min_plays') else None,
+            'min_plays':      int(data['min_plays']) if data.get('min_plays') else detected_filters.get('min_plays'),
             'max_plays':      int(data['max_plays']) if data.get('max_plays') else None,
             'limit':          int(data.get('limit', 30)),
             'max_per_artist': int(data.get('max_per_artist', 3)),
