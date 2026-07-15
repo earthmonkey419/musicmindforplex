@@ -9,14 +9,8 @@
 </head>
 <body>
     <div class="container">
-        <div class="nav">
-            <a href="/">← Back to the Stacks</a>
-            <a href="/db">🗄️ DB Console</a>
-            <a href="/tests">🧪 Tests</a>
-            <a href="/guide">📖 Guide</a>
-            <a href="/logs">📋 Logs</a>
-            <a href="/update">🔄 Update</a>
-        </div>
+{% set back_target = "/" %}{% set back_label = "Back to the Stacks" %}
+{% include "_admin_nav.html" %}
         <h1 class="page-title">⚙️ Back Office</h1>
         <p class="page-subtitle">Sync jobs and maintenance. Each job streams live output. Use direct IP for long-running jobs.</p>
 

@@ -9,15 +9,8 @@
 </head>
 <body>
     <div class="container">
-        <div class="nav">
-            <a href="/admin">← Back to Back Office</a>
-            <a href="/db">🗄️ DB Console</a>
-            <a href="/tests">🧪 Tests</a>
-            <a href="/synapse">🧠 Synapse</a>
-            <a href="/guide">📖 Guide</a>
-            <a href="/logs">📋 Logs</a>
-            <a href="/update">🔄 Update</a>
-        </div>
+{% set back_target = "/admin" %}{% set back_label = "Back to Back Office" %}
+{% include "_admin_nav.html" %}
         <h1 class="page-title">🗄️ The Ledger</h1>
         <p class="page-subtitle">SELECT queries only. Click a hint to load it. Ctrl+Enter to run.</p>
 
