@@ -11,6 +11,15 @@ from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH, OPENAI_KEY
 
 # --- Config ---
 
+# Defensive strip: a stray invisible Unicode character (e.g. U+2028
+# LINE SEPARATOR) silently pasted at the end of a credential will pass
+# every visual check but crash EVERY OpenAI API call with a confusing
+# httpx header-encoding error deep in a library traceback — found the
+# hard way July 15, 2026. .strip() catches this and all similar
+# whitespace-class Unicode contamination, in any environment.
+OPENAI_KEY = OPENAI_KEY.strip() if OPENAI_KEY else OPENAI_KEY
+PLEX_TOKEN = PLEX_TOKEN.strip() if PLEX_TOKEN else PLEX_TOKEN
+
 client = OpenAI(api_key=OPENAI_KEY)
 
 DEFAULT_FILTERS = {
