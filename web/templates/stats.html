@@ -80,25 +80,11 @@
                 <canvas id="chart-years"></canvas>
             </div>
             <div class="stat-card">
-                <h3>🎤 Top Artists
-                    <select id="limit-artists" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
+                <h3>🎤 Top 10 Artists</h3>
                 <canvas id="chart-artists"></canvas>
             </div>
             <div class="stat-card">
-                <h3>🏷️ Top Genres
-                    <select id="limit-genres" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
+                <h3>🏷️ Top Genres</h3>
                 <canvas id="chart-genres"></canvas>
             </div>
             <div class="stat-card">
@@ -106,14 +92,7 @@
                 <canvas id="chart-era"></canvas>
             </div>
             <div class="stat-card">
-                <h3>🌍 Library by Country
-                    <select id="limit-country" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
+                <h3>🌍 Library by Country</h3>
                 <canvas id="chart-country"></canvas>
             </div>
             <div class="stat-card">
@@ -147,31 +126,9 @@
         Chart.defaults.font.family = 'Inter, sans-serif'
         Chart.defaults.color = WARM.brown
 
-        let charts = {}
-
-        function getLimits() {
-            return {
-                genre_limit: localStorage.getItem('statsGenreLimit') || 10,
-                artist_limit: localStorage.getItem('statsArtistLimit') || 10,
-                country_limit: localStorage.getItem('statsCountryLimit') || 10,
-            }
-        }
-
         async function loadStats() {
-            const limits = getLimits()
-            const qs = new URLSearchParams(limits).toString()
-            const res = await fetch('/stats/data?' + qs)
+            const res = await fetch('/stats/data')
             const d = await res.json()
-
-            // Tear down any existing charts before recreating —
-            // Chart.js throws if you reuse a canvas without this.
-            Object.values(charts).forEach(c => c.destroy())
-            charts = {}
-
-            // Reflect current limits in the dropdowns
-            document.getElementById('limit-artists').value = limits.artist_limit
-            document.getElementById('limit-genres').value = limits.genre_limit
-            document.getElementById('limit-country').value = limits.country_limit
 
             // Hero stats
             document.getElementById('stat-tracks').textContent = d.stats.total_tracks.toLocaleString()
@@ -180,7 +137,7 @@
             document.getElementById('stat-instrumental').textContent = d.stats.total_instrumental.toLocaleString()
 
             // Listening by year
-            charts['years'] = new Chart(document.getElementById('chart-years'), {
+            new Chart(document.getElementById('chart-years'), {
                 type: 'bar',
                 data: {
                     labels: d.listening_by_year.map(r => r.year),
@@ -201,7 +158,7 @@
             })
 
             // Top artists — horizontal bar
-            charts['artists'] = new Chart(document.getElementById('chart-artists'), {
+            new Chart(document.getElementById('chart-artists'), {
                 type: 'bar',
                 data: {
                     labels: d.top_artists.map(r => r.artist),
@@ -223,7 +180,7 @@
             })
 
             // Top genres — donut
-            charts['genres'] = new Chart(document.getElementById('chart-genres'), {
+            new Chart(document.getElementById('chart-genres'), {
                 type: 'doughnut',
                 data: {
                     labels: d.top_genres.map(r => r.tag),
@@ -242,7 +199,7 @@
             })
 
             // By era — bar
-            charts['era'] = new Chart(document.getElementById('chart-era'), {
+            new Chart(document.getElementById('chart-era'), {
                 type: 'bar',
                 data: {
                     labels: d.by_era.map(r => r.era),
@@ -262,7 +219,7 @@
             })
 
             // By country — horizontal bar
-            charts['country'] = new Chart(document.getElementById('chart-country'), {
+            new Chart(document.getElementById('chart-country'), {
                 type: 'bar',
                 data: {
                     labels: d.by_country.map(r => r.country),
@@ -283,7 +240,7 @@
             })
 
             // Gender — donut
-            charts['gender'] = new Chart(document.getElementById('chart-gender'), {
+            new Chart(document.getElementById('chart-gender'), {
                 type: 'doughnut',
                 data: {
                     labels: d.by_gender.map(r => r.gender),
@@ -303,19 +260,6 @@
         }
 
         loadStats()
-
-        document.getElementById('limit-artists').addEventListener('change', e => {
-            localStorage.setItem('statsArtistLimit', e.target.value)
-            loadStats()
-        })
-        document.getElementById('limit-genres').addEventListener('change', e => {
-            localStorage.setItem('statsGenreLimit', e.target.value)
-            loadStats()
-        })
-        document.getElementById('limit-country').addEventListener('change', e => {
-            localStorage.setItem('statsCountryLimit', e.target.value)
-            loadStats()
-        })
     </script>
 {% include "footer.html" %}
 </body>
