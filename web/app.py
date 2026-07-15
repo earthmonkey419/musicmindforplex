@@ -899,16 +899,25 @@ def stats_data():
     import sqlite3
     conn = sqlite3.connect(DB_PATH)
 
+    # Tile row-count limits — configurable per-tile from the Stats page
+    # (persisted client-side in localStorage, not the database, so a
+    # future code sync can never silently revert someone's preference).
+    genre_limit = request.args.get('genre_limit', 10, type=int)
+    artist_limit = request.args.get('artist_limit', 10, type=int)
+    country_limit = request.args.get('country_limit', 10, type=int)
+
     listening_by_year = conn.execute(
         "SELECT strftime('%Y', datetime(timestamp, 'unixepoch', 'localtime')) as year, COUNT(*) as plays FROM lastfm_scrobbles GROUP BY year ORDER BY year"
     ).fetchall()
 
     top_artists = conn.execute(
-        "SELECT COALESCE(real_artist, artist) as artist, SUM(play_count) as plays FROM tracks WHERE play_count > 0 AND artist IS NOT NULL AND artist != '' AND LOWER(COALESCE(real_artist, artist)) NOT IN ('various artists', 'va') GROUP BY COALESCE(real_artist, artist) ORDER BY plays DESC LIMIT 10"
+        "SELECT COALESCE(real_artist, artist) as artist, SUM(play_count) as plays FROM tracks WHERE play_count > 0 AND artist IS NOT NULL AND artist != '' AND LOWER(COALESCE(real_artist, artist)) NOT IN ('various artists', 'va') GROUP BY COALESCE(real_artist, artist) ORDER BY plays DESC LIMIT ?",
+        (artist_limit,)
     ).fetchall()
 
     top_genres = conn.execute(
-        "SELECT tag, COUNT(*) as cnt FROM track_tags GROUP BY tag ORDER BY cnt DESC LIMIT 10"
+        "SELECT tag, COUNT(*) as cnt FROM track_tags GROUP BY tag ORDER BY cnt DESC LIMIT ?",
+        (genre_limit,)
     ).fetchall()
 
     by_era = conn.execute(
@@ -916,7 +925,8 @@ def stats_data():
     ).fetchall()
 
     by_country = conn.execute(
-        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT 10"
+        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT ?",
+        (country_limit,)
     ).fetchall()
 
     by_gender = conn.execute(
