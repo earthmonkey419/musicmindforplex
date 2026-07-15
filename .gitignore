@@ -16,3 +16,6 @@ __pycache__/
 
 # Mac
 .DS_Store
+
+# Licensed model files — CC BY-NC-SA, link don't bundle
+models/
