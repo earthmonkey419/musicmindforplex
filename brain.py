@@ -251,18 +251,30 @@ Respond ONLY with a flat JSON array of tag strings, using exact spelling from th
     return tags, log_id
 
 
-def update_query_log_result_count(log_id, result_count):
-    """Backfills result_count on a query_log row once search_tracks()
-    has actually run. Safe no-op if log_id is None (e.g. logging failed
-    or this prompt never went through expand_prompt at all)."""
+def update_query_log_result_count(log_id, result_count, filters=None):
+    """Backfills result_count (and, if provided, filters) on a query_log
+    row once search_tracks() has actually run. Neither is known at
+    INSERT time inside expand_prompt() — filters gets built afterward
+    in the /preview route. Safe no-op if log_id is None (e.g. logging
+    failed or this prompt never went through expand_prompt at all).
+    (filters backfill added July 15 — same class of gap as
+    result_count, found via view_logs.py --analyze showing a
+    default-filters mismatch instead of the real filters used.)"""
     if log_id is None:
         return
+    import json
     try:
         conn = sqlite3.connect(DB_PATH)
-        conn.execute(
-            "UPDATE query_log SET result_count = ? WHERE id = ?",
-            (result_count, log_id)
-        )
+        if filters is not None:
+            conn.execute(
+                "UPDATE query_log SET result_count = ?, filters = ? WHERE id = ?",
+                (result_count, json.dumps(filters), log_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE query_log SET result_count = ? WHERE id = ?",
+                (result_count, log_id)
+            )
         conn.commit()
         conn.close()
     except Exception as e:

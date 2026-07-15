@@ -123,7 +123,7 @@ def preview():
 
         }
         tracks = search_tracks(tags, filters)
-        update_query_log_result_count(query_log_id, len(tracks))
+        update_query_log_result_count(query_log_id, len(tracks), filters)
 
         if data.get('dj_ify'):
             tracks = sequence_for_flow(tracks)
