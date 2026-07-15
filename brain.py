@@ -215,6 +215,11 @@ Respond ONLY with a flat JSON array of tag strings, using exact spelling from th
     tags = filtered_tags
 
     # Log to DB
+    # NOTE: result_count is NOT known yet at this point — search_tracks()
+    # hasn't run. We return log_id so the caller can UPDATE this row with
+    # the real count once results exist, instead of it silently sitting
+    # as NULL forever (the "0 tracks" display bug found July 14).
+    log_id = None
     try:
         prompt_tokens     = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
@@ -222,7 +227,7 @@ Respond ONLY with a flat JSON array of tag strings, using exact spelling from th
         cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
 
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("""
+        cursor = conn.execute("""
             INSERT INTO query_log
                 (prompt, tags, openai_request, openai_response,
                  prompt_tokens, completion_tokens, cost_usd, duration_ms)
@@ -237,12 +242,31 @@ Respond ONLY with a flat JSON array of tag strings, using exact spelling from th
             round(cost_usd, 6),
             duration_ms
         ))
+        log_id = cursor.lastrowid
         conn.commit()
         conn.close()
     except Exception as log_err:
         print(f"Log error: {log_err}")
 
-    return tags
+    return tags, log_id
+
+
+def update_query_log_result_count(log_id, result_count):
+    """Backfills result_count on a query_log row once search_tracks()
+    has actually run. Safe no-op if log_id is None (e.g. logging failed
+    or this prompt never went through expand_prompt at all)."""
+    if log_id is None:
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "UPDATE query_log SET result_count = ? WHERE id = ?",
+            (result_count, log_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"update_query_log_result_count error: {e}")
 
 # --- Track Search ---
 
@@ -567,7 +591,7 @@ def create_playlist(name, rating_keys):
 
 if __name__ == "__main__":
     print("Testing prompt expansion...")
-    tags = expand_prompt("sunny day driving with the windows down")
+    tags, _log_id = expand_prompt("sunny day driving with the windows down")
     print(f"Tags: {tags}\n")
 
     print("Searching tracks...")

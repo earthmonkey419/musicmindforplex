@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 try:
     from config import IS_MASTER
@@ -74,6 +74,7 @@ def preview():
         detected_filters = {}
         classification = {}
         lastfm_rating_keys = None
+        query_log_id = None
 
         # Explicit lastfm: prefix — bypasses normal mood/AI classification
         # entirely, since a date reference is unambiguous once flagged
@@ -94,7 +95,7 @@ def preview():
             mood = classification.get('mood')
             if mood and intent in ('mood', 'filter_only'):
                 if intent == 'mood':
-                    tags = expand_prompt(prompt)
+                    tags, query_log_id = expand_prompt(prompt)
                 # for filter_only with no mood, skip expansion
 
         filters = {
@@ -122,6 +123,7 @@ def preview():
 
         }
         tracks = search_tracks(tags, filters)
+        update_query_log_result_count(query_log_id, len(tracks))
 
         if data.get('dj_ify'):
             tracks = sequence_for_flow(tracks)
