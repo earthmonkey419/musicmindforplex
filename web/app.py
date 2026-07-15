@@ -241,6 +241,10 @@ def run_script(script):
         'mbenrich': os.path.join(BASE_DIR, 'mb_enrich_artists.py'),
         'aienrich': os.path.join(BASE_DIR, 'enrich_artists.py'),
         'synapse':  os.path.join(BASE_DIR, 'synapse_analyze.py'),
+        'fingerprint':  os.path.join(BASE_DIR, 'fingerprint_tracks.py'),
+        'copyforward':  os.path.join(BASE_DIR, 'copy_forward_analysis.py'),
+        'dedup':        os.path.join(BASE_DIR, 'dedup_report.py'),
+        'varesolve':    os.path.join(BASE_DIR, 'va_resolve.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400

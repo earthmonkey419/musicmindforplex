@@ -95,6 +95,37 @@
                 <div class="log-box" id="log-gaps"></div>
             </div>
 
+            <div class="admin-card">
+                <h3>🔗 Fingerprint New Tracks</h3>
+                <p>Computes acoustic fingerprints for any track that doesn't have one yet. Fast, local, no rate limit — also runs automatically as part of Full Sync.</p>
+                <button onclick="runScript('fingerprint', this)">Run Now</button>
+                <div class="status" id="status-fingerprint"></div>
+                <div class="log-box" id="log-fingerprint"></div>
+            </div>
+
+            <div class="admin-card">
+                <h3>♻️ Copy-Forward Analysis</h3>
+                <p>Two tracks with identical fingerprints are the same recording — copies existing Synapse/VI results to any duplicate that's missing them, skipping redundant analysis. Run this again after a Synapse pass to catch new duplicates.</p>
+                <button onclick="runScript('copyforward', this)">Run Now</button>
+                <div class="status" id="status-copyforward"></div>
+                <div class="log-box" id="log-copyforward"></div>
+            </div>
+
+            <div class="admin-card">
+                <h3>🔍 Duplicate Report</h3>
+                <p>Read-only report — groups tracks by identical fingerprint to show real duplicates in your library. Never modifies or deletes anything.</p>
+                <button onclick="runScript('dedup', this)">Run Now</button>
+                <div class="status" id="status-dedup"></div>
+                <div class="log-box" id="log-dedup"></div>
+            </div>
+
+            <div class="admin-card">
+                <h3>🎯 Resolve Various Artists</h3>
+                <p>Identifies real performers for "Various Artists" compilation tracks via acoustic fingerprinting + AcoustID lookup, instead of unreliable text matching. Rate-limited (~2s/track) — can take a while on a large backlog.</p>
+                <button onclick="runScript('varesolve', this)">Run Now</button>
+                <div class="status" id="status-varesolve"></div>
+                <div class="log-box" id="log-varesolve"></div>
+            </div>
 
         </div>
     </div>
