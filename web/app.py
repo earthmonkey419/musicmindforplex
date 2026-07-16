@@ -237,7 +237,6 @@ def run_script(script):
         'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py') if LASTFM_KEY else None,
         'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
         'context':  os.path.join(BASE_DIR, 'listening_context.py'),
-        'instrumental': os.path.join(BASE_DIR, 'tag_instrumentals.py'),
         'mbenrich': os.path.join(BASE_DIR, 'mb_enrich_artists.py'),
         'aienrich': os.path.join(BASE_DIR, 'enrich_artists.py'),
         'synapse':  os.path.join(BASE_DIR, 'synapse_analyze.py'),
