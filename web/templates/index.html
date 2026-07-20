@@ -39,6 +39,21 @@
             <input type="text" id="prompt" placeholder="sunny day driving with the windows down..." autofocus>
         </div>
 
+        <div class="filters" id="bucket-filters" style="margin-top:0.5rem;">
+            <span style="font-weight:600; margin-right:0.5rem;">Genre focus (optional — leave all unchecked for the full library):</span>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="New Wave / Post-Punk / Synth" id="bucket-new-wave"> New Wave / Post-Punk / Synth</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Psych / Art Rock / Experimental" id="bucket-psych"> Psych / Art Rock / Experimental</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Classic / Garage / Alt / Punk Rock" id="bucket-classic-rock"> Classic / Garage / Alt / Punk Rock</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Soul / Funk / R&B" id="bucket-soul"> Soul / Funk / R&B</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Jazz" id="bucket-jazz"> Jazz</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="World / Reggae / Latin / Afro" id="bucket-world"> World / Reggae / Latin / Afro</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Hip-Hop / Rap" id="bucket-hiphop"> Hip-Hop / Rap</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Pop" id="bucket-pop"> Pop</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Classical / Orchestral / Cinematic" id="bucket-classical"> Classical / Orchestral / Cinematic</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Folk / Singer-Songwriter / Acoustic / Blues" id="bucket-folk"> Folk / Singer-Songwriter / Acoustic / Blues</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Electronic / House / Techno / Downtempo" id="bucket-electronic"> Electronic / House / Techno / Downtempo</label>
+        </div>
+
         <div class="filters">
             <label><input type="checkbox" id="unplayed"> Unplayed only</label>
             <label><input type="checkbox" id="instrumental"> Instrumental only</label>
@@ -232,6 +247,7 @@
                 gender:         document.getElementById('gender').value || null,
                 country:        document.getElementById('country').value || null,
                 era:            document.getElementById('era').value || null,
+                buckets:        Array.from(document.querySelectorAll('.bucket-checkbox:checked')).map(el => el.dataset.bucket),
             };
 
             try {

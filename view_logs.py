@@ -99,7 +99,7 @@ def show_analysis(conn, entry_id):
     result count.
     """
     row = conn.execute("""
-        SELECT prompt, tags, filters, result_count
+        SELECT prompt, tags, filters, result_count, buckets
         FROM query_log WHERE id = ?
     """, (entry_id,)).fetchone()
 
@@ -107,14 +107,19 @@ def show_analysis(conn, entry_id):
         print(f"No query_log entry with id={entry_id}")
         return
 
-    prompt, tags_json, filters_json, logged_count = row
+    prompt, tags_json, filters_json, logged_count, buckets_json = row
     tags = json.loads(tags_json) if tags_json else []
     filters = json.loads(filters_json) if filters_json else {}
+    buckets = json.loads(buckets_json) if buckets_json else []
 
     print("=" * 70)
     print(f"Analyzing Query Log #{entry_id}: \"{prompt}\"")
     print("=" * 70)
     print(f"Logged result count (at the time): {logged_count}")
+    if buckets:
+        print(f"Genre buckets selected: {', '.join(buckets)}")
+    else:
+        print("Genre buckets selected: none (full library tag pool)")
     print()
 
     if tags:

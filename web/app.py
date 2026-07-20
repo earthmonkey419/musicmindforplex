@@ -66,6 +66,7 @@ def onthisday():
 def preview():
     data = request.json
     prompt = data.get('prompt', '').strip()
+    bucket_names = data.get('buckets') or None  # optional list of genre bucket names to narrow tag vocabulary
 
     try:
         tags = []
@@ -95,7 +96,7 @@ def preview():
             mood = classification.get('mood')
             if mood and intent in ('mood', 'filter_only'):
                 if intent == 'mood':
-                    tags, query_log_id = expand_prompt(prompt)
+                    tags, query_log_id = expand_prompt(prompt, bucket_names)
                 # for filter_only with no mood, skip expansion
 
         filters = {

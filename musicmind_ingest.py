@@ -114,6 +114,7 @@ def init_db(conn):
             prompt            TEXT,
             tags              TEXT,
             filters           TEXT,
+            buckets           TEXT,
             result_count      INTEGER,
             duration_ms       INTEGER,
             error             TEXT,
@@ -124,6 +125,10 @@ def init_db(conn):
             cost_usd          REAL
         )
     """)
+    try:
+        conn.execute("ALTER TABLE query_log ADD COLUMN buckets TEXT")
+    except Exception:
+        pass  # column already exists
     conn.commit()
     print(f"Database ready: {DB_PATH}\n")
 
