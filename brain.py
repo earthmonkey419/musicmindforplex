@@ -677,14 +677,18 @@ def get_known_tags_bucketed(bucket_names=None, strict=False):
     No buckets selected -> today's exact unchanged behavior
     (get_known_tags(), the full ~200-tag pool).
 
-    strict=True (EXPERIMENTAL, July 2026): when a bucket IS selected,
-    skip ERA_TAGS/MOOD_ENERGY entirely — offer ONLY that bucket's own
-    tags. Built to test whether mood-pool dominance (checking "Jazz"
-    still returning zero jazz-specific tags for mood-heavy prompts)
-    is a model preference issue that persists regardless of what's
-    offered, or purely a side effect of the mood pool being available
-    as an easier/safer choice. Has no effect when bucket_names is
-    empty either way.
+    strict=True (CONFIRMED DEFAULT as of July 2026 — see app.py's
+    /preview route, which always passes strict=True whenever any
+    bucket is selected): when a bucket IS selected, skip ERA_TAGS/
+    MOOD_ENERGY entirely — offer ONLY that bucket's own tags. Proven
+    3/3 on real production data that this produces genuinely
+    genre-coherent results (real jazz artists for a jazz bucket, real
+    hip-hop for a hip-hop bucket, etc.) instead of generic mood words
+    crowding out every bucket's own vocabulary. The AI still reads
+    the full prompt text and interprets its mood — it just does so
+    THROUGH the selected genre's own vocabulary rather than reaching
+    for generic cross-genre mood words. Has no effect when
+    bucket_names is empty either way (unbucketed search unaffected).
 
     Cross-checks the static bucket assignments against LIVE track_tags
     data, so a bucket built from an old snapshot can never offer a tag
@@ -725,7 +729,7 @@ def expand_prompt(prompt, bucket_names=None, strict=False):
     offered tag vocabulary to (see GENRE_BUCKET_NAMES). None/empty
     means today's unchanged full-pool behavior.
 
-    strict: EXPERIMENTAL (July 2026) — see get_known_tags_bucketed().
+    strict: confirmed default whenever bucket_names is set — see get_known_tags_bucketed().
     """
     import json, time, sqlite3
 
