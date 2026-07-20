@@ -124,6 +124,13 @@ def main():
                 [FPCALC, "-json", filepath],
                 capture_output=True, text=True, timeout=60
             )
+            if result.returncode != 0 or not result.stdout.strip():
+                # fpcalc failed and wrote its real reason to stderr —
+                # surface that instead of letting json.loads() throw a
+                # generic, unhelpful "Expecting value" error that gives
+                # zero diagnostic information about the actual cause.
+                stderr_msg = result.stderr.strip() or "(no stderr output)"
+                raise RuntimeError(f"fpcalc failed: {stderr_msg}")
             fp = json.loads(result.stdout)
 
             conn.execute("""
