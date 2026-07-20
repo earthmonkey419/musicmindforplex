@@ -578,11 +578,28 @@ def run_fullsync():
             music.update()
 
             # Step 2: Poll until scan complete
+            # NOTE: plex.library is a cached_data_property in plexapi —
+            # re-calling plex.library.section(...) does NOT re-fetch
+            # from the server after the first access, it just returns
+            # the same cached object. That caused this loop to spin
+            # forever on a stale .refreshing=True value even after
+            # Plex had genuinely finished scanning (found July 2026).
+            # music.reload() forces a real re-fetch of just this
+            # object's own state, bypassing the cache correctly.
             yield "data: ⏳ Waiting for Plex scan to complete...\n\n"
+            max_wait_iterations = 360  # 5s * 360 = 30 minutes safety cap
+            waited = 0
             while True:
                 time.sleep(5)
-                music = plex.library.section(MUSIC_LIB)
+                waited += 1
+                try:
+                    music.reload()
+                except Exception:
+                    pass  # transient hiccup — try again next iteration
                 if not music.refreshing:
+                    break
+                if waited >= max_wait_iterations:
+                    yield "data: ⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).\n\n"
                     break
                 yield "data: ⏳ Still scanning...\n\n"
             yield "data: ✅ Plex scan complete.\n\n"
