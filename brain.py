@@ -667,7 +667,7 @@ def get_known_tags(limit=200):
     return tags
 
 
-def get_known_tags_bucketed(bucket_names=None):
+def get_known_tags_bucketed(bucket_names=None, strict=False):
     """Same purpose as get_known_tags(), but narrows the offered
     vocabulary to specific genre buckets when the user has selected
     any. ERA_TAGS and MOOD_ENERGY are always included regardless of
@@ -677,6 +677,15 @@ def get_known_tags_bucketed(bucket_names=None):
     No buckets selected -> today's exact unchanged behavior
     (get_known_tags(), the full ~200-tag pool).
 
+    strict=True (EXPERIMENTAL, July 2026): when a bucket IS selected,
+    skip ERA_TAGS/MOOD_ENERGY entirely — offer ONLY that bucket's own
+    tags. Built to test whether mood-pool dominance (checking "Jazz"
+    still returning zero jazz-specific tags for mood-heavy prompts)
+    is a model preference issue that persists regardless of what's
+    offered, or purely a side effect of the mood pool being available
+    as an easier/safer choice. Has no effect when bucket_names is
+    empty either way.
+
     Cross-checks the static bucket assignments against LIVE track_tags
     data, so a bucket built from an old snapshot can never offer a tag
     that's since disappeared from the library (drift protection).
@@ -684,7 +693,10 @@ def get_known_tags_bucketed(bucket_names=None):
     if not bucket_names:
         return get_known_tags()
 
-    candidate_pool = set(ERA_TAGS) | set(MOOD_ENERGY)
+    if strict:
+        candidate_pool = set()
+    else:
+        candidate_pool = set(ERA_TAGS) | set(MOOD_ENERGY)
     bucket_map = dict(BUCKETS)
     for name in bucket_names:
         if name in bucket_map:
@@ -701,7 +713,7 @@ def get_known_tags_bucketed(bucket_names=None):
     return sorted(candidate_pool & live_tags)
 
 
-def expand_prompt(prompt, bucket_names=None):
+def expand_prompt(prompt, bucket_names=None, strict=False):
     """
     Send a natural language prompt to OpenAI and get back
     a list of specific music tags/genres/moods to search for.
@@ -712,10 +724,12 @@ def expand_prompt(prompt, bucket_names=None):
     bucket_names: optional list of genre bucket names to narrow the
     offered tag vocabulary to (see GENRE_BUCKET_NAMES). None/empty
     means today's unchanged full-pool behavior.
+
+    strict: EXPERIMENTAL (July 2026) — see get_known_tags_bucketed().
     """
     import json, time, sqlite3
 
-    known_tags = get_known_tags_bucketed(bucket_names)
+    known_tags = get_known_tags_bucketed(bucket_names, strict=strict)
     tag_list = ", ".join(known_tags)
 
     system_msg = """You are an eclectic music curator who hosts a late-night college radio show. You have deep knowledge of subgenres, world music, jazz, post-punk, electronic, African music, Latin music, and everything in between. When given a theme, vibe, or situation, you think laterally — you find the emotional core and translate it into specific music tags."""
