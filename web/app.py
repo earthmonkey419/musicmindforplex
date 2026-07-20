@@ -566,6 +566,8 @@ def run_fullsync():
     import subprocess
     import time
     from plexapi.server import PlexServer as PS
+    if running.get('fullsync'):
+        return jsonify({'error': 'Already running'}), 400
     def generate():
         running['fullsync'] = True
         try:
@@ -594,6 +596,7 @@ def run_fullsync():
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
                 ('🏷️ Tagging new tracks...', os.path.join(BASE_DIR, 'plex_tag_tracks.py')),
+                ('🧠 Analyzing audio (Synapse: BPM/key/danceability)...', os.path.join(BASE_DIR, 'synapse_analyze.py')),
             ]
             for label, script in scripts:
                 yield f"data: {label}\n\n"
