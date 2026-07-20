@@ -305,7 +305,8 @@
                 `).join('');
 
                 document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-                document.getElementById('playlist-name').value = prompt || 'My Playlist';
+                const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
+                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix;
                 document.getElementById('results').style.display = 'block';
 
             } catch (e) {
