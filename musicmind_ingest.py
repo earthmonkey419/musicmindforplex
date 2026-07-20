@@ -144,6 +144,19 @@ def reconcile_removed_tracks(conn, seen_rating_keys):
     placeholders = ",".join("?" for _ in removed_keys)
     removed_list = list(removed_keys)
 
+    # Cascade cleanup to every analysis table keyed on rating_key —
+    # without this, removed tracks leave orphaned rows behind that
+    # silently inflate "already analyzed" counts and deflate real
+    # backlog estimates forever (found July, ~230 orphaned Synapse
+    # rows on production alone). Defensive existence checks since
+    # fingerprinting/VI aren't guaranteed to have run on every install.
+    for table in ("track_audio_features", "track_fingerprints", "vi_results"):
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if exists:
+            conn.execute(f"DELETE FROM {table} WHERE rating_key IN ({placeholders})", removed_list)
+
     conn.execute(f"DELETE FROM track_tags WHERE rating_key IN ({placeholders})", removed_list)
     conn.execute(f"DELETE FROM tracks WHERE rating_key IN ({placeholders})", removed_list)
 
