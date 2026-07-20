@@ -622,7 +622,8 @@ def run_fullsync():
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=1
+                    bufsize=1,
+                    start_new_session=True,  # detach from this Flask worker — a step (e.g. a long Synapse run) now survives a pm2 restart of the parent app, matching the same protection the standalone /run/synapse-full button already had
                 )
                 for line in proc.stdout:
                     yield f"data: {line.rstrip()}\n\n"
