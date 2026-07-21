@@ -535,6 +535,7 @@ DEFAULT_FILTERS = {
     "era":            None,
     "instrumental":   None,
     "vocal_tolerance": 0.55,  # p_voice cutoff when instrumental=1; 0.55 matches vi_reverify.py's own migration-time threshold, so checking the box with no slider adjustment reproduces today's exact behavior
+    "bucket_names":   None,  # genre bucket selection now constrains results directly (see search_tracks), not just AI tag vocabulary — closes the gap where filter-only prompts with no mood ignored bucket selection entirely
     "title_search":   None,
     "artist_search":  None,
     "year_search":    None,
@@ -1209,6 +1210,28 @@ def search_tracks(tags, filters=None):
     if f["min_plays"] is not None:
         query += " AND t.play_count >= ?"
         params.append(f["min_plays"])
+    if f.get("bucket_names"):
+        # Genre bucket selection now constrains results DIRECTLY, not
+        # just the AI's tag vocabulary. Found July 2026: a pure filter
+        # prompt like "give me some popular tracks" has no mood/tags
+        # at all, so expand_prompt() (the only other place buckets
+        # were consumed) never runs -- bucket selection had nowhere
+        # to apply and was silently ignored. This closes that gap:
+        # regardless of whether AI-selected tags exist, results are
+        # also constrained to tracks having at least one tag from the
+        # union of the selected bucket(s)' own vocabulary. Harmless
+        # when tags DO exist too (strict mode already draws only from
+        # bucket vocabulary in that case) -- belt and suspenders, not
+        # a behavior change for that path.
+        bucket_map = dict(BUCKETS)
+        bucket_tag_union = set()
+        for name in f["bucket_names"]:
+            if name in bucket_map:
+                bucket_tag_union |= set(bucket_map[name])
+        if bucket_tag_union:
+            bucket_placeholders = ",".join("?" for _ in bucket_tag_union)
+            query += f" AND EXISTS (SELECT 1 FROM track_tags btt WHERE btt.rating_key = t.rating_key AND btt.tag IN ({bucket_placeholders}))"
+            params.extend(bucket_tag_union)
     if f.get("popularity_min") is not None:
         # rating_count is Plex's own GLOBAL popularity field (confirmed
         # real July 2026: genuine per-track values, not album-level —

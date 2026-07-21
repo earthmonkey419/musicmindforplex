@@ -133,6 +133,7 @@ def preview():
             'bpm_min':        int(data['bpm_min']) if data.get('bpm_min') else None,
             'bpm_max':        int(data['bpm_max']) if data.get('bpm_max') else None,
             'danceability':   data.get('danceability') or None,
+            'bucket_names':   bucket_names,
             'lastfm_rating_keys': lastfm_rating_keys,
             'title_search':   classification.get('title_search'),
             'artist_search':  classification.get('artist_search'),
