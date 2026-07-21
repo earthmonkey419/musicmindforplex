@@ -115,6 +115,7 @@ def init_db(conn):
             tags              TEXT,
             filters           TEXT,
             buckets           TEXT,
+            intent            TEXT,
             result_count      INTEGER,
             duration_ms       INTEGER,
             error             TEXT,
@@ -127,6 +128,10 @@ def init_db(conn):
     """)
     try:
         conn.execute("ALTER TABLE query_log ADD COLUMN buckets TEXT")
+    except Exception:
+        pass  # column already exists
+    try:
+        conn.execute("ALTER TABLE query_log ADD COLUMN intent TEXT")
     except Exception:
         pass  # column already exists
     conn.commit()

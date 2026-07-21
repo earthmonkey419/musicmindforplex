@@ -582,12 +582,9 @@ def classify_prompt(prompt):
         'australian': 'AU', 'australia': 'AU',
     }
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        messages=[{
-            "role": "user",
-            "content": f"""Analyze this music search prompt across multiple dimensions.
+    import time
+    t_start = time.time()
+    user_msg = f"""Analyze this music search prompt across multiple dimensions.
 
 Prompt: "{prompt}"
 
@@ -632,10 +629,16 @@ Respond ONLY with valid JSON, no explanation:
     "min_plays": null
   }}
 }}"""
-        }]
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[{"role": "user", "content": user_msg}]
     )
+    duration_ms = int((time.time() - t_start) * 1000)
 
     raw = response.choices[0].message.content.strip()
+    raw_response = raw
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
 
@@ -651,7 +654,132 @@ Respond ONLY with valid JSON, no explanation:
         "min_plays":  f.get("min_plays"),
     }
 
-    return result
+    # Log immediately — this is the ONE call that runs for nearly
+    # every real prompt regardless of eventual intent, so this is
+    # where centralized logging lives. Previously classify_prompt's
+    # own OpenAI cost was NEVER tracked anywhere, even for prompts
+    # that DID get logged (only expand_prompt's separate, later call
+    # was ever captured) — and title_search/artist_search/filter_only
+    # prompts were never logged AT ALL, since only mood-intent prompts
+    # ever reached expand_prompt's logging code. Found July 2026 via
+    # two real examples ("Dance Dance", "I love humanity") that never
+    # appeared in query_log despite real OpenAI spend happening.
+    prompt_tokens     = response.usage.prompt_tokens
+    completion_tokens = response.usage.completion_tokens
+    cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+    log_id = log_query(
+        prompt=prompt,
+        intent=result.get("intent"),
+        filters=result.get("filters"),
+        openai_request=user_msg,
+        openai_response=raw_response,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=cost_usd,
+        duration_ms=duration_ms,
+    )
+
+    return result, log_id
+
+
+def log_query(prompt, intent=None, filters=None, tags=None, buckets=None,
+               openai_request=None, openai_response=None,
+               prompt_tokens=0, completion_tokens=0, cost_usd=0.0,
+               duration_ms=None):
+    """
+    Central logging entry point — inserts a fresh query_log row.
+    Called once per real user prompt, from classify_prompt() (the one
+    call that runs for nearly every prompt regardless of eventual
+    intent) or directly for paths that skip classification entirely
+    (e.g. the lastfm: prefix, which never calls OpenAI at all).
+
+    Returns log_id, or None if logging itself failed (never raises —
+    a logging failure should never break the actual user-facing
+    search/playlist flow).
+    """
+    import json, sqlite3
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.execute("""
+            INSERT INTO query_log
+                (prompt, intent, tags, filters, buckets,
+                 openai_request, openai_response,
+                 prompt_tokens, completion_tokens, cost_usd, duration_ms)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            prompt,
+            intent,
+            json.dumps(tags) if tags is not None else None,
+            json.dumps(filters) if filters is not None else None,
+            json.dumps(buckets) if buckets else None,
+            openai_request,
+            openai_response,
+            prompt_tokens,
+            completion_tokens,
+            round(cost_usd, 6) if cost_usd else 0.0,
+            duration_ms,
+        ))
+        log_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return log_id
+    except Exception as e:
+        print(f"log_query error: {e}")
+        return None
+
+
+def append_to_query_log(log_id, tags=None, buckets=None,
+                         openai_request=None, openai_response=None,
+                         prompt_tokens=0, completion_tokens=0, cost_usd=0.0):
+    """
+    Adds a SECOND OpenAI call's usage onto an EXISTING query_log row,
+    rather than overwriting it — for the mood-intent case, where
+    expand_prompt() makes its own separate API call after
+    classify_prompt() already logged the first one. Tokens/cost are
+    ADDED to whatever's already in the row (true combined cost per
+    prompt, tracked accurately for the first time), and the second
+    call's request/response text is appended with a clear separator
+    so view_logs.py --id N still shows the full, real picture of
+    every API call a single prompt actually triggered.
+
+    Safe no-op if log_id is None.
+    """
+    if log_id is None:
+        return
+    import json, sqlite3
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute(
+            "SELECT prompt_tokens, completion_tokens, cost_usd, openai_request, openai_response FROM query_log WHERE id = ?",
+            (log_id,)
+        ).fetchone()
+        if row is None:
+            conn.close()
+            return
+        existing_pt, existing_ct, existing_cost, existing_req, existing_resp = row
+        new_pt = (existing_pt or 0) + prompt_tokens
+        new_ct = (existing_ct or 0) + completion_tokens
+        new_cost = round((existing_cost or 0.0) + cost_usd, 6)
+        new_req = (existing_req or "") + "\n\n=== expand_prompt (tag selection) ===\n" + (openai_request or "")
+        new_resp = (existing_resp or "") + "\n\n=== expand_prompt (tag selection) ===\n" + (openai_response or "")
+
+        conn.execute("""
+            UPDATE query_log
+            SET tags = ?, buckets = ?,
+                prompt_tokens = ?, completion_tokens = ?, cost_usd = ?,
+                openai_request = ?, openai_response = ?
+            WHERE id = ?
+        """, (
+            json.dumps(tags) if tags is not None else None,
+            json.dumps(buckets) if buckets else None,
+            new_pt, new_ct, new_cost,
+            new_req, new_resp,
+            log_id,
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"append_to_query_log error: {e}")
 
 
 def get_known_tags(limit=200):
@@ -717,19 +845,27 @@ def get_known_tags_bucketed(bucket_names=None, strict=False):
     return sorted(candidate_pool & live_tags)
 
 
-def expand_prompt(prompt, bucket_names=None, strict=False):
+def expand_prompt(prompt, bucket_names=None, strict=False, log_id=None):
     """
     Send a natural language prompt to OpenAI and get back
     a list of specific music tags/genres/moods to search for.
     Tags are constrained to vocabulary that actually exists in this
     library's track_tags table, so results are guaranteed matchable.
-    Logs full request/response to query_log table.
 
     bucket_names: optional list of genre bucket names to narrow the
     offered tag vocabulary to (see GENRE_BUCKET_NAMES). None/empty
     means today's unchanged full-pool behavior.
 
     strict: confirmed default whenever bucket_names is set — see get_known_tags_bucketed().
+
+    log_id: if provided (the normal case — classify_prompt() already
+    logged this prompt before expand_prompt() ever runs, since mood
+    intent always goes through classification first), this call's
+    usage is ADDED onto that existing row via append_to_query_log(),
+    giving a true combined cost across both API calls. If None (e.g.
+    a standalone caller that never went through classify_prompt),
+    falls back to creating its own fresh row via log_query(), same as
+    this function's original standalone behavior.
     """
     import json, time, sqlite3
 
@@ -783,40 +919,43 @@ Respond ONLY with a flat JSON array of tag strings, using exact spelling from th
         print(f"expand_prompt: dropped invented tags not in library vocabulary: {dropped}")
     tags = filtered_tags
 
-    # Log to DB
-    # NOTE: result_count is NOT known yet at this point — search_tracks()
-    # hasn't run. We return log_id so the caller can UPDATE this row with
-    # the real count once results exist, instead of it silently sitting
-    # as NULL forever (the "0 tracks" display bug found July 14).
-    log_id = None
-    try:
-        prompt_tokens     = response.usage.prompt_tokens
-        completion_tokens = response.usage.completion_tokens
-        # gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
-        cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+    # Log to DB. NOTE: result_count is NOT known yet at this point —
+    # search_tracks() hasn't run. The caller updates this row with the
+    # real count once results exist (the "0 tracks" display bug fixed
+    # July 14 already covers this, unchanged here).
+    prompt_tokens     = response.usage.prompt_tokens
+    completion_tokens = response.usage.completion_tokens
+    # gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
+    cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
 
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.execute("""
-            INSERT INTO query_log
-                (prompt, tags, buckets, openai_request, openai_response,
-                 prompt_tokens, completion_tokens, cost_usd, duration_ms)
-            VALUES (?,?,?,?,?,?,?,?,?)
-        """, (
-            prompt,
-            json.dumps(tags),
-            json.dumps(bucket_names) if bucket_names else None,
-            user_msg,
-            raw_response,
-            prompt_tokens,
-            completion_tokens,
-            round(cost_usd, 6),
-            duration_ms
-        ))
-        log_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-    except Exception as log_err:
-        print(f"Log error: {log_err}")
+    if log_id is not None:
+        # Normal path: classify_prompt() already created this row —
+        # add this SECOND call's usage onto it (true combined cost),
+        # rather than creating a duplicate row for the same prompt.
+        append_to_query_log(
+            log_id,
+            tags=tags,
+            buckets=bucket_names,
+            openai_request=user_msg,
+            openai_response=raw_response,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost_usd,
+        )
+    else:
+        # Standalone fallback (e.g. a caller that never went through
+        # classify_prompt) — same behavior this function always had.
+        log_id = log_query(
+            prompt=prompt,
+            tags=tags,
+            buckets=bucket_names,
+            openai_request=user_msg,
+            openai_response=raw_response,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost_usd,
+            duration_ms=duration_ms,
+        )
 
     return tags, log_id
 

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 try:
     from config import IS_MASTER
@@ -81,14 +81,28 @@ def preview():
         # Explicit lastfm: prefix — bypasses normal mood/AI classification
         # entirely, since a date reference is unambiguous once flagged
         # this way and doesn't need the general-purpose classifier.
+        # Logged directly (no OpenAI call happens on this path, so
+        # there's no cost/token data — just makes the prompt visible
+        # in query_log, same completeness goal as the classify-based
+        # path below).
         if prompt.lower().startswith('lastfm:'):
             date_text = prompt[len('lastfm:'):].strip()
             dates = extract_lastfm_dates(date_text)
             lastfm_rating_keys = get_scrobbled_tracks_in_range(dates['start_date'], dates['end_date'])
             intent = 'lastfm_range'
             search_term = f"{dates['start_date']} to {dates['end_date']}"
+            query_log_id = log_query(prompt=prompt, intent=intent)
         elif prompt:
-            classification = classify_prompt(prompt)
+            # Centralized logging (July 2026): classify_prompt() now
+            # logs itself immediately on return — this is the ONE call
+            # that runs for nearly every real prompt regardless of
+            # eventual intent, closing the gap where title_search/
+            # artist_search/filter_only prompts were never logged at
+            # all (confirmed via two real examples: "Dance Dance",
+            # "I love humanity"). expand_prompt() below, when it also
+            # runs, appends onto this SAME row instead of creating a
+            # duplicate — true combined cost across both API calls.
+            classification, query_log_id = classify_prompt(prompt)
             intent      = classification.get('intent', 'mood')
             search_term = classification.get('title_search') or classification.get('artist_search')
             detected_filters = classification.get('filters', {}) or {}
@@ -97,7 +111,7 @@ def preview():
             mood = classification.get('mood')
             if mood and intent in ('mood', 'filter_only'):
                 if intent == 'mood':
-                    tags, query_log_id = expand_prompt(prompt, bucket_names, strict=strict_buckets)
+                    tags, query_log_id = expand_prompt(prompt, bucket_names, strict=strict_buckets, log_id=query_log_id)
                 # for filter_only with no mood, skip expansion
 
         filters = {

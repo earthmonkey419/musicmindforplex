@@ -29,7 +29,7 @@ from brain import search_tracks
 
 def show_summary(conn, limit):
     rows = conn.execute("""
-        SELECT id, timestamp, prompt, result_count, cost_usd, duration_ms, error
+        SELECT id, timestamp, prompt, intent, result_count, cost_usd, duration_ms, error
         FROM query_log
         ORDER BY id DESC
         LIMIT ?
@@ -39,22 +39,23 @@ def show_summary(conn, limit):
         print("No query log entries yet.")
         return
 
-    print(f"{'ID':<5} {'Time':<20} {'Results':<8} {'Cost':<9} {'ms':<7} Prompt")
-    print("-" * 90)
-    for rid, ts, prompt, result_count, cost, duration_ms, error in rows:
+    print(f"{'ID':<5} {'Time':<20} {'Intent':<14} {'Results':<8} {'Cost':<9} {'ms':<7} Prompt")
+    print("-" * 105)
+    for rid, ts, prompt, intent, result_count, cost, duration_ms, error in rows:
         rc = str(result_count) if result_count is not None else "—"
         cost_str = f"${cost:.5f}" if cost is not None else "—"
         dur = str(duration_ms) if duration_ms is not None else "—"
-        prompt_short = (prompt or "")[:40]
+        intent_str = intent or "—"
+        prompt_short = (prompt or "")[:35]
         flag = " ❌" if error else ""
-        print(f"{rid:<5} {ts:<20} {rc:<8} {cost_str:<9} {dur:<7} {prompt_short}{flag}")
+        print(f"{rid:<5} {ts:<20} {intent_str:<14} {rc:<8} {cost_str:<9} {dur:<7} {prompt_short}{flag}")
 
     print(f"\n{len(rows)} entries shown. Use --id N for full detail on one.")
 
 
 def show_detail(conn, entry_id):
     row = conn.execute("""
-        SELECT id, timestamp, prompt, tags, filters, result_count,
+        SELECT id, timestamp, prompt, intent, tags, filters, result_count,
                duration_ms, error, openai_request, openai_response,
                prompt_tokens, completion_tokens, cost_usd
         FROM query_log
@@ -65,7 +66,7 @@ def show_detail(conn, entry_id):
         print(f"No query_log entry with id={entry_id}")
         return
 
-    (rid, ts, prompt, tags, filters, result_count, duration_ms,
+    (rid, ts, prompt, intent, tags, filters, result_count, duration_ms,
      error, openai_request, openai_response, prompt_tokens,
      completion_tokens, cost_usd) = row
 
@@ -73,6 +74,7 @@ def show_detail(conn, entry_id):
     print(f"Query Log #{rid}  ({ts})")
     print("=" * 70)
     print(f"Prompt:       {prompt}")
+    print(f"Intent:       {intent or '(not classified — pre-centralized-logging entry)'}")
     print(f"Tags:         {tags}")
     print(f"Filters:      {filters}")
     print(f"Result count: {result_count}")
@@ -99,7 +101,7 @@ def show_analysis(conn, entry_id):
     result count.
     """
     row = conn.execute("""
-        SELECT prompt, tags, filters, result_count, buckets
+        SELECT prompt, intent, tags, filters, result_count, buckets
         FROM query_log WHERE id = ?
     """, (entry_id,)).fetchone()
 
@@ -107,7 +109,7 @@ def show_analysis(conn, entry_id):
         print(f"No query_log entry with id={entry_id}")
         return
 
-    prompt, tags_json, filters_json, logged_count, buckets_json = row
+    prompt, intent, tags_json, filters_json, logged_count, buckets_json = row
     tags = json.loads(tags_json) if tags_json else []
     filters = json.loads(filters_json) if filters_json else {}
     buckets = json.loads(buckets_json) if buckets_json else []
@@ -115,6 +117,7 @@ def show_analysis(conn, entry_id):
     print("=" * 70)
     print(f"Analyzing Query Log #{entry_id}: \"{prompt}\"")
     print("=" * 70)
+    print(f"Intent: {intent or '(not classified — pre-centralized-logging entry)'}")
     print(f"Logged result count (at the time): {logged_count}")
     if buckets:
         print(f"Genre buckets selected: {', '.join(buckets)}")
