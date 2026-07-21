@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicMind for Plex — Playlist Audit</title>
+    <link rel="icon" type="image/png" href="https://musicmind.vp-fun.com/assets/logo.png">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .audit-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .audit-table th, .audit-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #ddd0b8; font-size: 0.9rem; }
+        .audit-table th { color: #4a3728; font-weight: 600; }
+        .audit-table tr:hover { background: #f5efe0; }
+        .verdict-instrumental { color: #6a9a4a; }
+        .verdict-voice { color: #9a6a4a; }
+        .verdict-ambiguous { color: #999; }
+        .no-data { color: #aaa; font-style: italic; }
+        .prompt-box { background: #f0e8d8; border-left: 4px solid #8a6d4a; padding: 0.8rem 1.2rem; border-radius: 4px; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+{% set back_target = "/" %}{% set back_label = "Back to MusicMind" %}
+{% include "_admin_nav.html" %}
+        <h1 class="page-title">🔍 Playlist Audit</h1>
+        <p class="page-subtitle">See the real, measured data behind any playlist — VI verdicts, BPM, danceability, and the original prompt that created it.</p>
+
+        <select id="playlist-select" style="width:100%; max-width:500px; padding:0.5rem; margin-top:1rem;">
+            <option value="">Loading playlists...</option>
+        </select>
+
+        <div id="audit-results" style="display:none; margin-top:1.5rem;">
+            <h2 id="audit-title" style="margin-bottom:0.3rem;"></h2>
+            <div id="audit-prompt"></div>
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Artist</th>
+                        <th>BPM</th>
+                        <th>Danceability</th>
+                        <th>p_voice</th>
+                        <th>VI Verdict</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-tbody"></tbody>
+            </table>
+        </div>
+
+        <div id="audit-empty" style="display:none; color:#999; margin-top:1.5rem;">
+            Select a playlist above to see its audit data.
+        </div>
+    </div>
+
+<script>
+async function loadPlaylistOptions() {
+    const select = document.getElementById('playlist-select');
+    try {
+        const res = await fetch('/playlists');
+        const data = await res.json();
+        select.innerHTML = '<option value="">Select a playlist...</option>' +
+            data.playlists.map(p => `<option value="${p.key}">${p.title} (${p.trackCount} tracks)</option>`).join('');
+    } catch (e) {
+        select.innerHTML = '<option value="">Error loading playlists</option>';
+    }
+}
+
+async function loadAuditData(playlistKey) {
+    const resultsDiv = document.getElementById('audit-results');
+    const emptyDiv = document.getElementById('audit-empty');
+    if (!playlistKey) {
+        resultsDiv.style.display = 'none';
+        emptyDiv.style.display = 'block';
+        return;
+    }
+    emptyDiv.style.display = 'none';
+    resultsDiv.style.display = 'block';
+    document.getElementById('audit-title').textContent = 'Loading...';
+    document.getElementById('audit-prompt').innerHTML = '';
+    document.getElementById('audit-tbody').innerHTML = '';
+
+    try {
+        const res = await fetch(`/playlist-audit-data/${playlistKey}`);
+        const data = await res.json();
+        if (data.error) {
+            document.getElementById('audit-title').textContent = 'Error: ' + data.error;
+            return;
+        }
+
+        document.getElementById('audit-title').textContent = data.title;
+        const promptDiv = document.getElementById('audit-prompt');
+        if (data.summary) {
+            promptDiv.innerHTML = `<div class="prompt-box"><strong>Original prompt:</strong> "${data.summary}"</div>`;
+        } else {
+            promptDiv.innerHTML = `<div class="prompt-box no-data">No stored prompt — this playlist predates the audit feature, or wasn't created through MusicMind.</div>`;
+        }
+
+        const tbody = document.getElementById('audit-tbody');
+        tbody.innerHTML = data.tracks.map(t => {
+            const verdictClass = t.vi_verdict === 'INSTRUMENTAL' ? 'verdict-instrumental'
+                                : t.vi_verdict === 'VOICE' ? 'verdict-voice'
+                                : t.vi_verdict === 'AMBIGUOUS' ? 'verdict-ambiguous' : '';
+            return `<tr>
+                <td>${t.title}</td>
+                <td>${t.artist}</td>
+                <td>${t.bpm !== null ? t.bpm : '<span class="no-data">—</span>'}</td>
+                <td>${t.danceability !== null ? t.danceability : '<span class="no-data">—</span>'}</td>
+                <td>${t.p_voice !== null ? t.p_voice : '<span class="no-data">—</span>'}</td>
+                <td class="${verdictClass}">${t.vi_verdict || '<span class="no-data">not analyzed</span>'}</td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        document.getElementById('audit-title').textContent = 'Error loading audit data: ' + e;
+    }
+}
+
+document.getElementById('playlist-select').addEventListener('change', function() {
+    loadAuditData(this.value);
+});
+
+loadPlaylistOptions();
+document.getElementById('audit-empty').style.display = 'block';
+</script>
+</body>
+</html>

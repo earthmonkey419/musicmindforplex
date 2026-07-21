@@ -120,6 +120,7 @@ def preview():
             'min_year':       int(data['min_year']) if data.get('min_year') else None,
             'max_year':       int(data['max_year']) if data.get('max_year') else None,
             'min_plays':      int(data['min_plays']) if data.get('min_plays') else detected_filters.get('min_plays'),
+            'popularity_min': int(data['popularity_min']) if data.get('popularity_min') else detected_filters.get('popularity_min'),
             'max_plays':      int(data['max_plays']) if data.get('max_plays') else None,
             'limit':          int(data.get('limit', 30)),
             'max_per_artist': int(data.get('max_per_artist', 3)),
@@ -155,6 +156,7 @@ def create():
     data = request.json
     name = data.get('name', '').strip()
     rating_keys = data.get('rating_keys', [])
+    prompt = data.get('prompt', '').strip() or None
 
     if not name:
         return jsonify({'error': 'No playlist name provided'}), 400
@@ -162,7 +164,7 @@ def create():
         return jsonify({'error': 'No tracks provided'}), 400
 
     try:
-        count = create_playlist(name, rating_keys)
+        count = create_playlist(name, rating_keys, prompt=prompt)
         return jsonify({'success': True, 'count': count, 'name': name})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -573,7 +575,14 @@ def synapse_errors_view():
 
 @app.route('/synapse')
 def synapse_page():
-    return render_template('synapse.html', year=datetime.now().year)
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    total_tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+    analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
+    conn.close()
+    pct = round((analyzed / total_tracks * 100), 1) if total_tracks else 0
+    return render_template('synapse.html', year=datetime.now().year,
+                            synapse_analyzed=analyzed, synapse_total=total_tracks, synapse_pct=pct)
 
 
 @app.route('/run/fullsync')
@@ -902,6 +911,67 @@ def tests():
 @app.route('/guide')
 def guide():
     return render_template('guide.html', year=datetime.now().year)
+
+@app.route('/playlist-audit')
+def playlist_audit_page():
+    return render_template('playlist_audit.html', year=datetime.now().year)
+
+
+@app.route('/playlist-audit-data/<int:playlist_key>')
+def playlist_audit_data(playlist_key):
+    import sqlite3
+    try:
+        plex = PlexServer(PLEX_URL, PLEX_TOKEN)
+        playlist = plex.fetchItem(playlist_key)
+        items = playlist.items()
+    except Exception as e:
+        return jsonify({'error': f'Could not load playlist: {e}'}), 404
+
+    rating_keys = [str(t.ratingKey) for t in items]
+
+    conn = sqlite3.connect(DB_PATH)
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+
+    data_by_key = {}
+    if rating_keys:
+        placeholders = ",".join("?" for _ in rating_keys)
+        vi_select = "vi.p_voice, vi.verdict" if has_vi_results else "NULL, NULL"
+        vi_join = "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key" if has_vi_results else ""
+        rows = conn.execute(f"""
+            SELECT t.rating_key, COALESCE(t.real_artist, t.artist) as artist,
+                   taf.bpm, taf.danceability, {vi_select}
+            FROM tracks t
+            LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
+            {vi_join}
+            WHERE t.rating_key IN ({placeholders})
+        """, rating_keys).fetchall()
+        for row in rows:
+            data_by_key[row[0]] = row
+    conn.close()
+
+    # Preserve the PLAYLIST's own track order, not SQL's arbitrary order —
+    # the whole point of an audit is seeing the playlist as it actually is.
+    tracks_out = []
+    for t in items:
+        rk = str(t.ratingKey)
+        row = data_by_key.get(rk)
+        tracks_out.append({
+            'title':        t.title,
+            'artist':       (row[1] if row else t.artist) or t.artist,
+            'bpm':          round(row[2], 1) if row and row[2] is not None else None,
+            'danceability': round(row[3], 2) if row and row[3] is not None else None,
+            'p_voice':      round(row[4], 3) if row and row[4] is not None else None,
+            'vi_verdict':   row[5] if row else None,
+        })
+
+    return jsonify({
+        'title':   playlist.title,
+        'summary': playlist.summary or None,  # the stored prompt, if this playlist was created after this feature shipped
+        'tracks':  tracks_out,
+    })
+
 
 @app.route('/logs')
 def logs():

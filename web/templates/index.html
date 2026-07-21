@@ -31,6 +31,7 @@
         <div class="nav">
             {% if lastfm_enabled %}<a href="/gaps">📋 Missing From Your Collection</a>{% endif %}
             <a href="/stats">📊 The Collection</a>
+            <a href="/playlist-audit">🔍 Playlist Audit</a>
             <a href="/admin">⚙️ Admin</a>
             <a href="/guide">📖 Guide</a>
         </div>
@@ -337,7 +338,8 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         name,
-                        rating_keys: currentTracks.map(t => t.rating_key)
+                        rating_keys: currentTracks.map(t => t.rating_key),
+                        prompt: document.getElementById('prompt').value
                     })
                 });
                 const data = await res.json();

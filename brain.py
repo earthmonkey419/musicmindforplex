@@ -526,6 +526,7 @@ DEFAULT_FILTERS = {
     "min_year":       None,
     "max_year":       None,
     "min_plays":      None,
+    "popularity_min": None,
     "max_plays":      None,
     "limit":          30,
     "max_per_artist": 3,
@@ -614,6 +615,19 @@ Answer each dimension:
      "songs I've heard a lot", "on repeat", or similar — set a reasonable
      minimum play count threshold (5-10 is a sensible default). null if
      not requested.
+   - popularity_min: if the prompt asks for "popular tracks", "hits",
+     "well-known songs", "fan favorites", "crowd pleasers", or similar —
+     set a minimum rating count threshold. This is a GLOBAL popularity
+     metric with a huge range (confirmed real values from 2 up to
+     1,400,000+ for a genuine classic like "Let's Stay Together"), NOT
+     a small personal number. Use these tiers as a guide:
+       "moderately known"        -> 5000
+       "popular" / "hits"        -> 30000
+       "very popular" / "famous" -> 150000
+       "iconic" / "legendary"    -> 500000
+     null if not requested. Distinct from min_plays: this is about
+     tracks BROADLY well-known worldwide, not necessarily ones YOU
+     personally play a lot.
 
 Respond ONLY with valid JSON, no explanation:
 {{
@@ -627,7 +641,8 @@ Respond ONLY with valid JSON, no explanation:
     "country": "BR",
     "era": "70s",
     "year": null,
-    "min_plays": null
+    "min_plays": null,
+    "popularity_min": null
   }}
 }}"""
 
@@ -653,6 +668,7 @@ Respond ONLY with valid JSON, no explanation:
         "era":        f.get("era"),
         "year":       f.get("year"),
         "min_plays":  f.get("min_plays"),
+        "popularity_min": f.get("popularity_min"),
     }
 
     # Log immediately — this is the ONE call that runs for nearly
@@ -1193,6 +1209,18 @@ def search_tracks(tags, filters=None):
     if f["min_plays"] is not None:
         query += " AND t.play_count >= ?"
         params.append(f["min_plays"])
+    if f.get("popularity_min") is not None:
+        # rating_count is Plex's own GLOBAL popularity field (confirmed
+        # real July 2026: genuine per-track values, not album-level —
+        # a random deep cut can be single digits while a true classic
+        # like "Let's Stay Together" measured 1,414,115). Distinct from
+        # play_count/min_plays, which is purely personal listening
+        # history. NULL-safe: tracks with no rating_count (real gap —
+        # confirmed ~75% coverage on a real library sample, not
+        # universal) are correctly excluded by ">=", same as any other
+        # NULL numeric comparison in SQLite.
+        query += " AND t.rating_count >= ?"
+        params.append(f["popularity_min"])
     if f["max_plays"] is not None:
         query += " AND t.play_count <= ?"
         params.append(f["max_plays"])
@@ -1321,11 +1349,18 @@ def search_tracks(tags, filters=None):
 
 # --- Playlist Creation ---
 
-def create_playlist(name, rating_keys):
+def create_playlist(name, rating_keys, prompt=None):
     """
     Create a playlist in Plex from a list of rating keys.
     Replaces existing playlist with the same name.
     Returns number of tracks added.
+
+    prompt: if given, written into the Plex playlist's own summary
+    field (plexapi's editSummary()) — makes the originating prompt
+    visible directly in Plex itself, and is what the Playlist Audit
+    page reads back to show "what created this." Best-effort: a
+    failure here never blocks the actual playlist creation, since the
+    tracks existing in Plex matters far more than this metadata.
     """
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
 
@@ -1343,7 +1378,14 @@ def create_playlist(name, rating_keys):
         if pl.title == name:
             pl.delete()
 
-    plex.createPlaylist(name, items=tracks)
+    new_playlist = plex.createPlaylist(name, items=tracks)
+
+    if prompt:
+        try:
+            new_playlist.editSummary(prompt)
+        except Exception as e:
+            print(f"  Warning: could not set playlist summary: {e}")
+
     return len(tracks)
 
 # --- Quick test ---

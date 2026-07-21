@@ -44,7 +44,8 @@ def init_db(conn):
             updated_at   TEXT,
             real_artist  TEXT,
             is_instrumental INTEGER,
-            genres_written  INTEGER DEFAULT 0
+            genres_written  INTEGER DEFAULT 0,
+            rating_count INTEGER
         )
     """)
     # Columns added after the original schema — upgrade existing DBs in place
@@ -52,6 +53,7 @@ def init_db(conn):
         ("real_artist", "TEXT"),
         ("is_instrumental", "INTEGER"),
         ("genres_written", "INTEGER DEFAULT 0"),
+        ("rating_count", "INTEGER"),
     ]:
         try:
             conn.execute(f"ALTER TABLE tracks ADD COLUMN {col} {decl}")
@@ -232,8 +234,8 @@ def ingest(conn, plex):
                     INSERT OR REPLACE INTO tracks
                         (rating_key, title, artist, album, genre, year,
                          duration_ms, play_count, last_played, user_rating,
-                         added_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         added_at, updated_at, rating_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(track.ratingKey),
                     track.title,
@@ -246,7 +248,8 @@ def ingest(conn, plex):
                     last_played,
                     track.userRating,
                     added_at,
-                    now
+                    now,
+                    track.ratingCount
                 ))
                 inserted += 1
 
