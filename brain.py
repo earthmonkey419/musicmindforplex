@@ -315,7 +315,6 @@ BUCKETS = [
         'classic jazz',
         'contemporary jazz',
         'cool jazz',
-        'easy listening',
         'electronic jazz',
         'experimental jazz',
         'free jazz',
