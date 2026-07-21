@@ -56,7 +56,12 @@
 
         <div class="filters">
             <label><input type="checkbox" id="unplayed"> Unplayed only</label>
-            <label><input type="checkbox" id="instrumental"> Instrumental only</label>
+            <label><input type="checkbox" id="instrumental" onchange="document.getElementById('vocal-tolerance-wrap').style.display = this.checked ? 'inline-block' : 'none'"> Instrumental only</label>
+            <span id="vocal-tolerance-wrap" style="display:none;">
+                Vocal tolerance
+                <input type="range" id="vocal_tolerance" min="0.1" max="0.9" value="0.55" step="0.05" style="width:100px; vertical-align:middle;" oninput="document.getElementById('vocal_tolerance_label').textContent = this.value">
+                <span id="vocal_tolerance_label" style="font-size:0.85rem; color:#999;">0.55</span>
+            </span>
             <label><input type="checkbox" id="dj_ify"> 🎧 DJ-ify (sequence for flow)</label>
             <label>Genre
                 <select id="genre">
@@ -243,6 +248,7 @@
                 bpm_max:        document.getElementById('bpm_max').value || null,
                 danceability:   document.getElementById('danceability').value || null,
                 instrumental:   document.getElementById('instrumental').checked ? 1 : null,
+                vocal_tolerance: document.getElementById('instrumental').checked ? document.getElementById('vocal_tolerance').value : null,
 
                 gender:         document.getElementById('gender').value || null,
                 country:        document.getElementById('country').value || null,

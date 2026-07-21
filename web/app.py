@@ -128,6 +128,7 @@ def preview():
             'country':        data.get('country') or detected_filters.get('country') or None,
             'era':            data.get('era') or detected_filters.get('era') or None,
             'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
+            'vocal_tolerance': float(data['vocal_tolerance']) if data.get('vocal_tolerance') else None,
             'bpm_min':        int(data['bpm_min']) if data.get('bpm_min') else None,
             'bpm_max':        int(data['bpm_max']) if data.get('bpm_max') else None,
             'danceability':   data.get('danceability') or None,

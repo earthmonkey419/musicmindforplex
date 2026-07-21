@@ -533,6 +533,7 @@ DEFAULT_FILTERS = {
     "country":        None,
     "era":            None,
     "instrumental":   None,
+    "vocal_tolerance": 0.55,  # p_voice cutoff when instrumental=1; 0.55 matches vi_reverify.py's own migration-time threshold, so checking the box with no slider adjustment reproduces today's exact behavior
     "title_search":   None,
     "artist_search":  None,
     "year_search":    None,
@@ -1120,6 +1121,19 @@ def search_tracks(tags, filters=None):
     """
     f = {**DEFAULT_FILTERS, **(filters or {})}
 
+    conn = sqlite3.connect(DB_PATH)
+    # vi_results only exists on installs that have run vi_reverify.py —
+    # not guaranteed (it's a standalone migration script, not part of
+    # musicmind_ingest.py's core schema). Checked once here so the
+    # instrumental filter can use the more precise, adjustable p_voice
+    # threshold when available, and gracefully fall back to the older
+    # binary is_instrumental column when it's not — never crashes a
+    # search that doesn't even use instrumental filtering just because
+    # an unrelated table happens to be missing.
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+
     params = []
 
     if tags:
@@ -1128,6 +1142,8 @@ def search_tracks(tags, filters=None):
         where_tags = f"({keyword_conditions})"
     else:
         where_tags = "1=1"
+
+    vi_join = "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key" if has_vi_results else ""
 
     query = f"""
         SELECT
@@ -1146,6 +1162,7 @@ def search_tracks(tags, filters=None):
         LEFT JOIN track_tags tt ON t.rating_key = tt.rating_key
         LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
         LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
+        {vi_join}
         WHERE {where_tags}
           AND t.title IS NOT NULL
           AND t.artist IS NOT NULL
@@ -1194,9 +1211,31 @@ def search_tracks(tags, filters=None):
     if f.get("era"):
         query += " AND am.era = ?"
         params.append(f["era"])
-    if f.get("instrumental") is not None:
-        query += " AND t.is_instrumental = ?"
-        params.append(f["instrumental"])
+    if f.get("instrumental") == 1:
+        if has_vi_results:
+            # Adjustable threshold (vocal tolerance slider) using the
+            # real, continuous p_voice score instead of the old binary
+            # is_instrumental column — lets each search pick its own
+            # tolerance rather than relying on one fixed, one-size-
+            # fits-all decision baked in at migration time. Default
+            # 0.55 exactly matches vi_reverify.py's own threshold, so
+            # checking the box without touching the slider reproduces
+            # today's exact behavior. Tracks with no vi_results row
+            # (never VI-analyzed) are naturally excluded, same as
+            # before — NULL p_voice never satisfies a numeric
+            # comparison, consistent with is_instrumental IS NULL
+            # never satisfying "= 1" either.
+            query += " AND vi.p_voice < ?"
+            params.append(f.get("vocal_tolerance") or 0.55)
+        else:
+            # No VI data on this install at all — fall back to the
+            # original binary column so instrumental filtering still
+            # works, just without the adjustable precision.
+            query += " AND t.is_instrumental = 1"
+    elif f.get("instrumental") == 0:
+        # Vocal search — unchanged, out of scope for the tolerance
+        # slider (that's specifically an "Instrumental only" feature).
+        query += " AND t.is_instrumental = 0"
     if f.get("title_search"):
         query += " AND LOWER(t.title) LIKE ?"
         params.append(f"%{f['title_search'].lower()}%")
@@ -1250,7 +1289,6 @@ def search_tracks(tags, filters=None):
         ORDER BY match_score DESC, t.play_count ASC
     """
 
-    conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
