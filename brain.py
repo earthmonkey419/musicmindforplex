@@ -1331,13 +1331,43 @@ def search_tracks(tags, filters=None):
         else:
             query += " AND 1=0"  # no scrobbles found — force zero results
 
-    query += """
-        GROUP BY t.artist, t.title
-        ORDER BY match_score DESC, t.play_count ASC
-    """
+    # Popularity-focused searches with no AI-selected tags (e.g. "give
+    # me some popular tracks") have nothing meaningful for match_score
+    # to rank on -- every track ties on "how many tags it happens to
+    # have," unrelated to the query, which makes play_count ASC (the
+    # tiebreaker) the PRACTICAL sort order: least-played first, the
+    # opposite of what a "popular" request should surface, and fully
+    # deterministic -- same static pool, same order, every single time
+    # (found July 2026, via "the same prompt keeps returning the same
+    # songs"). When there's a popularity floor and no tags to rank by,
+    # sort by real popularity (rating_count) instead.
+    popularity_focused = not tags and f.get("popularity_min") is not None
+    if popularity_focused:
+        query += """
+            GROUP BY t.artist, t.title
+            ORDER BY t.rating_count DESC
+        """
+    else:
+        query += """
+            GROUP BY t.artist, t.title
+            ORDER BY match_score DESC, t.play_count ASC
+        """
 
     rows = conn.execute(query, params).fetchall()
     conn.close()
+
+    if popularity_focused and rows:
+        # Real popularity ordering alone would return the EXACT same
+        # top-N every time too -- static data, deterministic sort.
+        # Shuffle within a wider genuinely-popular window (not the
+        # whole qualifying pool, which would ignore popularity
+        # entirely) so repeated identical prompts return real variety
+        # while every result still comes from the most popular end.
+        import random
+        window_size = min(len(rows), max(f["limit"] * 5, 150))
+        window = rows[:window_size]
+        random.shuffle(window)
+        rows = window
 
     # Cap per artist
     artist_counts = {}
