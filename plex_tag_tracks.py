@@ -30,12 +30,34 @@ def init_tags_table(conn):
     conn.commit()
 
 def get_untagged_tracks(conn):
+    """
+    Tracks with no tags yet, ready to send to the AI tagger.
+
+    Two things worth knowing (found July 2026, confirmed a real bug
+    affecting ~19% of the library, 4,363 tracks):
+    - Uses COALESCE(real_artist, artist), not raw artist. Without
+      this, a "Various Artists" track that's since been resolved by
+      va_resolve.py (real_artist populated) would still show the
+      tagger "Various Artists" -- the resolved name lives in a
+      SEPARATE column this query never looked at before.
+    - Explicitly EXCLUDES tracks still artist='Various Artists' with
+      real_artist NOT YET resolved. These get tagged BLIND -- the AI
+      has no real artist to work with, only pattern-matches on song
+      title + compilation album name (confirmed real: The Sisters of
+      Mercy, a gothic rock band, got tagged "jazz, r&b, soul" purely
+      because its song happened to be titled "Body and Soul" on a
+      compilation called "NOW Yearbook"). Skipping these means they
+      simply WAIT -- once va_resolve.py resolves them, they show up
+      as untagged (assuming their bad tags get cleared, see the
+      backfill note) and get tagged correctly on the next pass.
+    """
     return conn.execute("""
-        SELECT t.rating_key, t.title, t.artist, t.album, t.genre
+        SELECT t.rating_key, t.title, COALESCE(t.real_artist, t.artist) as artist, t.album, t.genre
         FROM tracks t
         LEFT JOIN track_tags tt ON t.rating_key = tt.rating_key
         WHERE tt.rating_key IS NULL
           AND (t.title IS NOT NULL OR t.artist IS NOT NULL)
+          AND NOT (t.artist = 'Various Artists' AND t.real_artist IS NULL)
         ORDER BY t.artist, t.album
     """).fetchall()
 
