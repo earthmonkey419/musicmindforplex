@@ -959,7 +959,7 @@ def playlist_audit_data(playlist_key):
         row = data_by_key.get(rk)
         tracks_out.append({
             'title':        t.title,
-            'artist':       (row[1] if row else t.artist) or t.artist,
+            'artist':       (row[1] if row else t.grandparentTitle) or t.grandparentTitle,
             'bpm':          round(row[2], 1) if row and row[2] is not None else None,
             'danceability': round(row[3], 2) if row and row[3] is not None else None,
             'p_voice':      round(row[4], 3) if row and row[4] is not None else None,
