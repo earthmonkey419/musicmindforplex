@@ -81,6 +81,49 @@ VI_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "models", "voice_instrumental-musicnn-msd-1.pb")
 VI_THRESHOLD = 0.55
 
+def _load_audio_with_transcode_fallback(filepath, sample_rate, MonoLoader):
+    """Try loading directly first (fast, works for the vast majority of
+    files). If essentia's MonoLoader fails, transcode through ffmpeg
+    to a clean temp copy and retry once before giving up -- the exact
+    same proven pattern from fingerprint_tracks.py's
+    run_fpcalc_with_transcode_fallback(), confirmed there to recover
+    9 of 11 real production failures (found July 2026: a full
+    re-encode through ffmpeg's libmp3lame is what works -- a stream-
+    copy re-mux does NOT fix these files, it has to fully decode the
+    audio to write the new file, the same more-tolerant path Plex
+    itself uses).
+
+    Returns (audio_array, used_fallback: bool). Raises the ORIGINAL
+    error if the fallback isn't available or also fails, so the
+    caller's own error message stays meaningful.
+    """
+    import shutil, subprocess, tempfile
+    try:
+        return MonoLoader(filename=filepath, sampleRate=sample_rate)(), False
+    except Exception as first_err:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise first_err
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                tmp_path = tmp.name
+            transcode = subprocess.run(
+                [ffmpeg, "-y", "-err_detect", "ignore_err",
+                 "-i", filepath, "-acodec", "libmp3lame", "-q:a", "2", tmp_path],
+                capture_output=True, text=True, timeout=60
+            )
+            if transcode.returncode != 0 or not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                raise first_err
+            return MonoLoader(filename=tmp_path, sampleRate=sample_rate)(), True
+        except Exception:
+            raise first_err
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+
 def vi_model_available():
     """Whether the (deliberately never auto-downloaded, CC BY-NC-SA
     licensed) VI model file has actually been placed on disk. essentia
@@ -234,7 +277,7 @@ def _analyze_one_impl(filepath, result_queue, needs_synapse, needs_vi):
             # single decode with Synapse's extractors above measurably
             # degrades their accuracy. Small redundant cost, real
             # accuracy protected.
-            vi_audio = MonoLoader(filename=filepath, sampleRate=16000)()
+            vi_audio, _used_fallback = _load_audio_with_transcode_fallback(filepath, 16000, MonoLoader)
             model = TensorflowPredictMusiCNN(graphFilename=VI_MODEL, output="model/Sigmoid")
             preds = np.atleast_2d(model(vi_audio))
             if preds.size == 0:
