@@ -63,6 +63,32 @@ REFERENCE_MP3_SECONDS  = 13.6
 REFERENCE_FLAC_SECONDS = 22.3
 
 
+# --- VI (voice/instrumental) — merged in July 2026 -----------------
+# Previously a separate script (vi_reverify.py) that re-walked the
+# entire Plex library and re-decoded every audio file AGAIN, purely
+# to run one more classifier — genuinely redundant work against what
+# this script already does per track. Merged the ORCHESTRATION layer
+# (one Plex walk, one lock, one priority queue, one subprocess/timeout
+# wrapper, one combined per-track worker) while deliberately keeping
+# the audio DECODE separate for each analysis. Verified via direct
+# testing (real click track at a known 120 BPM ground truth, in-memory
+# array fed straight to the extractors — not a file round-trip) that
+# sharing a single 16kHz decode between both analyses measurably
+# degrades Synapse's own accuracy: BPM 120.03->110.24, key A minor->
+# C minor, danceability 8.465->60.736. Not a theoretical concern —
+# a real, confirmed regression avoided by keeping two loads.
+VI_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "models", "voice_instrumental-musicnn-msd-1.pb")
+VI_THRESHOLD = 0.55
+
+def vi_model_available():
+    """Whether the (deliberately never auto-downloaded, CC BY-NC-SA
+    licensed) VI model file has actually been placed on disk. essentia
+    itself is unconditionally required already (Synapse depends on it
+    too) -- this is the ONLY thing that's genuinely optional here."""
+    return os.path.exists(VI_MODEL)
+
+
 def init_table(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS track_audio_features (
@@ -81,6 +107,18 @@ def init_table(conn):
             filepath      TEXT,
             error         TEXT,
             failed_at     TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vi_results (
+            rating_key  TEXT PRIMARY KEY,
+            title       TEXT, artist TEXT,
+            old_tag     INTEGER,
+            p_inst      REAL, p_voice REAL,
+            verdict     TEXT,
+            tag_changed INTEGER,
+            error       TEXT,
+            analyzed_at TEXT
         )
     """)
     conn.commit()
@@ -132,53 +170,103 @@ MIN_REALISTIC_BPM = 40
 MAX_REALISTIC_BPM = 250
 
 
-def _analyze_one_impl(filepath, result_queue):
+def _analyze_one_impl(filepath, result_queue, needs_synapse, needs_vi):
     """Runs in a separate process so a hanging file can be killed
-    without taking down the whole batch job."""
-    try:
-        import essentia
-        essentia.log.infoActive = False
-        essentia.log.warningActive = False
-        import essentia.standard as es
+    without taking down the whole batch job. Does whichever of
+    Synapse/VI this particular track actually still needs -- most
+    tracks need both together (the common, efficient case this merge
+    is for), but resuming a partially-migrated library means some
+    tracks only need one or the other.
 
-        audio = es.MonoLoader(filename=filepath)()
+    Each analysis has its OWN try/except, independent of the other --
+    a Synapse-specific failure (e.g. the implausible-BPM check below)
+    doesn't prevent VI from still succeeding on the same file, and
+    vice versa. They share this one subprocess/timeout wrapper, but
+    their success/failure is otherwise fully independent.
 
-        rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
-        bpm, beats, beats_confidence, _, beats_intervals = rhythm_extractor(audio)
+    Puts a dict on the queue: {'synapse': (status, payload) or None,
+    'vi': (status, payload) or None} -- None means "wasn't requested
+    for this track," not "failed."
+    """
+    result = {'synapse': None, 'vi': None}
 
-        if not (MIN_REALISTIC_BPM <= bpm <= MAX_REALISTIC_BPM):
-            raise ValueError(
-                f"Implausible BPM ({bpm:.1f}) — likely no rhythmic content "
-                f"in this file (e.g. silence, noise, spoken word). Flagged "
-                f"for manual review rather than stored as valid data."
-            )
+    import essentia
+    essentia.log.infoActive = False
+    essentia.log.warningActive = False
+    import essentia.standard as es
 
-        key_extractor = es.KeyExtractor()
-        key, scale, key_strength = key_extractor(audio)
+    if needs_synapse:
+        try:
+            audio = es.MonoLoader(filename=filepath)()
 
-        danceability_extractor = es.Danceability()
-        dance_value, dance_dfa = danceability_extractor(audio)
+            rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
+            bpm, beats, beats_confidence, _, beats_intervals = rhythm_extractor(audio)
 
-        result_queue.put(('ok', {
-            'bpm': float(bpm),
-            'key': key,
-            'scale': scale,
-            'key_strength': float(key_strength),
-            'danceability': float(dance_value),
-        }))
-    except Exception as e:
-        result_queue.put(('error', str(e)))
+            if not (MIN_REALISTIC_BPM <= bpm <= MAX_REALISTIC_BPM):
+                raise ValueError(
+                    f"Implausible BPM ({bpm:.1f}) — likely no rhythmic content "
+                    f"in this file (e.g. silence, noise, spoken word). Flagged "
+                    f"for manual review rather than stored as valid data."
+                )
+
+            key_extractor = es.KeyExtractor()
+            key, scale, key_strength = key_extractor(audio)
+
+            danceability_extractor = es.Danceability()
+            dance_value, dance_dfa = danceability_extractor(audio)
+
+            result['synapse'] = ('ok', {
+                'bpm': float(bpm),
+                'key': key,
+                'scale': scale,
+                'key_strength': float(key_strength),
+                'danceability': float(dance_value),
+            })
+        except Exception as e:
+            result['synapse'] = ('error', str(e))
+
+    if needs_vi:
+        try:
+            import numpy as np
+            from essentia.standard import MonoLoader, TensorflowPredictMusiCNN
+            # Deliberately a SEPARATE decode at VI's own required rate
+            # (16000Hz) -- confirmed via direct testing that sharing a
+            # single decode with Synapse's extractors above measurably
+            # degrades their accuracy. Small redundant cost, real
+            # accuracy protected.
+            vi_audio = MonoLoader(filename=filepath, sampleRate=16000)()
+            model = TensorflowPredictMusiCNN(graphFilename=VI_MODEL, output="model/Sigmoid")
+            preds = np.atleast_2d(model(vi_audio))
+            if preds.size == 0:
+                raise ValueError("track too short for any analysis window — no patches produced")
+            p_inst, p_voice = (float(x) for x in np.mean(preds, axis=0))
+            result['vi'] = ('ok', {'p_inst': p_inst, 'p_voice': p_voice})
+        except Exception as e:
+            result['vi'] = ('error', str(e))
+
+    result_queue.put(result)
 
 
-def analyze_one(filepath, timeout=ANALYSIS_TIMEOUT_SECONDS):
-    """Analyzes one file with a hard timeout. A file that hangs (rather
-    than cleanly erroring) will be forcibly killed after `timeout`
-    seconds and reported as a failure — protects a multi-day unattended
-    run from stalling forever on one bad file."""
+def analyze_one(filepath, needs_synapse=True, needs_vi=False, timeout=ANALYSIS_TIMEOUT_SECONDS):
+    """Analyzes one file with a hard timeout, running whichever of
+    Synapse/VI is requested. A file that hangs (rather than cleanly
+    erroring) will be forcibly killed after `timeout` seconds —
+    protects a multi-day unattended run from stalling forever on one
+    bad file. The timeout applies to BOTH analyses together, since
+    they share one subprocess.
+
+    Always returns a dict {'synapse': (status, payload) or None,
+    'vi': (status, payload) or None} -- does NOT raise on a per-
+    analysis failure, since one can fail while the other succeeds.
+    Callers inspect each key independently.
+    """
     import multiprocessing
 
     result_queue = multiprocessing.Queue()
-    proc = multiprocessing.Process(target=_analyze_one_impl, args=(filepath, result_queue))
+    proc = multiprocessing.Process(
+        target=_analyze_one_impl,
+        args=(filepath, result_queue, needs_synapse, needs_vi)
+    )
     proc.start()
     proc.join(timeout=timeout)
 
@@ -187,15 +275,20 @@ def analyze_one(filepath, timeout=ANALYSIS_TIMEOUT_SECONDS):
         proc.join(timeout=5)
         if proc.is_alive():
             proc.kill()
-        raise TimeoutError(f"Analysis exceeded {timeout}s — file likely corrupt or unreadable")
+        msg = f"Analysis exceeded {timeout}s — file likely corrupt or unreadable"
+        return {
+            'synapse': ('error', msg) if needs_synapse else None,
+            'vi': ('error', msg) if needs_vi else None,
+        }
 
     if result_queue.empty():
-        raise RuntimeError("Analysis process exited without a result (crashed)")
+        msg = "Analysis process exited without a result (crashed)"
+        return {
+            'synapse': ('error', msg) if needs_synapse else None,
+            'vi': ('error', msg) if needs_vi else None,
+        }
 
-    status, payload = result_queue.get()
-    if status == 'error':
-        raise RuntimeError(payload)
-    return payload
+    return result_queue.get()
 
 
 def estimate(plex, samples_per_format=2, max_candidates_per_format=8):
@@ -229,15 +322,19 @@ def estimate(plex, samples_per_format=2, max_candidates_per_format=8):
         for filepath in filepaths:
             if successes >= samples_per_format:
                 break
-            try:
-                t_start = time.time()
-                analyze_one(filepath)
-                elapsed = time.time() - t_start
+            # estimate mode times Synapse only (needs_synapse=True is
+            # the default) -- VI's cost is a separate, optional add-on,
+            # not part of the core "how long will this take" estimate.
+            t_start = time.time()
+            result = analyze_one(filepath)
+            elapsed = time.time() - t_start
+            status, payload = result['synapse']
+            if status == 'ok':
                 format_timings.setdefault(ext, []).append(elapsed)
                 print(f"  {ext}: {elapsed:.1f}s  ({os.path.basename(filepath)})")
                 successes += 1
-            except Exception as e:
-                print(f"  {ext}: FAILED ({os.path.basename(filepath)}) — {e} — retrying with another file...")
+            else:
+                print(f"  {ext}: FAILED ({os.path.basename(filepath)}) — {payload} — retrying with another file...")
         if successes == 0:
             print(f"  {ext}: all {len(filepaths)} candidate samples failed — no timing available for this format")
         print()
@@ -274,19 +371,49 @@ def estimate(plex, samples_per_format=2, max_candidates_per_format=8):
 
 
 def get_unanalyzed_tracks(conn, plex, limit=None):
-    already_done = set(row[0] for row in conn.execute(
+    """
+    Returns tracks needing EITHER Synapse or VI (or both) -- most
+    tracks need both together in the common case, but resuming a
+    partially-migrated library means some only need one.
+
+    Simplification vs. the original standalone vi_reverify.py: that
+    script prioritized "tagged-instrumental first, then NULL, then
+    tagged-vocal" for its own runs. This merged version processes in
+    Plex's natural walk order instead (matching Synapse's existing,
+    proven convention) -- now that both analyses happen together per
+    track in one pass, VI-specific prioritization matters less than
+    it did as a standalone concern.
+
+    Returns (rating_key, filepath, needs_synapse, needs_vi, title,
+    artist, old_tag) tuples.
+    """
+    already_synapse_done = set(row[0] for row in conn.execute(
         "SELECT rating_key FROM track_audio_features"
     ).fetchall())
-    already_failed = set(row[0] for row in conn.execute(
+    already_synapse_failed = set(row[0] for row in conn.execute(
         "SELECT rating_key FROM synapse_errors"
     ).fetchall())
-    skip = already_done | already_failed
+    synapse_skip = already_synapse_done | already_synapse_failed
+
+    vi_available = vi_model_available()
+    already_vi_done = set()
+    if vi_available:
+        already_vi_done = set(row[0] for row in conn.execute(
+            "SELECT rating_key FROM vi_results"
+        ).fetchall())
+
+    track_meta = {row[0]: (row[1], row[2], row[3]) for row in conn.execute(
+        "SELECT rating_key, title, COALESCE(real_artist, artist), is_instrumental FROM tracks"
+    ).fetchall()}
 
     to_process = []
     for rating_key, filepath in get_plex_tracks(plex):
-        if rating_key in skip:
+        needs_synapse = rating_key not in synapse_skip
+        needs_vi = vi_available and rating_key not in already_vi_done
+        if not needs_synapse and not needs_vi:
             continue
-        to_process.append((rating_key, filepath))
+        title, artist, old_tag = track_meta.get(rating_key, (None, None, None))
+        to_process.append((rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag))
         if limit and len(to_process) >= limit:
             break
 
@@ -319,8 +446,11 @@ def _write_with_retry(conn, sql, params, max_attempts=5, base_delay=0.5):
 
 
 def run_analysis(conn, plex, limit=None):
-    print("MusicMind for Plex - Synapse Audio Analysis")
+    print("MusicMind for Plex - Synapse + VI Audio Analysis")
     print("=" * 40)
+
+    vi_available = vi_model_available()
+    print(f"VI (voice/instrumental) model: {'found — will run alongside Synapse' if vi_available else 'not found — Synapse only (see models/ in the repo README to enable VI)'}\n")
 
     if limit:
         print(f"LIMITED RUN — processing at most {limit} tracks\n")
@@ -333,64 +463,91 @@ def run_analysis(conn, plex, limit=None):
         print("All tracks already analyzed!")
         return
 
-    done = 0
-    failed = 0
+    synapse_done = synapse_failed = 0
+    vi_done = vi_failed = 0
+    processed = 0
     t_run_start = time.time()
 
-    for rating_key, filepath in tracks:
-        try:
-            features = analyze_one(filepath)
-        except Exception as e:
-            failed += 1
-            print(f"  ⚠️ Failed: {os.path.basename(filepath)} — {e}")
+    for rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag in tracks:
+        result = analyze_one(filepath, needs_synapse=needs_synapse, needs_vi=needs_vi)
+        processed += 1
+
+        # --- Synapse half — same retry/error-table logic as before,
+        # just scoped to result['synapse'] instead of a bare exception.
+        if needs_synapse:
+            status, payload = result['synapse']
+            if status == 'error':
+                synapse_failed += 1
+                print(f"  ⚠️ Synapse failed: {os.path.basename(filepath)} — {payload}")
+                _write_with_retry(conn, """
+                    INSERT OR REPLACE INTO synapse_errors
+                        (rating_key, filepath, error, failed_at)
+                    VALUES (?, ?, ?, ?)
+                """, (rating_key, filepath, str(payload), datetime.now().isoformat()))
+            else:
+                write_ok = _write_with_retry(conn, """
+                    INSERT OR REPLACE INTO track_audio_features
+                        (rating_key, bpm, key, scale, key_strength, danceability, analyzed_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    rating_key, payload['bpm'], payload['key'], payload['scale'],
+                    payload['key_strength'], payload['danceability'], datetime.now().isoformat()
+                ))
+                if write_ok:
+                    synapse_done += 1
+                else:
+                    synapse_failed += 1
+                    print(f"  ⚠️ Synapse write failed after retries: {os.path.basename(filepath)} — database still locked")
+                    _write_with_retry(conn, """
+                        INSERT OR REPLACE INTO synapse_errors
+                            (rating_key, filepath, error, failed_at)
+                        VALUES (?, ?, ?, ?)
+                    """, (rating_key, filepath, "database is locked (persisted after retries)", datetime.now().isoformat()))
+
+        # --- VI half — mirrors vi_reverify.py's original verdict logic
+        # (threshold comparison, is_instrumental flip, vi_results audit
+        # row), just scoped to result['vi'] and reusing the SAME decode
+        # already produced by _analyze_one_impl for this track.
+        if needs_vi:
+            status, payload = result['vi']
+            verdict = "ERROR"; changed = 0; err = None
+            p_inst = p_voice = None
+            if status == 'ok':
+                p_inst, p_voice = payload['p_inst'], payload['p_voice']
+                if p_voice >= VI_THRESHOLD:
+                    verdict = "VOICE"
+                    if old_tag != 0:
+                        _write_with_retry(conn, "UPDATE tracks SET is_instrumental = 0 WHERE rating_key = ?", (rating_key,))
+                        changed = 1
+                elif p_inst >= VI_THRESHOLD:
+                    verdict = "INSTRUMENTAL"
+                    if old_tag != 1:
+                        _write_with_retry(conn, "UPDATE tracks SET is_instrumental = 1 WHERE rating_key = ?", (rating_key,))
+                        changed = 1
+                else:
+                    verdict = "AMBIGUOUS"
+                vi_done += 1
+            else:
+                err = str(payload)[:300]
+                vi_failed += 1
+                print(f"  ⚠️ VI failed: {os.path.basename(filepath)} — {err}")
+
             _write_with_retry(conn, """
-                INSERT OR REPLACE INTO synapse_errors
-                    (rating_key, filepath, error, failed_at)
-                VALUES (?, ?, ?, ?)
-            """, (rating_key, filepath, str(e), datetime.now().isoformat()))
-            continue
+                INSERT OR REPLACE INTO vi_results
+                    (rating_key, title, artist, old_tag, p_inst, p_voice, verdict, tag_changed, error, analyzed_at)
+                VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))
+            """, (rating_key, title, artist, old_tag, p_inst, p_voice, verdict, changed, err))
 
-        # Analysis succeeded — the write itself can still transiently
-        # fail if Full Sync (which runs every ~2 hours) happens to be
-        # writing to the same SQLite file at this exact moment. This is
-        # NOT a real analysis failure, so it gets a short retry rather
-        # than being logged to synapse_errors like a genuine failure —
-        # confirmed this exact collision permanently excluded several
-        # legitimate, healthy tracks before this fix.
-        write_ok = _write_with_retry(conn, """
-            INSERT OR REPLACE INTO track_audio_features
-                (rating_key, bpm, key, scale, key_strength, danceability, analyzed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            rating_key,
-            features['bpm'],
-            features['key'],
-            features['scale'],
-            features['key_strength'],
-            features['danceability'],
-            datetime.now().isoformat()
-        ))
-
-        if write_ok:
-            done += 1
-        else:
-            failed += 1
-            print(f"  ⚠️ Failed after retries: {os.path.basename(filepath)} — database still locked")
-            _write_with_retry(conn, """
-                INSERT OR REPLACE INTO synapse_errors
-                    (rating_key, filepath, error, failed_at)
-                VALUES (?, ?, ?, ?)
-            """, (rating_key, filepath, "database is locked (persisted after retries)", datetime.now().isoformat()))
-            continue
-
-        if (done + failed) % 25 == 0:
+        if processed % 25 == 0:
             elapsed = time.time() - t_run_start
-            avg = elapsed / (done + failed)
-            remaining = total - (done + failed)
+            avg = elapsed / processed
+            remaining = total - processed
             eta_hours = (avg * remaining) / 3600
-            print(f"  {done + failed}/{total} processed ({done} ok, {failed} failed) — ETA: {eta_hours:.1f}h remaining")
+            print(f"  {processed}/{total} processed (synapse: {synapse_done} ok/{synapse_failed} failed, "
+                  f"vi: {vi_done} ok/{vi_failed} failed) — ETA: {eta_hours:.1f}h remaining")
 
-    print(f"\nDone. {done} tracks analyzed, {failed} failed.")
+    print(f"\nDone. Synapse: {synapse_done} analyzed, {synapse_failed} failed."
+          + (f" VI: {vi_done} analyzed, {vi_failed} failed." if vi_available else " VI: skipped (model not installed)."))
     print(f"Database: {DB_PATH}")
 
 

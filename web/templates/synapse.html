@@ -26,10 +26,16 @@
         <div class="guide-tip" style="margin-bottom:1.5rem;">
             <strong>What this does:</strong> Synapse analyzes the actual audio in your library —
             not metadata, not AI guesses — using Essentia to measure tempo (BPM), musical key,
-            and danceability directly from the waveform. This is a one-time, background job.
-            Full-library analysis can take a couple of days depending on your library size and
-            hardware. It's completely free (no API calls) and safe to run in the background —
-            just start it and check back later.
+            and danceability directly from the waveform, and (if the voice/instrumental model
+            file has been downloaded — see the repo README) also verifies each track's real
+            instrumental status the same way, in the same pass. It's completely free (no API
+            calls). The <strong>first full-library run</strong> is the only slow one — it can take
+            a couple of days depending on your library size and hardware, and is safe to run in
+            the background; just start it and check back later. After that initial backlog is
+            cleared, Synapse runs <strong>automatically</strong> as the final step of every Full
+            Sync, analyzing only genuinely new tracks — typically seconds to minutes, not days.
+            The manual "Run Now" button below is for that one-time backlog clear (or to
+            re-analyze on demand); day-to-day, you shouldn't need to touch it.
         </div>
 
         <div class="admin-card" style="margin-bottom:1.5rem;">

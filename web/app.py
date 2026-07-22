@@ -278,7 +278,6 @@ def run_script(script):
         'copyforward':  os.path.join(BASE_DIR, 'copy_forward_analysis.py'),
         'dedup':        os.path.join(BASE_DIR, 'dedup_report.py'),
         'varesolve':    os.path.join(BASE_DIR, 'va_resolve.py'),
-        'vi':           os.path.join(BASE_DIR, 'vi_reverify.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400
