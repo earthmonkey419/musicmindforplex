@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 try:
     from config import IS_MASTER
@@ -20,7 +20,8 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
+    return render_template('index.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year,
+                            vi_status=vi_capability_status())
 
 @app.route('/onthisday', methods=['POST'])
 def onthisday():
@@ -147,7 +148,20 @@ def preview():
         if data.get('dj_ify'):
             tracks = sequence_for_flow(tracks)
 
-        return jsonify({'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': bool(data.get('dj_ify'))})
+        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': bool(data.get('dj_ify'))}
+
+        # Found via July 2026 fresh-install sanity check: checking
+        # "Instrumental only" on an install with no VI data at all
+        # (fresh v3-dev, model never downloaded) silently returned
+        # zero results with no explanation. Distinguish that from
+        # "genuinely nothing matches this specific query."
+        if filters.get('instrumental') == 1 and len(tracks) == 0 and no_instrumental_data_exists():
+            response['warning'] = ("No tracks have been analyzed for voice/instrumental content "
+                                    "yet. Run VI verification from the Admin page (requires "
+                                    "downloading the voice/instrumental model first — see the "
+                                    "Admin page for the download link).")
+
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

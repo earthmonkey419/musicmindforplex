@@ -796,6 +796,62 @@ def append_to_query_log(log_id, tags=None, buckets=None,
         print(f"append_to_query_log error: {e}")
 
 
+def vi_capability_status():
+    """
+    Proactive version of no_instrumental_data_exists() -- used at page
+    LOAD time (not just after a failed search) to gray out the
+    "Instrumental only" checkbox entirely rather than let someone
+    check it, search, and only then learn nothing can ever come back.
+
+    Returns one of:
+      'no_essentia' -- essentia isn't installed at all (checked via
+                       importlib.util.find_spec, NOT a real import --
+                       essentia is a heavy library, actually importing
+                       it on every page load would be slow)
+      'no_data'     -- essentia may be present, but no VI data has
+                       been generated yet (vi_reverify.py never run)
+      'ready'       -- real instrumental data exists, filter will work
+    """
+    import importlib.util
+    if importlib.util.find_spec("essentia") is None:
+        return "no_essentia"
+    if no_instrumental_data_exists():
+        return "no_data"
+    return "ready"
+
+
+def no_instrumental_data_exists():
+    """
+    True if this install has literally no way to know which tracks are
+    instrumental -- neither vi_results (needs the separately-licensed
+    model downloaded + vi_reverify.py run) nor the older
+    tracks.is_instrumental column has ANY real data at all. Used to
+    distinguish "no tracks match the instrumental filter right now"
+    from "this install genuinely can't answer that question yet" --
+    found via the July 2026 fresh-install sanity check, where checking
+    Instrumental Only silently returned zero results with no
+    explanation on a brand new v3-dev install (tag_instrumentals.py,
+    the old text-based fallback, was correctly removed entirely, and
+    vi_reverify.py's model file is deliberately never auto-downloaded
+    due to its CC BY-NC-SA license).
+    """
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+    if has_vi_results:
+        vi_count = conn.execute("SELECT COUNT(*) FROM vi_results").fetchone()[0]
+        if vi_count > 0:
+            conn.close()
+            return False
+    is_instrumental_count = conn.execute(
+        "SELECT COUNT(*) FROM tracks WHERE is_instrumental IS NOT NULL"
+    ).fetchone()[0]
+    conn.close()
+    return is_instrumental_count == 0
+
+
 def get_known_tags(limit=200):
     """Returns the most common tags actually present in track_tags,
     used to ground OpenAI's tag suggestions in real, matchable vocabulary."""

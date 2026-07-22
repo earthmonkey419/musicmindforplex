@@ -57,7 +57,13 @@
 
         <div class="filters">
             <label><input type="checkbox" id="unplayed"> Unplayed only</label>
+            {% if vi_status == 'ready' %}
             <label><input type="checkbox" id="instrumental" onchange="document.getElementById('vocal-tolerance-wrap').style.display = this.checked ? 'inline-block' : 'none'"> Instrumental only</label>
+            {% elif vi_status == 'no_essentia' %}
+            <label style="color:#999;" title="Instrumental detection needs the essentia library, which isn't installed on this server. Ask your admin to install it (pip install essentia)."><input type="checkbox" disabled> Instrumental only <span style="font-size:0.8em;">(unavailable)</span></label>
+            {% else %}
+            <label style="color:#999;" title="No tracks have been analyzed for voice/instrumental content yet. Run VI verification from the Admin page first."><input type="checkbox" disabled> Instrumental only <span style="font-size:0.8em;">(run VI verification first)</span></label>
+            {% endif %}
             <span id="vocal-tolerance-wrap" style="display:none;">
                 Vocal tolerance
                 <input type="range" id="vocal_tolerance" min="0.1" max="0.9" value="0.55" step="0.05" style="width:100px; vertical-align:middle;" oninput="document.getElementById('vocal_tolerance_label').textContent = this.value">
@@ -268,6 +274,9 @@
                 if (data.error) {
                     showToast('Error: ' + data.error, 'error');
                     return;
+                }
+                if (data.warning) {
+                    showToast(data.warning, 'error');
                 }
 
                 // Show tags or intent info
