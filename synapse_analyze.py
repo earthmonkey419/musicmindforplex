@@ -93,9 +93,13 @@ def _load_audio_with_transcode_fallback(filepath, sample_rate, MonoLoader):
     audio to write the new file, the same more-tolerant path Plex
     itself uses).
 
-    Returns (audio_array, used_fallback: bool). Raises the ORIGINAL
-    error if the fallback isn't available or also fails, so the
-    caller's own error message stays meaningful.
+    Returns (audio_array, used_fallback: bool). Raises an error that
+    ALWAYS states which stage actually failed (direct load / ffmpeg
+    missing / transcode itself / retry after a successful transcode)
+    -- found July 2026 that always re-raising just the original error
+    made it impossible to tell from logs alone whether the fallback
+    was ever actually attempted, let alone why it didn't help. That
+    ambiguity is exactly what this fixes.
     """
     import shutil, subprocess, tempfile
     try:
@@ -103,7 +107,7 @@ def _load_audio_with_transcode_fallback(filepath, sample_rate, MonoLoader):
     except Exception as first_err:
         ffmpeg = shutil.which("ffmpeg")
         if not ffmpeg:
-            raise first_err
+            raise RuntimeError(f"{first_err} (fallback not attempted: ffmpeg not found on PATH)")
 
         tmp_path = None
         try:
@@ -115,10 +119,12 @@ def _load_audio_with_transcode_fallback(filepath, sample_rate, MonoLoader):
                 capture_output=True, text=True, timeout=60
             )
             if transcode.returncode != 0 or not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                raise first_err
-            return MonoLoader(filename=tmp_path, sampleRate=sample_rate)(), True
-        except Exception:
-            raise first_err
+                stderr_tail = (transcode.stderr or "")[-300:]
+                raise RuntimeError(f"{first_err} (transcode fallback also failed: {stderr_tail})")
+            try:
+                return MonoLoader(filename=tmp_path, sampleRate=sample_rate)(), True
+            except Exception as retry_err:
+                raise RuntimeError(f"{first_err} (transcode succeeded but retry still failed: {retry_err})")
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
