@@ -1023,6 +1023,70 @@ def logs():
 def stats():
     return render_template('stats.html', year=datetime.now().year)
 
+
+@app.route('/export-csv')
+def export_csv():
+    """
+    Dumps the enriched library data as a downloadable CSV -- AI tags,
+    measured BPM/key/danceability, VI verdicts, play counts,
+    real_artist. Data nobody else has, and exporting it makes the
+    whole thing feel genuinely user-owned rather than locked inside
+    a database only this app can read. From the July 2026 competitive
+    positioning research (Music Manager for Plex comparison).
+    """
+    import sqlite3, csv, io
+
+    conn = sqlite3.connect(DB_PATH)
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+
+    vi_select = "vi.verdict, vi.p_voice, vi.p_inst" if has_vi_results else "NULL, NULL, NULL"
+    vi_join = "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key" if has_vi_results else ""
+
+    rows = conn.execute(f"""
+        SELECT
+            t.rating_key,
+            t.title,
+            COALESCE(t.real_artist, t.artist) as artist,
+            t.album,
+            t.genre,
+            t.year,
+            t.play_count,
+            t.user_rating,
+            t.rating_count,
+            GROUP_CONCAT(DISTINCT tt.tag) as tags,
+            taf.bpm,
+            taf.key,
+            taf.scale,
+            taf.danceability,
+            {vi_select}
+        FROM tracks t
+        LEFT JOIN track_tags tt ON tt.rating_key = t.rating_key
+        LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
+        {vi_join}
+        GROUP BY t.rating_key
+        ORDER BY t.artist, t.album, t.title
+    """).fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'rating_key', 'title', 'artist', 'album', 'genre', 'year',
+        'play_count', 'user_rating', 'popularity_rating_count', 'tags',
+        'bpm', 'key', 'scale', 'danceability',
+        'vi_verdict', 'vi_p_voice', 'vi_p_inst'
+    ])
+    writer.writerows(rows)
+
+    response = app.response_class(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=musicmind_library_export.csv'}
+    )
+    return response
+
 @app.route('/stats/data')
 def stats_data():
     import sqlite3
