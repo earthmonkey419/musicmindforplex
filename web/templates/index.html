@@ -241,9 +241,13 @@
                     return;
                 }
 
-                status.textContent = data.mode === 'artist' && data.source === 'ai_fallback'
-                    ? 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.'
-                    : '';
+                if (data.mode === 'artist' && data.source === 'ai_fallback_no_lastfm') {
+                    status.textContent = 'ℹ️ Last.fm isn\'t configured on this install — used AI instead.';
+                } else if (data.mode === 'artist' && data.source === 'ai_fallback_lastfm_empty') {
+                    status.textContent = 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.';
+                } else {
+                    status.textContent = '';
+                }
                 status.className = 'status';
 
                 currentTracks = data.tracks;

@@ -1341,7 +1341,12 @@ def find_similar_by_artist(seed_artist, limit=30, max_per_artist=3):
     source = 'lastfm'
     if not similar_names:
         similar_names = _ai_similar_artists(seed_artist)
-        source = 'ai_fallback'
+        # Distinguish WHY the fallback triggered -- "Last.fm isn't
+        # configured on this install at all" is a genuinely different
+        # situation from "Last.fm was checked and had nothing for
+        # this specific artist," and the frontend message should say
+        # the true one, not always claim the artist-specific version.
+        source = 'ai_fallback_no_lastfm' if not LASTFM_KEY else 'ai_fallback_lastfm_empty'
 
     if not similar_names:
         return [], source
