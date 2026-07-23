@@ -79,7 +79,7 @@
 
         <div class="admin-card" style="margin-bottom:1.5rem;">
             <h3>⚠️ Errors</h3>
-            <p>Tracks Synapse couldn't analyze — corrupted files, unreadable formats, or files that timed out. Safe to ignore; these are skipped automatically on future runs.</p>
+            <p>Tracks Synapse and/or VI couldn't analyze — corrupted files, unreadable formats, or files that timed out. Safe to ignore; these are skipped automatically on future runs.</p>
             <button onclick="loadSynapseErrors(this)">Load Errors</button>
             <div id="synapse-errors-summary" style="font-size:0.85rem; color:#8b6914; margin-top:0.5rem;"></div>
             <div id="synapse-errors-list" style="margin-top:0.75rem;"></div>
@@ -295,17 +295,23 @@
                 const summary = document.getElementById('synapse-errors-summary');
                 const list = document.getElementById('synapse-errors-list');
 
-                summary.textContent = `${errors.length} error${errors.length !== 1 ? 's' : ''} logged` + (errors.length === 200 ? ' (showing most recent 200 — use The Ledger for the full list)' : '');
+                const synapseCount = errors.filter(e => e.type === 'synapse').length;
+                const viCount = errors.filter(e => e.type === 'vi').length;
+                summary.textContent = `${errors.length} error${errors.length !== 1 ? 's' : ''} logged `
+                    + `(${synapseCount} Synapse, ${viCount} VI)`
+                    + (errors.length === 200 ? ' — showing most recent 200, use The Ledger for the full list' : '');
 
                 if (errors.length === 0) {
                     list.innerHTML = '<p style="color:#8b6914; font-style:italic;">No errors logged yet.</p>';
                 } else {
                     list.innerHTML = errors.map(e => {
-                        const filename = e.filepath.split('/').pop();
+                        const badge = e.type === 'vi'
+                            ? '<span style="background:#5a4a8a; color:#fff; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:3px;">VI</span>'
+                            : '<span style="background:#8a6d4a; color:#fff; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:3px;">SYNAPSE</span>';
                         return `<div class="synapse-error-row">
-                            <div class="error-file">${filename}</div>
+                            <div class="error-file">${badge} ${e.label}</div>
                             <div class="error-msg">${e.error}</div>
-                            <div class="error-time">rating_key: ${e.rating_key} — ${e.failed_at}</div>
+                            <div class="error-time">rating_key: ${e.rating_key} — ${e.at}</div>
                         </div>`;
                     }).join('');
                 }

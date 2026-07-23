@@ -613,7 +613,21 @@ def synapse_status():
 
     conn = sqlite3.connect(DB_PATH)
     analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
-    errors = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
+    synapse_error_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
+    # VI errors live in a separate table (vi_results, verdict='ERROR')
+    # -- since the July 2026 merge, this page needs to surface BOTH
+    # failure sources, not just Synapse's. Found via a real run: the
+    # Errors section showed nothing even while VI was actively
+    # failing on real files (Bananarama, an Iggy Pop cluster).
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+    vi_error_count = 0
+    if has_vi_results:
+        vi_error_count = conn.execute(
+            "SELECT COUNT(*) FROM vi_results WHERE verdict = 'ERROR'"
+        ).fetchone()[0]
+    errors = synapse_error_count + vi_error_count
     last_write_row = conn.execute("SELECT MAX(analyzed_at) FROM track_audio_features").fetchone()
     conn.close()
 
@@ -636,22 +650,53 @@ def synapse_status():
 
 @app.route('/synapse-errors')
 def synapse_errors_view():
-    """Returns the current synapse_errors table as JSON, for display on the Synapse page."""
+    """Returns BOTH Synapse's and VI's error tables as one combined,
+    labeled JSON list, for display on the Synapse page. Since the
+    July 2026 VI+Synapse merge, a track can fail either analysis
+    independently -- this needs to surface both, not just Synapse's,
+    or VI failures (real ones: Bananarama, an Iggy Pop timeout
+    cluster) are invisible here even though they're real, tracked
+    data sitting in vi_results."""
     import sqlite3
     conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute("""
+
+    synapse_rows = conn.execute("""
         SELECT rating_key, filepath, error, failed_at
         FROM synapse_errors
         ORDER BY failed_at DESC
         LIMIT 200
     """).fetchall()
+
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+    vi_rows = []
+    if has_vi_results:
+        vi_rows = conn.execute("""
+            SELECT rating_key, title, artist, error, analyzed_at
+            FROM vi_results
+            WHERE verdict = 'ERROR'
+            ORDER BY analyzed_at DESC
+            LIMIT 200
+        """).fetchall()
     conn.close()
-    return jsonify([{
+
+    combined = [{
+        'type':       'synapse',
         'rating_key': r[0],
-        'filepath':   r[1],
+        'label':      r[1].split('/')[-1] if r[1] else r[0],
         'error':      r[2],
-        'failed_at':  r[3],
-    } for r in rows])
+        'at':         r[3],
+    } for r in synapse_rows] + [{
+        'type':       'vi',
+        'rating_key': r[0],
+        'label':      f"{r[2]} — {r[1]}" if r[1] or r[2] else r[0],
+        'error':      r[3],
+        'at':         r[4],
+    } for r in vi_rows]
+
+    combined.sort(key=lambda e: e['at'] or '', reverse=True)
+    return jsonify(combined[:200])
 
 
 @app.route('/synapse')
