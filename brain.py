@@ -1325,8 +1325,19 @@ def find_similar_by_artist(seed_artist, limit=30, max_per_artist=3):
     data, or a network issue). Matches results against what's
     actually IN the local library -- an artist Last.fm suggests that
     isn't in your collection simply won't appear.
+
+    Requests a generous candidate count (50, not the previous default
+    of 15) -- confirmed via real testing (July 2026) that this is the
+    actual bottleneck, not similarity-data quality. Last.fm's own
+    suggestions for Stevie Wonder and Simon & Garfunkel were both
+    excellent, genuinely correct peers (Marvin Gaye, Curtis Mayfield,
+    Bob Dylan, Leonard Cohen...) -- the "slim results" complaint was
+    real, but caused by only ~35-40% of a small 15-candidate list
+    happening to exist in this specific library, not by Last.fm
+    suggesting the wrong artists. A larger candidate pool directly
+    fixes that at the same hit rate, without changing the approach.
     """
-    similar_names = _lastfm_similar_artists(seed_artist)
+    similar_names = _lastfm_similar_artists(seed_artist, count=50)
     source = 'lastfm'
     if not similar_names:
         similar_names = _ai_similar_artists(seed_artist)
