@@ -148,6 +148,14 @@
             <button id="preview-btn" onclick="preview()">Preview</button>
         </div>
 
+        <div class="admin-card" style="margin: 1rem 0; position:relative;">
+            <h3>🎯 Based On</h3>
+            <p style="font-size:0.85rem;">Pick a track for similar-sounding songs (real tag + measured-audio matching, no AI), or an artist for similar musicians (real Last.fm listening data).</p>
+            <input type="text" id="based-on-input" placeholder="Type a song or artist name..." autocomplete="off" style="width:100%; max-width:400px;" oninput="basedOnSearch(this.value)">
+            <div id="based-on-suggestions" style="display:none; position:absolute; background:#fff; border:1px solid #ddd0b8; border-radius:4px; max-width:400px; z-index:10; max-height:250px; overflow-y:auto;"></div>
+            <div class="status" id="status-basedon"></div>
+        </div>
+
         <div class="admin-card" style="margin: 1rem 0;">
             <h3>📻 On This Day</h3>
             <p style="font-size:0.85rem;">Pick a date to see what you were actually listening to around that time — an 8-day window centered on your choice, pulled directly from your Last.fm history.</p>
@@ -172,6 +180,90 @@
 
     <script>
         let currentTracks = [];
+
+        let basedOnDebounce = null;
+        async function basedOnSearch(query) {
+            clearTimeout(basedOnDebounce);
+            const box = document.getElementById('based-on-suggestions');
+            if (query.trim().length < 2) {
+                box.style.display = 'none';
+                return;
+            }
+            basedOnDebounce = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/based-on-search?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (!data.results.length) {
+                        box.style.display = 'none';
+                        return;
+                    }
+                    box.innerHTML = data.results.map(r =>
+                        `<div style="padding:0.5rem 0.8rem; cursor:pointer; border-bottom:1px solid #eee;"
+                              onmouseover="this.style.background='#f0e8d8'" onmouseout="this.style.background='#fff'"
+                              onclick='basedOnSelect(${JSON.stringify(r).replace(/'/g, "&apos;")})'>
+                            ${r.label}
+                         </div>`
+                    ).join('');
+                    box.style.display = 'block';
+                } catch (e) {
+                    box.style.display = 'none';
+                }
+            }, 250);
+        }
+
+        async function basedOnSelect(item) {
+            document.getElementById('based-on-suggestions').style.display = 'none';
+            document.getElementById('based-on-input').value = item.label;
+            const status = document.getElementById('status-basedon');
+            status.textContent = '⏳ Finding similar tracks...';
+            status.className = 'status';
+
+            try {
+                const payload = item.type === 'track'
+                    ? { type: 'track', rating_key: item.rating_key, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
+                    : { type: 'artist', value: item.value, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value };
+
+                const res = await fetch('/based-on', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                    return;
+                }
+                if (!data.tracks.length) {
+                    status.textContent = '⚠️ No similar tracks found in your library.';
+                    status.className = 'status error';
+                    return;
+                }
+
+                status.textContent = data.mode === 'artist' && data.source === 'ai_fallback'
+                    ? 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.'
+                    : '';
+                status.className = 'status';
+
+                currentTracks = data.tracks;
+                const list = document.getElementById('track-list');
+                list.innerHTML = data.tracks.map(t => `
+                    <li>
+                        <span class="track-title">${t.artist} — ${t.title}</span>
+                        <span class="track-meta">${t.year || '?'} &bull; ${t.play_count || 0} plays</span>
+                    </li>
+                `).join('');
+                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+                const tagsRow = document.getElementById('tags-row');
+                tagsRow.innerHTML = `<span class="tag">🎯 Based on: ${item.label}</span>`;
+                tagsRow.style.display = 'flex';
+                document.getElementById('results').style.display = 'block';
+            } catch (e) {
+                status.textContent = '❌ Request failed: ' + e;
+                status.className = 'status error';
+            }
+        }
 
         async function findOnThisDay(btn) {
             const dateVal = document.getElementById('onthisday_date').value;

@@ -7,7 +7,7 @@ Shared logic for prompt expansion, track search, and playlist creation.
 import sqlite3
 from openai import OpenAI
 from plexapi.server import PlexServer
-from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH, OPENAI_KEY
+from config import PLEX_URL, PLEX_TOKEN, MUSIC_LIB, DB_PATH, OPENAI_KEY, LASTFM_KEY
 
 # --- Config ---
 
@@ -1179,6 +1179,187 @@ If the text mentions a holiday or relative date (e.g. "New Year's Eve", "my birt
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
     return json.loads(raw)
+
+
+def find_similar_by_track(seed_rating_key, limit=30, max_per_artist=3):
+    """
+    "Based on: <track>" -- finds tracks sharing the most tags with the
+    seed, refined by Synapse proximity (close BPM, matching key) as a
+    tiebreaker/booster. No AI involved at all -- the seed track
+    already has real, measured data to compare against, so this is
+    fully "measured, not guessed," same character as the rest of the
+    app.
+
+    Scoring: tag overlap dominates (10 points/shared tag), BPM
+    closeness contributes a small decaying bonus (max 5 points at
+    identical BPM, tapering to 0 by ~10 BPM apart), matching key+scale
+    adds a flat 3-point bonus. Tag overlap is the primary signal;
+    Synapse data refines ordering among similarly-tagged tracks
+    rather than dominating on its own.
+    """
+    conn = sqlite3.connect(DB_PATH)
+
+    seed_tags = set(row[0] for row in conn.execute(
+        "SELECT tag FROM track_tags WHERE rating_key = ?", (seed_rating_key,)
+    ).fetchall())
+
+    seed_features = conn.execute(
+        "SELECT bpm, key, scale, danceability FROM track_audio_features WHERE rating_key = ?",
+        (seed_rating_key,)
+    ).fetchone()
+    seed_bpm, seed_key, seed_scale, seed_dance = seed_features if seed_features else (None, None, None, None)
+
+    if not seed_tags:
+        conn.close()
+        return []
+
+    placeholders = ",".join("?" for _ in seed_tags)
+    candidates = conn.execute(f"""
+        SELECT t.rating_key, t.title, COALESCE(t.real_artist, t.artist) as artist,
+               t.album, t.year, t.play_count,
+               COUNT(DISTINCT tt.tag) as tag_overlap,
+               taf.bpm, taf.key, taf.scale, taf.danceability
+        FROM tracks t
+        JOIN track_tags tt ON tt.rating_key = t.rating_key
+        LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
+        WHERE tt.tag IN ({placeholders}) AND t.rating_key != ?
+        GROUP BY t.rating_key
+        ORDER BY tag_overlap DESC
+    """, list(seed_tags) + [seed_rating_key]).fetchall()
+    conn.close()
+
+    scored = []
+    for rk, title, artist, album, year, play_count, tag_overlap, bpm, key, scale, dance in candidates:
+        score = tag_overlap * 10
+        if seed_bpm is not None and bpm is not None:
+            bpm_diff = abs(seed_bpm - bpm)
+            score += max(0, 5 - bpm_diff / 2)
+        if seed_key is not None and key == seed_key and scale == seed_scale:
+            score += 3
+        scored.append({
+            'rating_key': rk, 'title': title, 'artist': artist, 'album': album,
+            'year': year, 'play_count': play_count, 'tag_overlap': tag_overlap,
+            'bpm': bpm, 'key': key, 'scale': scale, 'danceability': dance,
+            'score': score,
+        })
+
+    scored.sort(key=lambda x: -x['score'])
+
+    # Cap per artist, same pattern as search_tracks()
+    artist_counts = {}
+    results = []
+    for track in scored:
+        a = track['artist']
+        if artist_counts.get(a, 0) >= max_per_artist:
+            continue
+        artist_counts[a] = artist_counts.get(a, 0) + 1
+        results.append(track)
+        if len(results) >= limit:
+            break
+
+    return results
+
+
+def _lastfm_similar_artists(artist_name, count=15):
+    """Real, external listening-pattern data from Last.fm's own
+    artist.getSimilar -- who other people ACTUALLY listen to
+    alongside this artist, not a guess. Returns [] on any failure
+    (no key configured, artist not found, network error) rather than
+    raising -- this is explicitly a best-effort signal, callers fall
+    back to AI when it comes back empty."""
+    if not LASTFM_KEY:
+        return []
+    import urllib.request, urllib.parse, json
+    try:
+        params = {
+            'method': 'artist.getsimilar',
+            'artist': artist_name,
+            'api_key': LASTFM_KEY,
+            'format': 'json',
+            'limit': count,
+        }
+        query = '&'.join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+        url = f"https://ws.audioscrobbler.com/2.0/?{query}"
+        data = json.loads(urllib.request.urlopen(url, timeout=10).read())
+        artists = data.get('similarartists', {}).get('artist', [])
+        return [a['name'] for a in artists]
+    except Exception:
+        return []
+
+
+def _ai_similar_artists(artist_name, count=10):
+    """Last-resort fallback ONLY -- used when Last.fm has nothing for
+    this artist (not configured, artist too obscure, network issue).
+    Explicitly the least-preferred option in this feature: real
+    external data (Last.fm) is tried first, actual measured local
+    data powers track mode entirely -- this is the one place genuine
+    AI guessing is used, and only when nothing measured is available.
+    """
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.3,
+            messages=[{
+                "role": "user",
+                "content": f'List {count} real musical artists whose sound is genuinely '
+                           f'similar to "{artist_name}". Respond with ONLY a JSON array of '
+                           f'artist name strings, nothing else. Example: ["Artist One", "Artist Two"]'
+            }]
+        )
+        import json
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+        return json.loads(raw)
+    except Exception:
+        return []
+
+
+def find_similar_by_artist(seed_artist, limit=30, max_per_artist=3):
+    """
+    "Based on: <artist>" -- finds tracks by artists similar to the
+    seed, using Last.fm's real getSimilar data first (genuine
+    listening-pattern data from actual people, not a guess), falling
+    back to asking AI directly only if Last.fm has nothing (not
+    configured, artist too obscure/new to have Last.fm similarity
+    data, or a network issue). Matches results against what's
+    actually IN the local library -- an artist Last.fm suggests that
+    isn't in your collection simply won't appear.
+    """
+    similar_names = _lastfm_similar_artists(seed_artist)
+    source = 'lastfm'
+    if not similar_names:
+        similar_names = _ai_similar_artists(seed_artist)
+        source = 'ai_fallback'
+
+    if not similar_names:
+        return [], source
+
+    conn = sqlite3.connect(DB_PATH)
+    placeholders = ",".join("?" for _ in similar_names)
+    rows = conn.execute(f"""
+        SELECT t.rating_key, t.title, COALESCE(t.real_artist, t.artist) as artist,
+               t.album, t.year, t.play_count
+        FROM tracks t
+        WHERE COALESCE(t.real_artist, t.artist) IN ({placeholders})
+        ORDER BY t.play_count DESC
+    """, similar_names).fetchall()
+    conn.close()
+
+    artist_counts = {}
+    results = []
+    for rk, title, artist, album, year, play_count in rows:
+        if artist_counts.get(artist, 0) >= max_per_artist:
+            continue
+        artist_counts[artist] = artist_counts.get(artist, 0) + 1
+        results.append({
+            'rating_key': rk, 'title': title, 'artist': artist,
+            'album': album, 'year': year, 'play_count': play_count,
+        })
+        if len(results) >= limit:
+            break
+
+    return results, source
 
 
 def search_tracks(tags, filters=None):

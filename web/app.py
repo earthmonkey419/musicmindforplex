@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 try:
     from config import IS_MASTER
@@ -61,6 +61,62 @@ def onthisday():
         'intent': 'lastfm_window',
         'search_term': f"{target_date} ± 4 days",
     })
+
+
+@app.route('/based-on-search')
+def based_on_search():
+    """Autocomplete for the 'Based on:' box -- searches both track
+    titles and artist names, clearly labeled by type, so the frontend
+    knows which mode to use once the user picks a suggestion."""
+    import sqlite3
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'results': []})
+
+    conn = sqlite3.connect(DB_PATH)
+    track_rows = conn.execute("""
+        SELECT rating_key, title, COALESCE(real_artist, artist) as artist
+        FROM tracks WHERE title LIKE ? LIMIT 8
+    """, (f'%{q}%',)).fetchall()
+    artist_rows = conn.execute("""
+        SELECT DISTINCT COALESCE(real_artist, artist) as artist
+        FROM tracks WHERE COALESCE(real_artist, artist) LIKE ? LIMIT 8
+    """, (f'%{q}%',)).fetchall()
+    conn.close()
+
+    results = [{'type': 'track', 'rating_key': rk, 'label': f'{title} — {artist}'} for rk, title, artist in track_rows]
+    results += [{'type': 'artist', 'value': a[0], 'label': f'{a[0]} (artist)'} for a in artist_rows]
+    return jsonify({'results': results})
+
+
+@app.route('/based-on', methods=['POST'])
+def based_on():
+    """The actual 'Based on:' results -- routes to track mode (local
+    tag+Synapse blend, no AI) or artist mode (Last.fm real similarity
+    data, AI only as a last-resort fallback) depending on what the
+    user picked."""
+    data = request.json
+    seed_type = data.get('type')
+    limit = int(data.get('limit', 30))
+    max_per_artist = int(data.get('max_per_artist', 3))
+
+    try:
+        if seed_type == 'track':
+            rating_key = data.get('rating_key')
+            if not rating_key:
+                return jsonify({'error': 'No track specified'}), 400
+            results = find_similar_by_track(rating_key, limit=limit, max_per_artist=max_per_artist)
+            return jsonify({'tracks': results, 'mode': 'track'})
+        elif seed_type == 'artist':
+            artist = data.get('value')
+            if not artist:
+                return jsonify({'error': 'No artist specified'}), 400
+            results, source = find_similar_by_artist(artist, limit=limit, max_per_artist=max_per_artist)
+            return jsonify({'tracks': results, 'mode': 'artist', 'source': source})
+        else:
+            return jsonify({'error': 'Unknown seed type'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/preview', methods=['POST'])
