@@ -1199,6 +1199,11 @@ def find_similar_by_track(seed_rating_key, limit=30, max_per_artist=3):
     """
     conn = sqlite3.connect(DB_PATH)
 
+    seed_row = conn.execute("""
+        SELECT title, COALESCE(real_artist, artist) as artist, album, year, play_count
+        FROM tracks WHERE rating_key = ?
+    """, (seed_rating_key,)).fetchone()
+
     seed_tags = set(row[0] for row in conn.execute(
         "SELECT tag FROM track_tags WHERE rating_key = ?", (seed_rating_key,)
     ).fetchall())
@@ -1245,8 +1250,13 @@ def find_similar_by_track(seed_rating_key, limit=30, max_per_artist=3):
 
     scored.sort(key=lambda x: -x['score'])
 
-    # Cap per artist, same pattern as search_tracks()
+    # Cap per artist, same pattern as search_tracks(). Reserve one
+    # slot for the seed itself (added back below) so a max_per_artist
+    # cap of, say, 1 still leaves room for the seed's own artist to
+    # also appear among the similar tracks if genuinely warranted.
     artist_counts = {}
+    if seed_row:
+        artist_counts[seed_row[1]] = 1  # seed's artist already "used" one slot
     results = []
     for track in scored:
         a = track['artist']
@@ -1254,8 +1264,28 @@ def find_similar_by_track(seed_rating_key, limit=30, max_per_artist=3):
             continue
         artist_counts[a] = artist_counts.get(a, 0) + 1
         results.append(track)
-        if len(results) >= limit:
+        if len(results) >= limit - 1:  # leave room for the seed
             break
+
+    # Include the seed itself as the anchor track -- "based on X"
+    # implies a playlist genuinely containing X, not just things
+    # similar to it. Prepended first; sequence_for_flow() below may
+    # reposition it based on tempo, but it starts as the anchor.
+    if seed_row:
+        title, artist, album, year, play_count = seed_row
+        results = [{
+            'rating_key': seed_rating_key, 'title': title, 'artist': artist,
+            'album': album, 'year': year, 'play_count': play_count,
+            'tag_overlap': None, 'bpm': seed_bpm, 'key': seed_key,
+            'scale': seed_scale, 'danceability': seed_dance, 'score': None,
+            'is_seed': True,
+        }] + results
+
+    # Auto-sequence for tempo flow -- "based on" results are an
+    # inherently loose grouping (ranked by score, not a hand-crafted
+    # prompt), so a smooth BPM arc is a sensible default rather than
+    # requiring the user to remember to check DJ-ify separately.
+    results = sequence_for_flow(results)
 
     return results
 
@@ -1352,11 +1382,27 @@ def find_similar_by_artist(seed_artist, limit=30, max_per_artist=3):
         return [], source
 
     conn = sqlite3.connect(DB_PATH)
+
+    # Include the seed artist's OWN top tracks too -- "based on:
+    # Chris Isaak" implies a playlist genuinely featuring him, not
+    # just artists similar to him. Capped at max_per_artist, same as
+    # every other artist in these results.
+    seed_rows = conn.execute("""
+        SELECT t.rating_key, t.title, COALESCE(t.real_artist, t.artist) as artist,
+               t.album, t.year, t.play_count, taf.bpm, taf.key, taf.scale, taf.danceability
+        FROM tracks t
+        LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
+        WHERE COALESCE(t.real_artist, t.artist) = ?
+        ORDER BY t.play_count DESC
+        LIMIT ?
+    """, (seed_artist, max_per_artist)).fetchall()
+
     placeholders = ",".join("?" for _ in similar_names)
     rows = conn.execute(f"""
         SELECT t.rating_key, t.title, COALESCE(t.real_artist, t.artist) as artist,
-               t.album, t.year, t.play_count
+               t.album, t.year, t.play_count, taf.bpm, taf.key, taf.scale, taf.danceability
         FROM tracks t
+        LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
         WHERE COALESCE(t.real_artist, t.artist) IN ({placeholders})
         ORDER BY t.play_count DESC
     """, similar_names).fetchall()
@@ -1364,16 +1410,30 @@ def find_similar_by_artist(seed_artist, limit=30, max_per_artist=3):
 
     artist_counts = {}
     results = []
-    for rk, title, artist, album, year, play_count in rows:
+    for rk, title, artist, album, year, play_count, bpm, key, scale, dance in seed_rows:
+        artist_counts[artist] = artist_counts.get(artist, 0) + 1
+        results.append({
+            'rating_key': rk, 'title': title, 'artist': artist,
+            'album': album, 'year': year, 'play_count': play_count,
+            'bpm': bpm, 'key': key, 'scale': scale, 'danceability': dance,
+            'is_seed': True,
+        })
+
+    for rk, title, artist, album, year, play_count, bpm, key, scale, dance in rows:
         if artist_counts.get(artist, 0) >= max_per_artist:
             continue
         artist_counts[artist] = artist_counts.get(artist, 0) + 1
         results.append({
             'rating_key': rk, 'title': title, 'artist': artist,
             'album': album, 'year': year, 'play_count': play_count,
+            'bpm': bpm, 'key': key, 'scale': scale, 'danceability': dance,
         })
         if len(results) >= limit:
             break
+
+    # Auto-sequence for tempo flow, same reasoning as track mode --
+    # gracefully no-ops if BPM data isn't available for enough tracks.
+    results = sequence_for_flow(results)
 
     return results, source
 
