@@ -587,7 +587,19 @@ def run_analysis(conn, plex, limit=None):
                 VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))
             """, (rating_key, title, artist, old_tag, p_inst, p_voice, verdict, changed, err))
 
-        if processed % 25 == 0:
+        # Reduced from every 25 to every 5 tracks (found July 2026,
+        # real observation: "the logs are still batching"). Not
+        # actually a streaming/buffering bug -- the underlying pipe
+        # is genuinely line-by-line (-u flag, bufsize=1) -- but at
+        # VI's real per-track pace (~30-40s each, confirmed via a real
+        # 691-track/7-hour estimate), a report only every 25 tracks
+        # meant ~15 minutes of complete silence in the live log
+        # between updates, which understandably reads as "batching"
+        # even though real work is happening the whole time. Every 5
+        # tracks keeps a slow VI-heavy run visibly alive (~2-3 minutes
+        # between updates) without meaningfully spamming a fast
+        # Synapse-only run.
+        if processed % 5 == 0:
             elapsed = time.time() - t_run_start
             avg = elapsed / processed
             remaining = total - processed
