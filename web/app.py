@@ -106,12 +106,23 @@ def based_on():
             if not rating_key:
                 return jsonify({'error': 'No track specified'}), 400
             results = find_similar_by_track(rating_key, limit=limit, max_per_artist=max_per_artist)
+            # Found missing entirely (July 2026): the /based-on routes
+            # were built after centralized logging and never wired
+            # into it -- same class of gap as the original
+            # title_search/artist_search issue, just for a brand new
+            # code path. log_query() works standalone (no
+            # classify_prompt needed), same pattern already used for
+            # the lastfm: prefix path.
+            log_id = log_query(prompt=f"[based-on:track] {data.get('seed_label', rating_key)}", intent='based_on_track')
+            update_query_log_result_count(log_id, len(results), {'limit': limit, 'max_per_artist': max_per_artist})
             return jsonify({'tracks': results, 'mode': 'track'})
         elif seed_type == 'artist':
             artist = data.get('value')
             if not artist:
                 return jsonify({'error': 'No artist specified'}), 400
             results, source = find_similar_by_artist(artist, limit=limit, max_per_artist=max_per_artist)
+            log_id = log_query(prompt=f"[based-on:artist] {artist}", intent='based_on_artist')
+            update_query_log_result_count(log_id, len(results), {'limit': limit, 'max_per_artist': max_per_artist, 'source': source})
             return jsonify({'tracks': results, 'mode': 'artist', 'source': source})
         else:
             return jsonify({'error': 'Unknown seed type'}), 400

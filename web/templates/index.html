@@ -220,7 +220,7 @@
 
             try {
                 const payload = item.type === 'track'
-                    ? { type: 'track', rating_key: item.rating_key, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
+                    ? { type: 'track', rating_key: item.rating_key, seed_label: item.label, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
                     : { type: 'artist', value: item.value, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value };
 
                 const res = await fetch('/based-on', {
