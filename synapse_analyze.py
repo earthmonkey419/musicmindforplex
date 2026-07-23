@@ -206,9 +206,43 @@ def count_formats(plex):
     return formats, total
 
 
-ANALYSIS_TIMEOUT_SECONDS = 90  # generous — normal tracks take 8-25s;
-                                # a file needing longer than this is
-                                # treated as broken/hung, not slow.
+ANALYSIS_TIMEOUT_SECONDS = 90  # floor for normal-length tracks —
+                                # normal tracks take 8-25s; a file
+                                # needing longer than this is treated
+                                # as broken/hung, not slow.
+
+# Found July 2026: real, legitimate long tracks exist (Hendrix's
+# "Machine Gun" ~22min, Velvet Underground's "Sister Ray" ~17min,
+# King Crimson prog epics, extended ragas/qawwali, Dan Gibson ambient
+# pieces up to ~30min) alongside genuinely bad data (a "track" that
+# turned out to be a 26-HOUR mislabeled album). Both analyses process
+# the whole waveform, so real analysis time scales roughly linearly
+# with duration -- a fixed 90s floor that's generous for a 4-minute
+# track isn't necessarily enough for a legitimate 20-minute one.
+# get_timeout_for_duration() scales the timeout to the track's real
+# length, but caps it -- so genuine long tracks get proportionally
+# more time and should now actually succeed, while clearly malformed
+# data (the 26-hour case) still eventually times out and gets
+# correctly flagged as an error worth investigating, rather than
+# being given effectively unlimited patience and stalling a run.
+ANALYSIS_TIMEOUT_SECONDS_PER_MINUTE = 10  # real headroom above the
+                                            # observed ~4-8s/min baseline
+ANALYSIS_TIMEOUT_CAP_SECONDS = 600  # 10 minutes -- generous enough for
+                                      # any genuine long track, bounded
+                                      # enough that bad data can't stall
+                                      # an unattended run indefinitely
+
+
+def get_timeout_for_duration(duration_ms):
+    """Scales the analysis timeout to a track's real length, floored
+    at ANALYSIS_TIMEOUT_SECONDS and capped at
+    ANALYSIS_TIMEOUT_CAP_SECONDS. duration_ms=None (unknown length)
+    falls back to the plain floor, same as before this existed."""
+    if not duration_ms:
+        return ANALYSIS_TIMEOUT_SECONDS
+    duration_minutes = duration_ms / 60000
+    scaled = duration_minutes * ANALYSIS_TIMEOUT_SECONDS_PER_MINUTE
+    return int(max(ANALYSIS_TIMEOUT_SECONDS, min(ANALYSIS_TIMEOUT_CAP_SECONDS, scaled)))
 
 
 # Realistic BPM range — anything outside this is almost certainly a
@@ -434,7 +468,9 @@ def get_unanalyzed_tracks(conn, plex, limit=None):
     it did as a standalone concern.
 
     Returns (rating_key, filepath, needs_synapse, needs_vi, title,
-    artist, old_tag) tuples.
+    artist, old_tag, duration_ms) tuples. duration_ms feeds
+    get_timeout_for_duration() so genuinely long tracks get a
+    proportionally longer analysis timeout instead of the flat floor.
     """
     already_synapse_done = set(row[0] for row in conn.execute(
         "SELECT rating_key FROM track_audio_features"
@@ -451,8 +487,8 @@ def get_unanalyzed_tracks(conn, plex, limit=None):
             "SELECT rating_key FROM vi_results"
         ).fetchall())
 
-    track_meta = {row[0]: (row[1], row[2], row[3]) for row in conn.execute(
-        "SELECT rating_key, title, COALESCE(real_artist, artist), is_instrumental FROM tracks"
+    track_meta = {row[0]: (row[1], row[2], row[3], row[4]) for row in conn.execute(
+        "SELECT rating_key, title, COALESCE(real_artist, artist), is_instrumental, duration_ms FROM tracks"
     ).fetchall()}
 
     to_process = []
@@ -461,8 +497,8 @@ def get_unanalyzed_tracks(conn, plex, limit=None):
         needs_vi = vi_available and rating_key not in already_vi_done
         if not needs_synapse and not needs_vi:
             continue
-        title, artist, old_tag = track_meta.get(rating_key, (None, None, None))
-        to_process.append((rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag))
+        title, artist, old_tag, duration_ms = track_meta.get(rating_key, (None, None, None, None))
+        to_process.append((rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag, duration_ms))
         if limit and len(to_process) >= limit:
             break
 
@@ -517,8 +553,9 @@ def run_analysis(conn, plex, limit=None):
     processed = 0
     t_run_start = time.time()
 
-    for rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag in tracks:
-        result = analyze_one(filepath, needs_synapse=needs_synapse, needs_vi=needs_vi)
+    for rating_key, filepath, needs_synapse, needs_vi, title, artist, old_tag, duration_ms in tracks:
+        track_timeout = get_timeout_for_duration(duration_ms)
+        result = analyze_one(filepath, needs_synapse=needs_synapse, needs_vi=needs_vi, timeout=track_timeout)
         processed += 1
 
         # --- Synapse half — same retry/error-table logic as before,
