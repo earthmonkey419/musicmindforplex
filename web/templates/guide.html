@@ -19,9 +19,11 @@
             <a href="#quickstart">Quick Start</a>
             <span class="guide-nav-label">Reference</span>
             <a href="#playlists">Playlists</a>
+            <a href="#basedon">Based On</a>
             <a href="#sidebar">Sidebar</a>
             <a href="#gaps">Missing From Your Collection</a>
             <a href="#stats">The Collection</a>
+            <a href="#playlistaudit">Playlist Audit</a>
             <a href="#backoffice">Back Office</a>
             <a href="#synapse">Synapse</a>
             <a href="#enrichment">MusicBrainz &amp; AI</a>
@@ -46,7 +48,8 @@
                     <div class="guide-step-num">1</div>
                     <div class="guide-step-text">
                         Install dependencies:
-                        <code>sudo python3.12 -m pip install plexapi openai flask mutagen --break-system-packages</code>
+                        <code>sudo python3.12 -m pip install plexapi openai flask mutagen essentia numpy --break-system-packages</code>
+                        (<code>essentia</code> powers Synapse and voice/instrumental analysis — heavier to install, but required)
                     </div>
                 </div>
                 <div class="guide-step">
@@ -60,7 +63,9 @@
                     <div class="guide-step-num">3</div>
                     <div class="guide-step-text">
                         Copy <code>config.example.py</code> to <code>config.py</code> and fill in your Plex URL, token,
-                        OpenAI key, and (optionally) your Last.fm key.
+                        OpenAI key, and (optionally) your Last.fm key and a free
+                        <a href="https://acoustid.org/api-key" target="_blank">AcoustID key</a> (enables fingerprinting
+                        and Various Artists resolution).
                     </div>
                 </div>
                 <div class="guide-step">
@@ -94,7 +99,7 @@
             <div class="guide-card-row">
                 <div class="guide-card">
                     <span class="guide-card-title">Mood or vibe</span>
-                    <p>"late night psychedelic soul", "grandma's birthday party" — expands into 2-3 focused vibes and searches your library's AI tags.</p>
+                    <p>"late night psychedelic soul", "grandma's birthday party" — expands into 2-3 focused vibes and searches your library's AI tags. Phrases like "comfort picks" or "old favorites" automatically bias toward tracks you actually play a lot; "popular tracks" or "iconic songs" bias toward tracks that are widely well-known (a real, measured signal pulled from Plex, not a guess).</p>
                 </div>
                 <div class="guide-card">
                     <span class="guide-card-title">Title search</span>
@@ -110,17 +115,30 @@
                 </div>
                 <div class="guide-card">
                     <span class="guide-card-title">📻 Last.fm date search</span>
-                    <p>Type <code>lastfm: played in december 2023</code> (or any date range in plain English) to pull tracks straight from your real listening history — no genre matching, just what you actually played. Or use the <strong>On This Day</strong> date picker below the Preview button for a quick, AI-free way to see what you were listening to around a specific date (an 8-day window centered on your pick).</p>
+                    <p>Type <code>lastfm: played in december 2023</code> (or any date range in plain English) to pull tracks straight from your real listening history — no genre matching, just what you actually played. Or use the <strong>On This Day</strong> date picker below the Preview button for a quick, AI-free way to see what you were listening to around a specific date (an 8-day window centered on your pick). If any of your real scrobbles from that window never matched a local track, they show up separately below the results, clearly labeled — never added to the playlist, just so you can see what's missing from your library.</p>
                 </div>
             </div>
+
+            <h3>Genre focus</h3>
+            <p>
+                11 genre checkboxes above the prompt box (Jazz, Hip-Hop/Rap, Classic/Garage/Alt/Punk Rock, and
+                so on) narrow the AI to that genre's own tag vocabulary — leave all unchecked to search your
+                full tag library. Checking one or more automatically switches to <strong>strict mode</strong>:
+                the AI still reads and interprets your whole prompt, but only ever picks tags from the genres
+                you selected, so "something for a rainy day" + Jazz genuinely returns jazz, not just "rainy day"
+                music that happens to touch on jazz occasionally.
+            </p>
 
             <h3>Filters</h3>
             <ul>
                 <li><strong>Unplayed only</strong> — restrict to 0-play tracks</li>
-                <li><strong>Instrumental only</strong> — restrict to tracks classified as instrumental</li>
+                <li><strong>Instrumental only</strong> — restrict to tracks with no (or minimal) vocals. Once checked, a <strong>vocal tolerance</strong> slider appears (default 0.55) — drag it down for stricter instrumental-only results, or up to allow tracks with some quiet or background vocal presence. Grays out automatically if voice/instrumental analysis hasn't been run yet on your library, with an explanation why.</li>
                 <li><strong>Genre</strong> — Decades (search artist era) and Genres (search AI tags), shown as two sections in the dropdown</li>
                 <li><strong>From year / To year</strong> — restrict by release year range</li>
                 <li><strong>Tracks per artist</strong> — cap how many tracks from one artist can appear (default 1)</li>
+                <li><strong>Min BPM / Max BPM</strong> — restrict by real, measured tempo (requires Synapse analysis — see below)</li>
+                <li><strong>Danceability</strong> — restrict by Synapse's measured danceability score</li>
+                <li><strong>Min rating</strong> — restrict by your Plex star rating</li>
                 <li><strong>Gender / Country / Era</strong> — filter by artist metadata</li>
             </ul>
 
@@ -128,6 +146,26 @@
                 <strong>Tip:</strong> Prompt and filters combine. "Late night jazz" + Gender=female + Era=60s finds
                 late night jazz from female artists of the 60s.
             </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ BASED ON ═══════════════════ -->
+        <div class="guide-section" id="basedon">
+            <h2>🎯 Based On</h2>
+            <p>
+                Pick a track or an artist, get similar results — two genuinely different modes under one box:
+            </p>
+            <div class="guide-card-row">
+                <div class="guide-card">
+                    <span class="guide-card-title">🎵 Based on a track</span>
+                    <p>"Based on: Up On the Catwalk" finds tracks that share the most AI tags with it, refined by how close their real, measured tempo and key are (via Synapse). Entirely local, measured data — no AI involved in the actual matching. The seed track itself is included as the anchor, and results are automatically sequenced into a smooth tempo arc.</p>
+                </div>
+                <div class="guide-card">
+                    <span class="guide-card-title">🎤 Based on an artist</span>
+                    <p>"Based on: Chris Isaak" finds tracks by genuinely similar musicians, using Last.fm's real listening-pattern data (who other people actually listen to alongside this artist) — not a guess. Falls back to asking AI directly only if Last.fm has nothing for that specific artist. The artist's own top tracks are included alongside the similar artists' tracks, and results are sequenced for tempo flow.</p>
+                </div>
+            </div>
+            <p>Start typing a song or artist name into the box — suggestions from your library appear as you type, clearly labeled by type. Pick one to see the results.</p>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
 
@@ -158,6 +196,23 @@
         <div class="guide-section" id="stats">
             <h2>📊 The Collection</h2>
             <p>Your library and listening history at a glance — six charts covering listening history by year, top artists, top genres, library by era, library by country, and artists by gender.</p>
+            <p>
+                The <strong>Export enriched library data</strong> button downloads everything MusicMind knows about
+                your tracks as a CSV — AI tags, measured BPM/key/danceability, voice/instrumental verdicts, play
+                counts, and resolved real artist names. Data nobody else has, exportable so it's genuinely yours.
+            </p>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ PLAYLIST AUDIT ═══════════════════ -->
+        <div class="guide-section" id="playlistaudit">
+            <h2>🔍 Playlist Audit</h2>
+            <p>
+                Pick any Plex playlist and see the real, measured data behind it — every track's voice/instrumental
+                verdict, BPM, danceability, and resolved real artist, plus the original prompt that generated the
+                playlist (if it was created through MusicMind, since this fix shipped). Found in the Back Office
+                submenu, since it's more of a diagnostic/exploration tool than something you'll use every day.
+            </p>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
 
@@ -171,7 +226,6 @@
                 <li><strong>Sync Last.fm</strong> — update scrobbles, play counts, loved tracks</li>
                 <li><strong>Tag New Tracks</strong> — AI genre tagging</li>
                 <li><strong>Refresh Context Playlists</strong> — rebuild Your Afternoon, Weekend Flow, Often Together</li>
-                <li><strong>Tag Instrumentals</strong> — classify tracks as instrumental or vocal</li>
                 <li><strong>Enrich Artists</strong> — MusicBrainz and AI Fallback (see below)</li>
                 <li><strong>Refresh Gap Analysis</strong> — re-run Missing From Your Collection</li>
             </ul>
@@ -188,8 +242,23 @@
             <p>
                 Synapse analyzes the actual audio in your library — not metadata, not AI guesses —
                 measuring tempo (BPM), musical key, and danceability directly from the waveform using
-                Essentia. This is completely free (no API calls, no OpenAI cost) and runs entirely on
-                your own hardware.
+                Essentia, and (if you've downloaded the voice/instrumental model — see the repo README)
+                also verifies each track's real instrumental status the same way, in the same pass.
+                Completely free — no API calls, no OpenAI cost — and runs entirely on your own hardware.
+            </p>
+            <p>
+                This is real, measured data, and it powers real features already shipped: the
+                <strong>Min BPM / Max BPM</strong> and <strong>Danceability</strong> filters on the main
+                page, the <strong>vocal tolerance</strong> slider, <strong>Based On</strong> track-mode
+                similarity, and the per-track breakdown on <strong>Playlist Audit</strong>.
+            </p>
+            <p>
+                The coverage bar at the top of this page shows how much of your library has been analyzed
+                so far. The <strong>first full-library run</strong> is the only slow one — it can take a
+                couple of days depending on your library size and hardware, and is safe to run in the
+                background. After that initial backlog is cleared, Synapse runs <strong>automatically</strong>
+                as the final step of every Full Sync, analyzing only genuinely new tracks — typically
+                seconds to minutes, not days.
             </p>
             <div class="guide-card-row">
                 <div class="guide-card">
@@ -206,14 +275,19 @@
                 </div>
                 <div class="guide-card">
                     <span class="guide-card-title">🚀 Full Run</span>
-                    <p>Analyzes every track and stores the results. A one-time, multi-day background job — resumable, safe to stop and restart anytime, and runs fully detached from the app itself, so it keeps going even if the app restarts.</p>
+                    <p>Analyzes every remaining track and stores the results — the one-time backlog clear, or a manual re-run on demand. Resumable, safe to stop and restart anytime, and runs fully detached from the app itself, so it keeps going even if the app restarts.</p>
                 </div>
             </div>
+            <p>
+                The <strong>Errors</strong> panel shows tracks that couldn't be analyzed — corrupted files,
+                unreadable formats, or files that timed out — clearly labeled by whether it was the tempo/key
+                analysis or the voice/instrumental check that failed. Safe to ignore; these are skipped
+                automatically on future runs.
+            </p>
             <div class="guide-tip">
-                <strong>Tip:</strong> Run <strong>Estimate Time</strong> first, then a small <strong>Limited Run</strong> to confirm everything works, before starting the full job. Every NAS performs
+                <strong>Tip:</strong> Run <strong>Estimate Time</strong> first, then a small <strong>Limited Run</strong> to confirm everything works, before starting the full job — every NAS performs
                 differently, and it gives you a real number for your specific hardware before you
-                commit to a multi-day background job. This data doesn't power any playlist filters
-                yet — it's the foundation for sonic similarity features coming in a future update.
+                commit to a multi-day background job.
             </div>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
