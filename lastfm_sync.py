@@ -79,14 +79,85 @@ def set_last_sync(conn, ts):
     conn.execute("INSERT OR REPLACE INTO lastfm_meta (key, value) VALUES ('last_sync', ?)", (str(ts),))
     conn.commit()
 
+import re
+
+def normalize_title(title):
+    """
+    Strips COSMETIC-ONLY title differences that represent the SAME
+    underlying recording -- remaster tags and feature credits --
+    used only as a fallback when exact matching fails. Deliberately
+    does NOT touch anything that could represent a genuinely
+    DIFFERENT recording of the song: Live, Acoustic, Demo, Remix,
+    Radio Edit, Extended Mix, Instrumental, Alternate Take, etc. all
+    stay completely untouched -- conflating those would be a real
+    correctness regression, not an improvement.
+
+    Found real (July 2026): Last.fm and a locally-stored track can
+    each carry cosmetic info the other lacks, in EITHER direction --
+    "Birdmad Girl - 2006 Remaster" (scrobble) vs "Birdmad Girl"
+    (library), and "My Mind Is" (scrobble) vs "My Mind Is (feat.
+    Oliver Tree)" (library). Stripping from both sides before
+    comparing handles both directions with one mechanism.
+    """
+    t = title
+    # Remaster tags: "- 2006 Remaster", "(2006 Remastered)",
+    # "- Remastered 2011", "(Remaster)"
+    t = re.sub(r'\s*[-–—]\s*\d{4}\s*Remaster(ed)?\s*$', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\s*\(\s*\d{4}\s*Remaster(ed)?\s*\)\s*$', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\s*[-–—]\s*Remaster(ed)?(\s+\d{4})?\s*$', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\s*\(\s*Remaster(ed)?(\s+\d{4})?\s*\)\s*$', '', t, flags=re.IGNORECASE)
+    # Feature credits: "(feat. X)", "(ft. X)", "(featuring X)", same with []
+    t = re.sub(r'\s*[\(\[]\s*(feat\.|ft\.|featuring)\s+[^\)\]]+[\)\]]\s*$', '', t, flags=re.IGNORECASE)
+    return t.strip()
+
+
 def match_track(conn, artist, title):
+    """
+    Tries an EXACT match first (highest confidence, unchanged
+    behavior). Falls back to a cosmetic-normalized match only if
+    that fails -- see normalize_title() for exactly what's considered
+    "cosmetic" vs. a genuinely different recording.
+
+    Also now matches against COALESCE(real_artist, artist) instead of
+    the raw artist column -- closes the same class of gap found and
+    fixed for AI tagging earlier this session (a VA-resolved track's
+    real artist name living in a separate column nobody was reading).
+
+    Known, accepted limitation: if a library genuinely contains
+    multiple different official versions that normalize to the same
+    title (e.g. two different guest-feature releases of the same
+    song), the first match found wins -- rare enough not to be worth
+    the added complexity of resolving right now.
+    """
     row = conn.execute("""
         SELECT rating_key FROM tracks
-        WHERE LOWER(artist) = LOWER(?)
-          AND LOWER(title)  = LOWER(?)
+        WHERE LOWER(COALESCE(real_artist, artist)) = LOWER(?)
+          AND LOWER(title) = LOWER(?)
         LIMIT 1
     """, (artist, title)).fetchone()
-    return row[0] if row else None
+    if row:
+        return row[0]
+
+    # Deliberately does NOT bail early just because the query side has
+    # nothing to strip -- found a real bug here during testing: the
+    # extra cosmetic info can live on EITHER side (a feature credit
+    # might only be on the LIBRARY's stored title, e.g. "My Mind Is"
+    # scrobbled vs. "My Mind Is (feat. Oliver Tree)" stored locally).
+    # Always normalizes both sides and compares.
+    normalized_query = normalize_title(title)
+    if not normalized_query:
+        return None
+
+    candidates = conn.execute("""
+        SELECT rating_key, title FROM tracks
+        WHERE LOWER(COALESCE(real_artist, artist)) = LOWER(?)
+    """, (artist,)).fetchall()
+
+    for rk, candidate_title in candidates:
+        if candidate_title and normalize_title(candidate_title).lower() == normalized_query.lower():
+            return rk
+
+    return None
 
 def rematch_unmatched_scrobbles(conn):
     """
