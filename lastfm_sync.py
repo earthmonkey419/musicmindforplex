@@ -119,9 +119,21 @@ def rematch_unmatched_scrobbles(conn):
         SELECT DISTINCT artist, title FROM lastfm_scrobbles WHERE matched = 0
     """).fetchall()
 
+    total_pairs = len(distinct_unmatched)
+    if total_pairs > 200:
+        # Found real (July 2026): a large first-time backlog clear
+        # produced zero output for long enough to look like a silent
+        # hang, even though it was genuinely working the whole time
+        # (confirmed via ps aux CPU time climbing). Only print progress
+        # for a genuinely large backlog -- routine ongoing syncs should
+        # stay quiet, matching the function's normal cheap/fast case.
+        print(f"  Checking {total_pairs} previously-unmatched tracks against the current library...")
+
     pairs_rematched = 0
     rows_updated = 0
-    for artist, title in distinct_unmatched:
+    for i, (artist, title) in enumerate(distinct_unmatched, 1):
+        if total_pairs > 200 and i % 500 == 0:
+            print(f"    {i}/{total_pairs} checked ({pairs_rematched} rematched so far)")
         rk = match_track(conn, artist, title)
         if rk:
             cursor = conn.execute("""
