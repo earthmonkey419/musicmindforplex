@@ -88,6 +88,53 @@ def match_track(conn, artist, title):
     """, (artist, title)).fetchone()
     return row[0] if row else None
 
+def rematch_unmatched_scrobbles(conn):
+    """
+    One-off/periodic re-match pass -- sync_scrobbles() only ever
+    attempts to match each scrobble ONCE, at the exact moment it's
+    first synced from Last.fm. If the corresponding track gets added
+    to the library LATER (a very normal thing -- libraries grow over
+    time), that scrobble stays permanently marked unmatched forever,
+    with no retry, even once the track genuinely exists locally.
+
+    Found real (July 2026): confirmed via a real example (Tim
+    Buckley's "Gypsy Woman") where artist/title matched the local
+    library BYTE-FOR-BYTE, yet stayed unmatched -- every scrobble
+    from an album the library didn't yet contain at sync time was
+    permanently stuck, while scrobbles from an album already owned
+    at that time matched correctly. Not a string-matching bug at all;
+    a timing/staleness bug in the same family as several others this
+    session (incremental processes that never retroactively revisit
+    already-processed data once conditions change).
+
+    Batches by DISTINCT (artist, title) rather than re-matching every
+    individual scrobble row -- a song scrobbled 50 times only needs
+    ONE match_track() call, then a single UPDATE applies the result
+    to every row sharing that exact pair. Safe to re-run anytime;
+    only ever touches rows that genuinely newly match.
+
+    Returns (pairs_rematched, rows_updated, pairs_checked).
+    """
+    distinct_unmatched = conn.execute("""
+        SELECT DISTINCT artist, title FROM lastfm_scrobbles WHERE matched = 0
+    """).fetchall()
+
+    pairs_rematched = 0
+    rows_updated = 0
+    for artist, title in distinct_unmatched:
+        rk = match_track(conn, artist, title)
+        if rk:
+            cursor = conn.execute("""
+                UPDATE lastfm_scrobbles SET rating_key = ?, matched = 1
+                WHERE artist = ? AND title = ? AND matched = 0
+            """, (rk, artist, title))
+            rows_updated += cursor.rowcount
+            pairs_rematched += 1
+
+    conn.commit()
+    return pairs_rematched, rows_updated, len(distinct_unmatched)
+
+
 def sync_scrobbles(conn):
     import urllib.parse
 
@@ -285,6 +332,20 @@ def main():
     init_tables(conn)
     sync_scrobbles(conn)
     sync_loved(conn)
+
+    # Runs automatically every sync now, not just as a one-off manual
+    # fix -- found real (July 2026): sync_scrobbles() only ever
+    # attempts each scrobble ONCE, at the moment it's first synced.
+    # A scrobble stays permanently "unmatched" forever if the track
+    # gets added to the library later, unless something re-attempts
+    # it. Cheap on ongoing runs (only checks scrobbles still marked
+    # unmatched, batched by distinct artist/title pair) -- the real
+    # cost is only on the FIRST run clearing an existing backlog.
+    print("\nRe-checking previously unmatched scrobbles against the current library...")
+    pairs_rematched, rows_updated, pairs_checked = rematch_unmatched_scrobbles(conn)
+    print(f"Rematched {rows_updated} scrobbles ({pairs_rematched} distinct tracks) "
+          f"out of {pairs_checked} previously-unmatched tracks checked.")
+
     update_play_counts(conn)
     update_loved_ratings(conn)
     print_stats(conn)
