@@ -11,12 +11,18 @@ import sqlite3
 import urllib.request
 import json
 import time
+import os
+import sys
 from datetime import datetime
 from config import DB_PATH, LASTFM_KEY, LASTFM_USER
 
 API_KEY  = LASTFM_KEY
 USERNAME = LASTFM_USER
 API_BASE = "http://ws.audioscrobbler.com/2.0/"
+
+REMATCH_INTERVAL_SECONDS = 24 * 3600  # full unmatched-backlog rescan
+                                        # runs at most once per day --
+                                        # see rematch_unmatched_scrobbles()
 
 def init_tables(conn):
     conn.execute("""
@@ -70,6 +76,15 @@ def api_call(params):
             print(f"  API error (attempt {attempt+1}): {e}")
             time.sleep(2)
     return None
+
+def get_last_rematch(conn):
+    row = conn.execute("SELECT value FROM lastfm_meta WHERE key='last_full_rematch'").fetchone()
+    return float(row[0]) if row else None
+
+
+def set_last_rematch(conn, ts):
+    conn.execute("INSERT OR REPLACE INTO lastfm_meta (key, value) VALUES ('last_full_rematch', ?)", (str(ts),))
+
 
 def get_last_sync(conn):
     row = conn.execute("SELECT value FROM lastfm_meta WHERE key='last_sync'").fetchone()
@@ -159,7 +174,7 @@ def match_track(conn, artist, title):
 
     return None
 
-def rematch_unmatched_scrobbles(conn):
+def rematch_unmatched_scrobbles(conn, force=False):
     """
     One-off/periodic re-match pass -- sync_scrobbles() only ever
     attempts to match each scrobble ONCE, at the exact moment it's
@@ -185,7 +200,24 @@ def rematch_unmatched_scrobbles(conn):
     only ever touches rows that genuinely newly match.
 
     Returns (pairs_rematched, rows_updated, pairs_checked).
+
+    Throttled to run at most once every REMATCH_INTERVAL_SECONDS
+    (24h) -- found real (July 2026): without this, EVERY future sync
+    would re-scan the ENTIRE unmatched backlog (tens of thousands of
+    pairs) from scratch, every single time, most of which are
+    genuinely, permanently unmatched (music scrobbled but never
+    actually owned). A full re-scan only makes sense after enough
+    time has passed for new music to plausibly have been added, not
+    on every routine sync. force=True bypasses the throttle (used by
+    the standalone --rematch CLI flag).
     """
+    last_rematch = get_last_rematch(conn)
+    if not force and last_rematch is not None and (time.time() - last_rematch) < REMATCH_INTERVAL_SECONDS:
+        hours_left = (REMATCH_INTERVAL_SECONDS - (time.time() - last_rematch)) / 3600
+        print(f"  Skipping full rematch — last ran {(time.time() - last_rematch) / 3600:.1f}h ago, "
+              f"next due in {hours_left:.1f}h (use --rematch to force it now).")
+        return 0, 0, 0
+
     distinct_unmatched = conn.execute("""
         SELECT DISTINCT artist, title FROM lastfm_scrobbles WHERE matched = 0
     """).fetchall()
@@ -214,6 +246,7 @@ def rematch_unmatched_scrobbles(conn):
             rows_updated += cursor.rowcount
             pairs_rematched += 1
 
+    set_last_rematch(conn, time.time())
     conn.commit()
     return pairs_rematched, rows_updated, len(distinct_unmatched)
 
@@ -374,6 +407,59 @@ def update_loved_ratings(conn):
     updated = conn.execute("SELECT COUNT(*) FROM tracks WHERE user_rating = 10").fetchone()[0]
     print(f"Set 5-star rating for {updated} loved tracks.")
 
+LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lastfm_sync.lock')
+
+
+def is_lastfm_sync_process_alive(pid):
+    """
+    Same proven pattern as synapse_analyze.py's process-liveness check
+    -- checks /proc/<pid> existence and confirms the cmdline actually
+    still mentions lastfm_sync.py, not just that SOME process exists
+    at that PID number (which could have been reassigned since).
+
+    Found real (July 2026): lastfm_sync.py had NO lock protection at
+    all -- a manually-started run and Full Sync's own internal
+    lastfm_sync.py step collided, both writing to the same database
+    concurrently, and the resulting lock contention crashed a THIRD,
+    unrelated script (mb_enrich_artists.py) that happened to run
+    right after in the same Full Sync pipeline.
+    """
+    try:
+        pid = int(pid)
+    except (ValueError, TypeError):
+        return False
+
+    proc_dir = f'/proc/{pid}'
+    if not os.path.exists(proc_dir):
+        return False
+
+    try:
+        with open(f'{proc_dir}/cmdline', 'rb') as f:
+            cmdline = f.read().decode('utf-8', errors='ignore')
+        return 'lastfm_sync.py' in cmdline
+    except (OSError, IOError):
+        return False
+
+
+def acquire_lock():
+    """Prevents two real lastfm_sync.py runs (e.g. one manual, one via
+    Full Sync) from executing simultaneously. Returns True if lock
+    acquired, False if another run is genuinely still active."""
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE) as f:
+            old_pid = f.read().strip()
+        if is_lastfm_sync_process_alive(old_pid):
+            return False
+    with open(LOCK_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def release_lock():
+    if os.path.exists(LOCK_FILE):
+        os.remove(LOCK_FILE)
+
+
 def print_stats(conn):
     print("\n=== Last.fm Sync Stats ===")
 
@@ -403,6 +489,7 @@ def print_stats(conn):
 
 def main():
     import urllib.parse
+    force_rematch = "--rematch" in sys.argv
     print("MusicMind for Plex - Last.fm Sync")
     print("=" * 40)
 
@@ -411,29 +498,43 @@ def main():
         print("(This is optional. Set LASTFM_KEY and LASTFM_USER to enable.)")
         return
 
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    init_tables(conn)
-    sync_scrobbles(conn)
-    sync_loved(conn)
+    # Lock: prevents a manually-started run from colliding with Full
+    # Sync's own internal lastfm_sync.py step (found real, July 2026
+    # -- exactly this collision crashed a third, unrelated script,
+    # mb_enrich_artists.py, that ran right after in the same Full
+    # Sync pipeline while a manual run was still active).
+    if not acquire_lock():
+        print("❌ Another Last.fm sync is already in progress.")
+        print("   Check with: ps aux | grep lastfm_sync")
+        return
 
-    # Runs automatically every sync now, not just as a one-off manual
-    # fix -- found real (July 2026): sync_scrobbles() only ever
-    # attempts each scrobble ONCE, at the moment it's first synced.
-    # A scrobble stays permanently "unmatched" forever if the track
-    # gets added to the library later, unless something re-attempts
-    # it. Cheap on ongoing runs (only checks scrobbles still marked
-    # unmatched, batched by distinct artist/title pair) -- the real
-    # cost is only on the FIRST run clearing an existing backlog.
-    print("\nRe-checking previously unmatched scrobbles against the current library...")
-    pairs_rematched, rows_updated, pairs_checked = rematch_unmatched_scrobbles(conn)
-    print(f"Rematched {rows_updated} scrobbles ({pairs_rematched} distinct tracks) "
-          f"out of {pairs_checked} previously-unmatched tracks checked.")
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        init_tables(conn)
+        sync_scrobbles(conn)
+        sync_loved(conn)
 
-    update_play_counts(conn)
-    update_loved_ratings(conn)
-    print_stats(conn)
-    conn.close()
-    print("\nDone.")
+        # Runs automatically every sync now, not just as a one-off
+        # manual fix -- found real (July 2026): sync_scrobbles() only
+        # ever attempts each scrobble ONCE, at the moment it's first
+        # synced. A scrobble stays permanently "unmatched" forever if
+        # the track gets added to the library later, unless something
+        # re-attempts it. Throttled to once per day (see
+        # rematch_unmatched_scrobbles) so routine syncs stay fast --
+        # pass --rematch to force a full recheck right now regardless.
+        print("\nRe-checking previously unmatched scrobbles against the current library...")
+        pairs_rematched, rows_updated, pairs_checked = rematch_unmatched_scrobbles(conn, force=force_rematch)
+        if pairs_checked:
+            print(f"Rematched {rows_updated} scrobbles ({pairs_rematched} distinct tracks) "
+                  f"out of {pairs_checked} previously-unmatched tracks checked.")
+
+        update_play_counts(conn)
+        update_loved_ratings(conn)
+        print_stats(conn)
+        conn.close()
+        print("\nDone.")
+    finally:
+        release_lock()
 
 if __name__ == "__main__":
     main()
