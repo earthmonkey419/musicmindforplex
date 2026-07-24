@@ -121,10 +121,23 @@ def resolve(fp_json, lib_title):
 
 
 def get_unresolved(conn):
+    """
+    Found real (July 2026): PLACEHOLDER_ARTISTS only recognized known
+    text placeholders ("Various Artists", "VA", "Unknown Artist") --
+    a track with a genuinely EMPTY or NULL artist field (confirmed
+    real: 8 tracks, e.g. a malformed rip where the artist tag never
+    got populated at all) was never eligible for VA resolution at
+    all, regardless of how many times this script ran -- fell
+    through a real crack between normal tagging (needs a real artist
+    string) and this mechanism (needed one of a few specific known
+    placeholder strings). Now also treats empty string and NULL as
+    resolvable, using the same proven fingerprint-based mechanism
+    rather than guessing from title text.
+    """
     placeholders = ",".join("?" for _ in PLACEHOLDER_ARTISTS)
     rows = conn.execute(f"""
         SELECT rating_key, title FROM tracks
-        WHERE artist IN ({placeholders})
+        WHERE (artist IN ({placeholders}) OR artist = '' OR artist IS NULL)
           AND rating_key NOT IN (SELECT rating_key FROM va_results)
         ORDER BY rating_key
     """, PLACEHOLDER_ARTISTS).fetchall()
