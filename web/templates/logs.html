@@ -120,6 +120,28 @@
             </div>
             <div class="log-detail">
 
+                {% if e.intent == 'based_on_track' %}
+                <div class="log-section">
+                    <div class="log-section-title">What happened</div>
+                    <p style="color:#5a3e28; margin:0;">Based On — track mode. Matched by real tag overlap with the seed track, refined by Synapse audio proximity (BPM/key). No AI call involved — nothing to show as tags or request/response, this is expected for this intent, not a broken log entry.</p>
+                </div>
+                {% elif e.intent == 'based_on_artist' %}
+                <div class="log-section">
+                    <div class="log-section-title">What happened</div>
+                    <p style="color:#5a3e28; margin:0;">Based On — artist mode. Matched via Last.fm's real similar-artist data (or an AI fallback only if Last.fm had nothing for this specific artist). No AI-tag-expansion call involved — nothing to show as tags or request/response, this is expected for this intent, not a broken log entry.</p>
+                </div>
+                {% elif e.intent == 'lastfm_range' %}
+                <div class="log-section">
+                    <div class="log-section-title">What happened</div>
+                    <p style="color:#5a3e28; margin:0;">A Last.fm date-range query — pulled directly from your real scrobble history. No AI call involved — nothing to show as tags or request/response, this is expected for this intent, not a broken log entry.</p>
+                </div>
+                {% elif not e.tags and not e.openai_request and e.intent %}
+                <div class="log-section">
+                    <div class="log-section-title">What happened</div>
+                    <p style="color:#5a3e28; margin:0;">Intent: <strong>{{ e.intent }}</strong> — this kind of query doesn't involve AI tag expansion, so there's no tags or request/response to show. Not a broken log entry.</p>
+                </div>
+                {% endif %}
+
                 {% if e.tags %}
                 <div class="log-section">
                     <div class="log-section-title">Expanded Tags</div>

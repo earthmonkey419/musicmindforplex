@@ -1109,7 +1109,7 @@ def logs():
     rows = conn.execute("""
         SELECT id, timestamp, prompt, tags, filters, result_count,
                duration_ms, error, openai_request, openai_response,
-               prompt_tokens, completion_tokens, cost_usd
+               prompt_tokens, completion_tokens, cost_usd, intent
         FROM query_log
         ORDER BY id DESC
         LIMIT 100
@@ -1131,6 +1131,7 @@ def logs():
             'prompt_tokens':     row[10] or 0,
             'completion_tokens': row[11] or 0,
             'cost_usd':          row[12] or 0,
+            'intent':            row[13] or '',
         })
     return render_template('logs.html', entries=entries, year=datetime.now().year)
 
