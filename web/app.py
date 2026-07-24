@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
+from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, get_missing_scrobbles_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 try:
     from config import IS_MASTER
@@ -40,6 +40,7 @@ def onthisday():
 
     try:
         rating_keys = get_scrobbled_tracks_around_date(target_date, window_days=4)
+        missing = get_missing_scrobbles_around_date(target_date, window_days=4)
     except ValueError:
         return jsonify({'error': 'Invalid date format'}), 400
 
@@ -58,6 +59,7 @@ def onthisday():
 
     return jsonify({
         'tracks': tracks,
+        'missing': missing,  # real Last.fm scrobbles from this window that never matched a local track -- shown separately, never included in the playlist
         'intent': 'lastfm_window',
         'search_term': f"{target_date} ± 4 days",
     })

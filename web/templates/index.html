@@ -161,6 +161,7 @@
             <input type="date" id="onthisday_date">
             <button onclick="findOnThisDay(this)">Find Tracks</button>
             <div class="status" id="status-onthisday"></div>
+            <div id="onthisday-missing" style="display:none; margin-top:1rem;"></div>
         </div>
 
         <div id="tags-row" class="tags-row" style="display:none"></div>
@@ -317,6 +318,30 @@
                 const tagsRow = document.getElementById('tags-row');
                 tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
                 tagsRow.style.display = 'flex';
+
+                // Real Last.fm scrobbles from this window that never matched
+                // a local track -- shown separately, deliberately never
+                // added to currentTracks, so they can never end up in the
+                // created playlist.
+                const missingDiv = document.getElementById('onthisday-missing');
+                if (data.missing && data.missing.length > 0) {
+                    missingDiv.style.display = 'block';
+                    missingDiv.innerHTML = `
+                        <div style="font-size:0.85rem; color:#8b6914; margin-bottom:0.4rem;">
+                            🚫 ${data.missing.length} track${data.missing.length !== 1 ? 's' : ''} you actually scrobbled in this window, but missing from your library:
+                        </div>
+                        <ul style="list-style:none; padding:0; margin:0; font-size:0.85rem;">
+                            ${data.missing.map(m => `
+                                <li style="padding:0.3rem 0; border-bottom:1px solid #eee; color:#8b6914;">
+                                    ${m.artist} — ${m.title}${m.count > 1 ? ` <span style="opacity:0.7;">(played ${m.count}×)</span>` : ''}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `;
+                } else {
+                    missingDiv.style.display = 'none';
+                    missingDiv.innerHTML = '';
+                }
 
                 document.getElementById('results').style.display = 'block';
             } catch (e) {

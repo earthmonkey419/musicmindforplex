@@ -1123,6 +1123,46 @@ def get_scrobbled_tracks_around_date(target_date, window_days=4):
     return [r[0] for r in rows]
 
 
+def get_missing_scrobbles_around_date(target_date, window_days=4):
+    """
+    Companion to get_scrobbled_tracks_around_date() -- returns real
+    Last.fm scrobbles from the same window that were NEVER matched to
+    a local track (genuinely missing from the library, or a matching
+    failure), instead of silently dropping them the way the matched-
+    only function does. artist/title/album are captured directly from
+    Last.fm at sync time regardless of match status, so real,
+    displayable info exists even without a rating_key.
+
+    Deduplicated by (artist, title) with a scrobble count -- something
+    played 5 times in this window is worth flagging more prominently
+    than something played once.
+
+    Returns a list of {'artist', 'title', 'album', 'count'} dicts,
+    ordered by scrobble count descending.
+    """
+    import sqlite3
+    from datetime import datetime, timedelta
+
+    center = datetime.strptime(target_date, "%Y-%m-%d")
+    start = center - timedelta(days=window_days)
+    end = center + timedelta(days=window_days) + timedelta(days=1)
+
+    start_epoch = int(start.timestamp())
+    end_epoch = int(end.timestamp())
+
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT artist, title, album, COUNT(*) as scrobble_count
+        FROM lastfm_scrobbles
+        WHERE timestamp >= ? AND timestamp < ? AND matched = 0
+        GROUP BY artist, title
+        ORDER BY scrobble_count DESC
+    """, (start_epoch, end_epoch)).fetchall()
+    conn.close()
+
+    return [{'artist': a, 'title': t, 'album': al, 'count': c} for a, t, al, c in rows]
+
+
 def get_scrobbled_tracks_in_range(start_date, end_date):
     """
     Returns distinct rating_keys for tracks scrobbled between
