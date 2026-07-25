@@ -831,6 +831,55 @@ def synapse_page():
 
 FULLSYNC_LOG_PATH = os.path.join(BASE_DIR, 'fullsync_live.log')
 
+# Every real script this pipeline/admin dispatcher can run, checked
+# directly against actual OS processes -- deliberately NOT limited to
+# just Flask's own in-memory `running` dict, since that would
+# completely miss anything launched OUTSIDE this app entirely (a
+# separately-scheduled job, a direct SSH-run script). Confirmed real
+# July 2026: exactly this kind of external conflict (a separately-
+# scheduled shell chain) caused a genuine database lock error during
+# the Clear Errors feature's first real use.
+KNOWN_PIPELINE_SCRIPTS = [
+    'musicmind_ingest.py', 'lastfm_sync.py', 'plex_tag_tracks.py',
+    'listening_context.py', 'synapse_analyze.py', 'va_resolve.py',
+    'resolve_recording_mbids.py', 'mb_enrich_artists.py',
+    'enrich_artists.py', 'fingerprint_tracks.py',
+    'copy_forward_analysis.py', 'dedup_report.py',
+]
+
+
+@app.route('/admin/other-processes-status')
+def other_processes_status():
+    """
+    Real, live check for anything that might be actively using the
+    database right now -- checked directly against actual OS
+    processes via /proc, not just this app's own in-memory
+    bookkeeping, so it correctly catches something launched entirely
+    outside this admin dispatcher (a separately-scheduled job, a
+    direct SSH-run script) -- exactly the real conflict that caused
+    a genuine lock error during Clear Errors' first real use.
+    """
+    running_scripts = set()
+    try:
+        for pid_dir in os.listdir('/proc'):
+            if not pid_dir.isdigit():
+                continue
+            try:
+                with open(f'/proc/{pid_dir}/cmdline', 'rb') as f:
+                    cmdline = f.read().decode('utf-8', errors='ignore')
+            except (OSError, IOError):
+                continue
+            for script in KNOWN_PIPELINE_SCRIPTS:
+                if script in cmdline:
+                    running_scripts.add(script)
+    except OSError:
+        pass
+
+    return jsonify({
+        'other_scripts': sorted(running_scripts),
+        'fullsync_running': bool(running.get('fullsync')),
+    })
+
 
 @app.route('/run/fullsync')
 def run_fullsync():

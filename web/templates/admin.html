@@ -18,6 +18,7 @@
             <h3>⚡ Full Sync</h3>
             <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
             <p style="font-size:0.85rem; color:#8b6914;">📡 If your connection drops mid-run, the sync itself keeps going on the server — it does NOT stop. This page will automatically reconnect and pick the real output back up.</p>
+            <div id="other-processes-status" style="font-size:0.85rem; margin-bottom:0.75rem;">Checking for other running processes…</div>
             <button onclick="runScript('fullsync', this)">Run Full Sync</button>
             <div class="status" id="status-fullsync"></div>
             <div class="log-box" id="log-fullsync" style="height:200px;"></div>
@@ -296,6 +297,53 @@
                 status.className = 'status error';
             }
         }
+
+        const SCRIPT_FRIENDLY_NAMES = {
+            'musicmind_ingest.py':       'Library Ingest',
+            'lastfm_sync.py':            'Last.fm Sync',
+            'plex_tag_tracks.py':        'AI Tagging',
+            'listening_context.py':      'Listening Context',
+            'synapse_analyze.py':        'Synapse Analysis',
+            'va_resolve.py':             'Various Artists Resolution',
+            'resolve_recording_mbids.py': 'Recording ID Resolution',
+            'mb_enrich_artists.py':      'MusicBrainz Enrichment',
+            'enrich_artists.py':         'AI Artist Enrichment',
+            'fingerprint_tracks.py':     'Fingerprinting',
+            'copy_forward_analysis.py':  'Duplicate Check',
+            'dedup_report.py':           'Duplicate Report',
+        };
+
+        /**
+         * Found real (July 2026): a separately-scheduled job running
+         * completely outside this app caused a genuine database lock
+         * error during real use, and there was no way to see that
+         * anything else was even running until it actually failed.
+         * Checks real OS processes directly (not just this app's own
+         * bookkeeping), so it correctly catches anything -- launched
+         * through this dispatcher, or entirely externally.
+         */
+        async function checkOtherProcesses() {
+            const el = document.getElementById('other-processes-status');
+            const result = await friendlyFetchJSON('/admin/other-processes-status');
+            if (!result.ok) {
+                el.textContent = '';
+                return;
+            }
+            const data = result.data;
+            const names = data.other_scripts.map(s => SCRIPT_FRIENDLY_NAMES[s] || s);
+            if (data.fullsync_running) names.unshift('Full Sync');
+
+            if (names.length > 0) {
+                el.innerHTML = `⚠️ Currently running: <strong>${names.join(', ')}</strong> — starting Full Sync now may run into a database conflict.`;
+                el.style.color = '#9b2226';
+            } else {
+                el.textContent = '✓ Nothing else appears to be running right now.';
+                el.style.color = '#2d6a4f';
+            }
+        }
+
+        checkOtherProcesses();
+        setInterval(checkOtherProcesses, 8000);
 
         loadErrorCounts();
     </script>
