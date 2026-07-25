@@ -211,6 +211,21 @@ def preview():
             'intent':         intent,
 
         }
+
+        # Found real (July 2026): the "Tracks per artist" field
+        # defaults to 1 in the UI and is always sent explicitly, which
+        # correctly serves its real purpose -- variety across many
+        # different artists in a mood/vibe result set -- but makes no
+        # sense once the search has already been narrowed to a single
+        # named artist. Confirmed real: "Popular tracks by David
+        # Bowie" was silently capped to one track even though 30 real
+        # matches existed. For artist_search specifically, the user's
+        # actual limit control is the `limit` field itself; ignore
+        # whatever max_per_artist the client sent and use a high
+        # enough value that it's effectively uncapped.
+        if intent == 'artist_search':
+            filters['max_per_artist'] = max(filters['limit'], 100)
+
         tracks = search_tracks(tags, filters)
         update_query_log_result_count(query_log_id, len(tracks), filters)
 
