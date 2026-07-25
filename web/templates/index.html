@@ -182,6 +182,24 @@
         let currentTracks = [];
 
         /**
+         * Found real (July 2026): document.getElementById(id).checked
+         * throws if the element doesn't exist at all -- confirmed
+         * real via a live "Cannot read properties of null (reading
+         * 'checked')" error. A missing checkbox shouldn't crash the
+         * whole search; it should just be treated as unchecked. Logs
+         * a warning so a genuinely missing element is still
+         * discoverable, without taking down the feature.
+         */
+        function getChecked(id) {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`Expected checkbox #${id} was not found on the page — treating as unchecked.`);
+                return false;
+            }
+            return el.checked;
+        }
+
+        /**
          * Shared helper for every fetch action on this page. Found
          * real (July 2026): a genuine server-side error (e.g. a
          * database lock conflict from another process running at the
@@ -334,7 +352,7 @@
                         date: dateVal,
                         limit: document.getElementById('limit').value,
                         max_per_artist: document.getElementById('max_per_artist').value,
-                        dj_ify: document.getElementById('dj_ify').checked,
+                        dj_ify: getChecked('dj_ify'),
                     })
                 });
 
@@ -414,19 +432,19 @@
             try {
                 const payload = {
                     prompt,
-                    unplayed:       document.getElementById('unplayed').checked,
+                    unplayed:       getChecked('unplayed'),
                     genre:          document.getElementById('genre').value,
                     min_year:       document.getElementById('min_year').value,
                     max_year:       document.getElementById('max_year').value,
                     limit:          document.getElementById('limit').value,
                     max_per_artist: document.getElementById('max_per_artist').value,
                     min_rating:     document.getElementById('min_rating').value || null,
-                    dj_ify:         document.getElementById('dj_ify').checked,
+                    dj_ify:         getChecked('dj_ify'),
                     bpm_min:        document.getElementById('bpm_min').value || null,
                     bpm_max:        document.getElementById('bpm_max').value || null,
                     danceability:   document.getElementById('danceability').value || null,
-                    instrumental:   document.getElementById('instrumental').checked ? 1 : null,
-                    vocal_tolerance: document.getElementById('instrumental').checked ? document.getElementById('vocal_tolerance').value : null,
+                    instrumental:   getChecked('instrumental') ? 1 : null,
+                    vocal_tolerance: getChecked('instrumental') ? (document.getElementById('vocal_tolerance')?.value ?? null) : null,
 
                     gender:         document.getElementById('gender').value || null,
                     country:        document.getElementById('country').value || null,
