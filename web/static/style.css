@@ -427,7 +427,7 @@ tr:hover td { background: #ede8df; }
     padding: 0.8rem 1.5rem;
     border-radius: 4px;
     font-weight: 600;
-    z-index: 100;
+    z-index: 9999;
     font-family: 'Inter', sans-serif;
 }
 
