@@ -381,14 +381,14 @@ def run_script(script):
                 start_new_session=True,  # detach from this Flask worker -- found missing entirely (July 2026) after a real pm2 restart interrupted a live Synapse run started via this exact generic dispatcher. This ONE mechanism serves all 11 admin-page "Run Now" buttons (ingest, tagger, fingerprint, VA-resolve, dedup, Synapse, and more) -- every one of them was equally vulnerable, despite the DEDICATED /run/synapse-full route and Full Sync's own steps both already having this same protection.
             )
             for line in proc.stdout:
-                yield emit(line.rstrip())
+                yield f"data: {line.rstrip()}\n\n"
             proc.wait()
             if proc.returncode == 0:
                 yield "data: ✅ Done.\n\n"
             else:
                 yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
         except Exception as e:
-            yield emit(f"❌ Exception: {e}")
+            yield f"data: ❌ Exception: {e}\n\n"
         finally:
             running[script] = False
         yield "data: __DONE__\n\n"
