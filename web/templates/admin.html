@@ -129,6 +129,13 @@
                 <div class="log-box" id="log-recordingmbid"></div>
             </div>
 
+            <div class="admin-card">
+                <h3>🧹 Clear Errors</h3>
+                <p>Once a track fails and gets an error recorded, it's permanently skipped on future runs — even for a transient failure (a network hiccup, a 500 error) that a simple retry would likely fix. Clearing a source's errors makes those tracks eligible again the next time you click that section's own "Run Now" button — this only clears, it doesn't re-run anything automatically.</p>
+                <div id="error-counts-list" style="margin: 0.75rem 0; font-size: 0.9rem;">Loading current counts…</div>
+                <div class="status" id="status-clearerrors"></div>
+            </div>
+
         </div>
     </div>
 
@@ -199,6 +206,56 @@
                 }
             };
         }
+
+        const ERROR_SOURCE_LABELS = {
+            synapse:     'Synapse (BPM/key/danceability) errors',
+            vi:          'Voice/Instrumental errors',
+            fingerprint: 'Fingerprinting errors',
+        };
+
+        async function loadErrorCounts() {
+            const list = document.getElementById('error-counts-list');
+            try {
+                const res = await fetch('/admin/error-counts');
+                const counts = await res.json();
+                list.innerHTML = Object.entries(ERROR_SOURCE_LABELS).map(([key, label]) => {
+                    const n = counts[key] || 0;
+                    const btn = n > 0
+                        ? `<button style="margin-left:0.75rem; font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="clearErrorSource('${key}')">Clear</button>`
+                        : '';
+                    return `<div style="padding:0.25rem 0;">${label}: <strong>${n}</strong>${btn}</div>`;
+                }).join('');
+            } catch (e) {
+                list.textContent = 'Could not load error counts.';
+            }
+        }
+
+        async function clearErrorSource(source) {
+            const status = document.getElementById('status-clearerrors');
+            const label = ERROR_SOURCE_LABELS[source] || source;
+            if (!confirm(`Clear all ${label.toLowerCase()}? This only clears the error records -- affected tracks become eligible for retry next time you run that section's own analysis. This does not undo anything else.`)) {
+                return;
+            }
+            status.textContent = '⏳ Clearing…';
+            status.className = 'status running';
+            try {
+                const res = await fetch(`/admin/clear-errors/${source}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                    return;
+                }
+                status.textContent = `✅ Cleared ${data.cleared} error${data.cleared !== 1 ? 's' : ''}.`;
+                status.className = 'status done';
+                loadErrorCounts();
+            } catch (e) {
+                status.textContent = '❌ Request failed: ' + e;
+                status.className = 'status error';
+            }
+        }
+
+        loadErrorCounts();
     </script>
 {% include "footer.html" %}
 </body>

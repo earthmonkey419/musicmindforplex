@@ -274,6 +274,92 @@ import threading
 # Track running processes
 running = {}
 
+@app.route('/admin/error-counts')
+def admin_error_counts():
+    """
+    Live counts for the three real, persistent error sources --
+    Synapse analysis failures, VI analysis failures, and
+    fingerprinting failures. Found real (July 2026): once a track
+    fails and gets an error row written, it's permanently excluded
+    from future retry attempts (the same "already processed" logic
+    that correctly prevents re-doing successful work also correctly-
+    but-unhelpfully treats a transient failure -- a network hiccup, a
+    500 error -- the same as a genuinely corrupt file forever, with no
+    way to say "try this again" without a manual one-off script. This
+    surfaces the real counts so Clear Errors (below) can act on them.
+    """
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+
+    synapse_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
+
+    has_vi_results = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+    ).fetchone() is not None
+    vi_count = 0
+    if has_vi_results:
+        vi_count = conn.execute(
+            "SELECT COUNT(*) FROM vi_results WHERE verdict = 'ERROR'"
+        ).fetchone()[0]
+
+    has_fingerprints = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='track_fingerprints'"
+    ).fetchone() is not None
+    fingerprint_count = 0
+    if has_fingerprints:
+        fingerprint_count = conn.execute(
+            "SELECT COUNT(*) FROM track_fingerprints WHERE error IS NOT NULL"
+        ).fetchone()[0]
+
+    conn.close()
+    return jsonify({
+        'synapse': synapse_count,
+        'vi': vi_count,
+        'fingerprint': fingerprint_count,
+    })
+
+
+@app.route('/admin/clear-errors/<source>', methods=['POST'])
+def admin_clear_errors(source):
+    """
+    Deletes persistent error records for one specific source, making
+    those tracks eligible for retry the next time the corresponding
+    "Run Now" button is clicked -- same effect as the one-off manual
+    clears done by hand several times tonight, now self-service.
+    Deliberately separate per source (not one "clear everything"
+    button) -- these are genuinely different failure types someone
+    might want to retry independently. Deliberately does NOT
+    auto-retrigger the analysis itself -- clears only, by design.
+    """
+    import sqlite3
+
+    valid_sources = {
+        'synapse': ("DELETE FROM synapse_errors", None),
+        'vi': ("DELETE FROM vi_results WHERE verdict = 'ERROR'", 'vi_results'),
+        'fingerprint': ("DELETE FROM track_fingerprints WHERE error IS NOT NULL", 'track_fingerprints'),
+    }
+    if source not in valid_sources:
+        return jsonify({'error': 'Unknown error source'}), 400
+
+    delete_sql, required_table = valid_sources[source]
+
+    conn = sqlite3.connect(DB_PATH)
+    if required_table:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (required_table,)
+        ).fetchone() is not None
+        if not exists:
+            conn.close()
+            return jsonify({'cleared': 0})
+
+    cursor = conn.execute(delete_sql)
+    cleared = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    return jsonify({'cleared': cleared})
+
+
 @app.route('/admin')
 def admin():
     return render_template('admin.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
