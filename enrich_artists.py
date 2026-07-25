@@ -92,6 +92,32 @@ Artists:
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
     return json.loads(raw)
 
+
+def enrich_batch_with_retry(batch, max_attempts=3):
+    """
+    Found real (July 2026): a batch that failed outright (a genuine
+    OpenAI-side 500 error, or a raw connection reset -- confirmed
+    real, not caused by anything wrong with the request itself) was
+    just skipped entirely with no retry, requiring a whole separate
+    re-run to pick up the stragglers. These are exactly the kind of
+    transient upstream hiccup a short retry with backoff resolves
+    most of the time. 3 attempts, backoff 2s/8s/20s -- generous
+    enough to ride out a brief outage without turning a real,
+    persistent failure into an excessively long hang.
+    """
+    delays = [2, 8, 20]
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            return enrich_batch(batch)
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts - 1:
+                print(f"  Batch attempt {attempt + 1} failed ({e}) — retrying in {delays[attempt]}s...")
+                time.sleep(delays[attempt])
+    raise last_error
+
+
 def main():
     test_mode = "--test" in sys.argv
     limit = None
@@ -133,7 +159,7 @@ def main():
     for i in range(0, total, BATCH_SIZE):
         batch = artists[i:i+BATCH_SIZE]
         try:
-            results = enrich_batch(batch)
+            results = enrich_batch_with_retry(batch)
             for j, result in enumerate(results):
                 if j >= len(batch):
                     break
