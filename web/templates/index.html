@@ -256,56 +256,61 @@
             status.textContent = '⏳ Finding similar tracks...';
             status.className = 'status';
 
-            const payload = item.type === 'track'
-                ? { type: 'track', rating_key: item.rating_key, seed_label: item.label, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
-                : { type: 'artist', value: item.value, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value };
+            try {
+                const payload = item.type === 'track'
+                    ? { type: 'track', rating_key: item.rating_key, seed_label: item.label, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
+                    : { type: 'artist', value: item.value, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value };
 
-            const result = await friendlyFetchJSON('/based-on', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
+                const result = await friendlyFetchJSON('/based-on', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
 
-            if (!result.ok) {
-                status.textContent = result.message;
+                if (!result.ok) {
+                    status.textContent = result.message;
+                    status.className = 'status error';
+                    return;
+                }
+                const data = result.data;
+
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                    return;
+                }
+                if (!data.tracks.length) {
+                    status.textContent = '⚠️ No similar tracks found in your library.';
+                    status.className = 'status error';
+                    return;
+                }
+
+                if (data.mode === 'artist' && data.source === 'ai_fallback_no_lastfm') {
+                    status.textContent = 'ℹ️ Last.fm is not configured on this install — used AI instead.';
+                } else if (data.mode === 'artist' && data.source === 'ai_fallback_lastfm_empty') {
+                    status.textContent = 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.';
+                } else {
+                    status.textContent = '';
+                }
+                status.className = 'status';
+
+                currentTracks = data.tracks;
+                const list = document.getElementById('track-list');
+                list.innerHTML = data.tracks.map(t => `
+                    <li>
+                        <span class="track-title">${t.artist} — ${t.title}</span>
+                        <span class="track-meta">${t.year || '?'} &bull; ${t.play_count || 0} plays</span>
+                    </li>
+                `).join('');
+                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+                const tagsRow = document.getElementById('tags-row');
+                tagsRow.innerHTML = `<span class="tag">🎯 Based on: ${item.label}</span>`;
+                tagsRow.style.display = 'flex';
+                document.getElementById('results').style.display = 'block';
+            } catch (e) {
+                status.textContent = '❌ Unexpected error: ' + e;
                 status.className = 'status error';
-                return;
             }
-            const data = result.data;
-
-            if (data.error) {
-                status.textContent = '❌ ' + data.error;
-                status.className = 'status error';
-                return;
-            }
-            if (!data.tracks.length) {
-                status.textContent = '⚠️ No similar tracks found in your library.';
-                status.className = 'status error';
-                return;
-            }
-
-            if (data.mode === 'artist' && data.source === 'ai_fallback_no_lastfm') {
-                status.textContent = 'ℹ️ Last.fm is not configured on this install — used AI instead.';
-            } else if (data.mode === 'artist' && data.source === 'ai_fallback_lastfm_empty') {
-                status.textContent = 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.';
-            } else {
-                status.textContent = '';
-            }
-            status.className = 'status';
-
-            currentTracks = data.tracks;
-            const list = document.getElementById('track-list');
-            list.innerHTML = data.tracks.map(t => `
-                <li>
-                    <span class="track-title">${t.artist} — ${t.title}</span>
-                    <span class="track-meta">${t.year || '?'} &bull; ${t.play_count || 0} plays</span>
-                </li>
-            `).join('');
-            document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-            const tagsRow = document.getElementById('tags-row');
-            tagsRow.innerHTML = `<span class="tag">🎯 Based on: ${item.label}</span>`;
-            tagsRow.style.display = 'flex';
-            document.getElementById('results').style.display = 'block';
         }
 
         async function findOnThisDay(btn) {
@@ -321,75 +326,79 @@
             status.textContent = '⏳ Searching...';
             status.className = 'status running';
 
-            const result = await friendlyFetchJSON('/onthisday', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    date: dateVal,
-                    limit: document.getElementById('limit').value,
-                    max_per_artist: document.getElementById('max_per_artist').value,
-                    dj_ify: document.getElementById('dj_ify').checked,
-                })
-            });
+            try {
+                const result = await friendlyFetchJSON('/onthisday', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        date: dateVal,
+                        limit: document.getElementById('limit').value,
+                        max_per_artist: document.getElementById('max_per_artist').value,
+                        dj_ify: document.getElementById('dj_ify').checked,
+                    })
+                });
 
-            if (!result.ok) {
-                status.textContent = result.message;
+                if (!result.ok) {
+                    status.textContent = result.message;
+                    status.className = 'status error';
+                    return;
+                }
+                const data = result.data;
+
+                if (data.error) {
+                    status.textContent = '❌ ' + data.error;
+                    status.className = 'status error';
+                    return;
+                }
+
+                status.textContent = '';
+                currentTracks = data.tracks;
+
+                const list = document.getElementById('track-list');
+                list.innerHTML = data.tracks.map((t, i) => `
+                    <li>
+                        <span class="track-title">${t.artist} — ${t.title}</span>
+                        <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays</span>
+                    </li>
+                `).join('');
+
+                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+
+                const tagsRow = document.getElementById('tags-row');
+                tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
+                tagsRow.style.display = 'flex';
+
+                // Real Last.fm scrobbles from this window that never matched
+                // a local track -- shown separately, deliberately never
+                // added to currentTracks, so they can never end up in the
+                // created playlist.
+                const missingDiv = document.getElementById('onthisday-missing');
+                if (data.missing && data.missing.length > 0) {
+                    missingDiv.style.display = 'block';
+                    missingDiv.innerHTML = `
+                        <div style="font-size:0.85rem; color:#8b6914; margin-bottom:0.4rem;">
+                            🚫 ${data.missing.length} track${data.missing.length !== 1 ? 's' : ''} you actually scrobbled in this window, but missing from your library:
+                        </div>
+                        <ul style="list-style:none; padding:0; margin:0; font-size:0.85rem;">
+                            ${data.missing.map(m => `
+                                <li style="padding:0.3rem 0; border-bottom:1px solid #eee; color:#8b6914;">
+                                    ${m.artist} — ${m.title}${m.count > 1 ? ` <span style="opacity:0.7;">(played ${m.count}×)</span>` : ''}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `;
+                } else {
+                    missingDiv.style.display = 'none';
+                    missingDiv.innerHTML = '';
+                }
+
+                document.getElementById('results').style.display = 'block';
+            } catch (e) {
+                status.textContent = '❌ Unexpected error: ' + e;
                 status.className = 'status error';
+            } finally {
                 btn.disabled = false;
-                return;
             }
-            const data = result.data;
-
-            if (data.error) {
-                status.textContent = '❌ ' + data.error;
-                status.className = 'status error';
-                btn.disabled = false;
-                return;
-            }
-
-            status.textContent = '';
-            currentTracks = data.tracks;
-
-            const list = document.getElementById('track-list');
-            list.innerHTML = data.tracks.map((t, i) => `
-                <li>
-                    <span class="track-title">${t.artist} — ${t.title}</span>
-                    <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays</span>
-                </li>
-            `).join('');
-
-            document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-
-            const tagsRow = document.getElementById('tags-row');
-            tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
-            tagsRow.style.display = 'flex';
-
-            // Real Last.fm scrobbles from this window that never matched
-            // a local track -- shown separately, deliberately never
-            // added to currentTracks, so they can never end up in the
-            // created playlist.
-            const missingDiv = document.getElementById('onthisday-missing');
-            if (data.missing && data.missing.length > 0) {
-                missingDiv.style.display = 'block';
-                missingDiv.innerHTML = `
-                    <div style="font-size:0.85rem; color:#8b6914; margin-bottom:0.4rem;">
-                        🚫 ${data.missing.length} track${data.missing.length !== 1 ? 's' : ''} you actually scrobbled in this window, but missing from your library:
-                    </div>
-                    <ul style="list-style:none; padding:0; margin:0; font-size:0.85rem;">
-                        ${data.missing.map(m => `
-                            <li style="padding:0.3rem 0; border-bottom:1px solid #eee; color:#8b6914;">
-                                ${m.artist} — ${m.title}${m.count > 1 ? ` <span style="opacity:0.7;">(played ${m.count}×)</span>` : ''}
-                            </li>
-                        `).join('')}
-                    </ul>
-                `;
-            } else {
-                missingDiv.style.display = 'none';
-                missingDiv.innerHTML = '';
-            }
-
-            document.getElementById('results').style.display = 'block';
-            btn.disabled = false;
         }
 
         async function preview() {
@@ -402,100 +411,107 @@
             document.getElementById('results').style.display = 'none';
             document.getElementById('tags-row').style.display = 'none';
 
-            const payload = {
-                prompt,
-                unplayed:       document.getElementById('unplayed').checked,
-                genre:          document.getElementById('genre').value,
-                min_year:       document.getElementById('min_year').value,
-                max_year:       document.getElementById('max_year').value,
-                limit:          document.getElementById('limit').value,
-                max_per_artist: document.getElementById('max_per_artist').value,
-                min_rating:     document.getElementById('min_rating').value || null,
-                dj_ify:         document.getElementById('dj_ify').checked,
-                bpm_min:        document.getElementById('bpm_min').value || null,
-                bpm_max:        document.getElementById('bpm_max').value || null,
-                danceability:   document.getElementById('danceability').value || null,
-                instrumental:   document.getElementById('instrumental').checked ? 1 : null,
-                vocal_tolerance: document.getElementById('instrumental').checked ? document.getElementById('vocal_tolerance').value : null,
+            try {
+                const payload = {
+                    prompt,
+                    unplayed:       document.getElementById('unplayed').checked,
+                    genre:          document.getElementById('genre').value,
+                    min_year:       document.getElementById('min_year').value,
+                    max_year:       document.getElementById('max_year').value,
+                    limit:          document.getElementById('limit').value,
+                    max_per_artist: document.getElementById('max_per_artist').value,
+                    min_rating:     document.getElementById('min_rating').value || null,
+                    dj_ify:         document.getElementById('dj_ify').checked,
+                    bpm_min:        document.getElementById('bpm_min').value || null,
+                    bpm_max:        document.getElementById('bpm_max').value || null,
+                    danceability:   document.getElementById('danceability').value || null,
+                    instrumental:   document.getElementById('instrumental').checked ? 1 : null,
+                    vocal_tolerance: document.getElementById('instrumental').checked ? document.getElementById('vocal_tolerance').value : null,
 
-                gender:         document.getElementById('gender').value || null,
-                country:        document.getElementById('country').value || null,
-                era:            document.getElementById('era').value || null,
-                buckets:        Array.from(document.querySelectorAll('.bucket-checkbox:checked')).map(el => el.dataset.bucket),
-            };
+                    gender:         document.getElementById('gender').value || null,
+                    country:        document.getElementById('country').value || null,
+                    era:            document.getElementById('era').value || null,
+                    buckets:        Array.from(document.querySelectorAll('.bucket-checkbox:checked')).map(el => el.dataset.bucket),
+                };
 
-            const result = await friendlyFetchJSON('/preview', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
+                const result = await friendlyFetchJSON('/preview', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
 
-            if (!result.ok) {
-                showToast(result.message, 'error');
+                if (!result.ok) {
+                    showToast(result.message, 'error');
+                    return;
+                }
+                const data = result.data;
+
+                if (data.error) {
+                    showToast('Error: ' + data.error, 'error');
+                    return;
+                }
+                if (data.warning) {
+                    showToast(data.warning, 'error');
+                }
+
+                // Show tags or intent info
+                const tagsRow = document.getElementById('tags-row');
+                const pills = [];
+
+                // Intent pills
+                if (data.intent === 'title_search' && data.search_term)
+                    pills.push(`🔍 Title: "${data.search_term}"`);
+                else if (data.intent === 'artist_search' && data.search_term)
+                    pills.push(`🎤 Artist: "${data.search_term}"`);
+                else if (data.intent === 'year_search' && data.search_term)
+                    pills.push(`📅 Year: "${data.search_term}"`);
+                else if (data.intent === 'lastfm_range' && data.search_term)
+                    pills.push(`📻 Last.fm: ${data.search_term}`);
+
+                // Detected filter pills
+                const df = data.detected_filters || {};
+                if (df.gender)  pills.push(`👤 ${df.gender}`);
+                if (df.country) pills.push(`🌍 ${df.country}`);
+                if (df.era)     pills.push(`📅 ${df.era}`);
+
+                // Mood tags
+                if (data.tags && data.tags.length > 0)
+                    data.tags.forEach(t => pills.push(t));
+
+                if (pills.length > 0) {
+                    tagsRow.innerHTML = pills.map(p => `<span class="tag">${p}</span>`).join('');
+                    tagsRow.style.display = 'flex';
+                } else {
+                    tagsRow.style.display = 'none';
+                }
+
+                // Show tracks
+                currentTracks = data.tracks;
+                const list = document.getElementById('track-list');
+                list.innerHTML = data.tracks.map((t, i) => `
+                    <li>
+                        <span class="track-title">${t.artist} — ${t.title}</span>
+                        <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays &bull; ${t.match_score} match</span>
+                    </li>
+                `).join('');
+
+                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+                const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
+                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix;
+                document.getElementById('results').style.display = 'block';
+            } catch (e) {
+                // Found real (July 2026): removing this safety net
+                // during the friendlyFetchJSON rewrite left ANY
+                // unexpected exception -- not just a fetch failure --
+                // uncaught, permanently stuck on "Thinking...". This
+                // catches anything friendlyFetchJSON itself can't
+                // (a DOM element unexpectedly missing, a malformed
+                // response shape, etc.) so the button always recovers.
+                showToast('Unexpected error: ' + e, 'error');
+            } finally {
                 btn.textContent = 'Preview';
                 btn.disabled = false;
-                return;
             }
-            const data = result.data;
-
-            if (data.error) {
-                showToast('Error: ' + data.error, 'error');
-                btn.textContent = 'Preview';
-                btn.disabled = false;
-                return;
-            }
-            if (data.warning) {
-                showToast(data.warning, 'error');
-            }
-
-            // Show tags or intent info
-            const tagsRow = document.getElementById('tags-row');
-            const pills = [];
-
-            // Intent pills
-            if (data.intent === 'title_search' && data.search_term)
-                pills.push(`🔍 Title: "${data.search_term}"`);
-            else if (data.intent === 'artist_search' && data.search_term)
-                pills.push(`🎤 Artist: "${data.search_term}"`);
-            else if (data.intent === 'year_search' && data.search_term)
-                pills.push(`📅 Year: "${data.search_term}"`);
-            else if (data.intent === 'lastfm_range' && data.search_term)
-                pills.push(`📻 Last.fm: ${data.search_term}`);
-
-            // Detected filter pills
-            const df = data.detected_filters || {};
-            if (df.gender)  pills.push(`👤 ${df.gender}`);
-            if (df.country) pills.push(`🌍 ${df.country}`);
-            if (df.era)     pills.push(`📅 ${df.era}`);
-
-            // Mood tags
-            if (data.tags && data.tags.length > 0)
-                data.tags.forEach(t => pills.push(t));
-
-            if (pills.length > 0) {
-                tagsRow.innerHTML = pills.map(p => `<span class="tag">${p}</span>`).join('');
-                tagsRow.style.display = 'flex';
-            } else {
-                tagsRow.style.display = 'none';
-            }
-
-            // Show tracks
-            currentTracks = data.tracks;
-            const list = document.getElementById('track-list');
-            list.innerHTML = data.tracks.map((t, i) => `
-                <li>
-                    <span class="track-title">${t.artist} — ${t.title}</span>
-                    <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays &bull; ${t.match_score} match</span>
-                </li>
-            `).join('');
-
-            document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-            const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
-            document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix;
-            document.getElementById('results').style.display = 'block';
-
-            btn.textContent = 'Preview';
-            btn.disabled = false;
         }
 
         async function createPlaylist() {
@@ -506,27 +522,31 @@
             btn.textContent = 'Creating...';
             btn.disabled = true;
 
-            const result = await friendlyFetchJSON('/create', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name,
-                    rating_keys: currentTracks.map(t => t.rating_key),
-                    prompt: document.getElementById('prompt').value
-                })
-            });
+            try {
+                const result = await friendlyFetchJSON('/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name,
+                        rating_keys: currentTracks.map(t => t.rating_key),
+                        prompt: document.getElementById('prompt').value
+                    })
+                });
 
-            if (!result.ok) {
-                showToast(result.message, 'error');
-            } else if (result.data.success) {
-                showToast(`✅ "${result.data.name}" created in Plex with ${result.data.count} tracks!`, 'success');
-                loadPlaylists();
-            } else {
-                showToast('Error: ' + result.data.error, 'error');
+                if (!result.ok) {
+                    showToast(result.message, 'error');
+                } else if (result.data.success) {
+                    showToast(`✅ "${result.data.name}" created in Plex with ${result.data.count} tracks!`, 'success');
+                    loadPlaylists();
+                } else {
+                    showToast('Error: ' + result.data.error, 'error');
+                }
+            } catch (e) {
+                showToast('Unexpected error: ' + e, 'error');
+            } finally {
+                btn.textContent = 'Create in Plex';
+                btn.disabled = false;
             }
-
-            btn.textContent = 'Create in Plex';
-            btn.disabled = false;
         }
 
         // Load genre tags on page load

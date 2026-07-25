@@ -276,20 +276,25 @@
             status.textContent = '⏳ Clearing…';
             status.className = 'status running';
 
-            const result = await friendlyFetchJSON(`/admin/clear-errors/${source}`, { method: 'POST' });
-            if (!result.ok) {
-                status.textContent = result.message;
+            try {
+                const result = await friendlyFetchJSON(`/admin/clear-errors/${source}`, { method: 'POST' });
+                if (!result.ok) {
+                    status.textContent = result.message;
+                    status.className = 'status error';
+                    return;
+                }
+                if (result.data.error) {
+                    status.textContent = '❌ ' + result.data.error;
+                    status.className = 'status error';
+                    return;
+                }
+                status.textContent = `✅ Cleared ${result.data.cleared} error${result.data.cleared !== 1 ? 's' : ''}.`;
+                status.className = 'status done';
+                loadErrorCounts();
+            } catch (e) {
+                status.textContent = '❌ Unexpected error: ' + e;
                 status.className = 'status error';
-                return;
             }
-            if (result.data.error) {
-                status.textContent = '❌ ' + result.data.error;
-                status.className = 'status error';
-                return;
-            }
-            status.textContent = `✅ Cleared ${result.data.cleared} error${result.data.cleared !== 1 ? 's' : ''}.`;
-            status.className = 'status done';
-            loadErrorCounts();
         }
 
         loadErrorCounts();
