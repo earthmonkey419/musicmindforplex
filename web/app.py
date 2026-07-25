@@ -75,7 +75,8 @@ def based_on_search():
     if len(q) < 2:
         return jsonify({'results': []})
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     track_rows = conn.execute("""
         SELECT rating_key, title, COALESCE(real_artist, artist) as artist
         FROM tracks WHERE title LIKE ? LIMIT 8
@@ -577,7 +578,8 @@ def run_assertion(assertion_id):
 
     a = assertions[assertion_id]
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.execute("PRAGMA busy_timeout=30000")
         result = conn.execute(a['query']).fetchone()[0]
         conn.close()
         passed = (result == 0) if a['expect_zero'] else (result > 0)
@@ -724,7 +726,8 @@ def synapse_status():
         except ValueError:
             is_running = False
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
     synapse_error_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
     # VI errors live in a separate table (vi_results, verdict='ERROR')
@@ -771,7 +774,8 @@ def synapse_errors_view():
     cluster) are invisible here even though they're real, tracked
     data sitting in vi_results."""
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
 
     synapse_rows = conn.execute("""
         SELECT rating_key, filepath, error, failed_at
@@ -815,7 +819,8 @@ def synapse_errors_view():
 @app.route('/synapse')
 def synapse_page():
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     total_tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
     analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
     conn.close()
@@ -1042,7 +1047,8 @@ def query():
     if not sql.lower().startswith('select'):
         return jsonify({'error': 'Only SELECT queries allowed'}), 400
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.execute("PRAGMA busy_timeout=30000")
         conn.row_factory = sqlite3.Row
         cur = conn.execute(sql)
         rows = cur.fetchall()
@@ -1101,7 +1107,8 @@ def playlists():
 @app.route('/genres')
 def genres():
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     rows = conn.execute('''
         SELECT tag, COUNT(*) as cnt
         FROM track_tags
@@ -1268,7 +1275,8 @@ def playlist_audit_data(playlist_key):
 
     rating_keys = [str(t.ratingKey) for t in items]
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     has_vi_results = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
     ).fetchone() is not None
@@ -1315,7 +1323,8 @@ def playlist_audit_data(playlist_key):
 @app.route('/logs')
 def logs():
     import sqlite3, json
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     rows = conn.execute("""
         SELECT id, timestamp, prompt, tags, filters, result_count,
                duration_ms, error, openai_request, openai_response,
@@ -1362,7 +1371,8 @@ def export_csv():
     """
     import sqlite3, csv, io
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     has_vi_results = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
     ).fetchone() is not None
@@ -1416,7 +1426,8 @@ def export_csv():
 @app.route('/stats/data')
 def stats_data():
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
 
     # Tile row-count limits — configurable per-tile from the Stats page
     # (persisted client-side in localStorage, not the database, so a
@@ -1481,7 +1492,8 @@ def db_console():
 @app.route('/gaps')
 def gaps():
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     buckets = []
     for cat_key, cat_label in [
         ('worth_acquiring',    '🎵 Worth Acquiring'),

@@ -215,18 +215,55 @@
 
         async function loadErrorCounts() {
             const list = document.getElementById('error-counts-list');
+            const result = await friendlyFetchJSON('/admin/error-counts');
+            if (!result.ok) {
+                list.textContent = result.message;
+                return;
+            }
+            const counts = result.data;
+            list.innerHTML = Object.entries(ERROR_SOURCE_LABELS).map(([key, label]) => {
+                const n = counts[key] || 0;
+                const btn = n > 0
+                    ? `<button style="margin-left:0.75rem; font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="clearErrorSource('${key}')">Clear</button>`
+                    : '';
+                return `<div style="padding:0.25rem 0;">${label}: <strong>${n}</strong>${btn}</div>`;
+            }).join('');
+        }
+
+        /**
+         * Shared helper for every admin fetch action. Found real
+         * (July 2026): a genuine server-side error (e.g. a database
+         * lock conflict from another process running at the same
+         * time) returns an HTML error page, not JSON -- attempting
+         * res.json() on that throws a raw, confusing SyntaxError
+         * ("Unexpected token '<'...") with zero indication of what
+         * actually happened. Checks res.ok FIRST and gives a real,
+         * specific, human explanation based on the actual status
+         * code, before ever trying to parse the body as JSON.
+         */
+        async function friendlyFetchJSON(url, options) {
+            let res;
             try {
-                const res = await fetch('/admin/error-counts');
-                const counts = await res.json();
-                list.innerHTML = Object.entries(ERROR_SOURCE_LABELS).map(([key, label]) => {
-                    const n = counts[key] || 0;
-                    const btn = n > 0
-                        ? `<button style="margin-left:0.75rem; font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="clearErrorSource('${key}')">Clear</button>`
-                        : '';
-                    return `<div style="padding:0.25rem 0;">${label}: <strong>${n}</strong>${btn}</div>`;
-                }).join('');
+                res = await fetch(url, options);
             } catch (e) {
-                list.textContent = 'Could not load error counts.';
+                return { ok: false, message: '⚠️ Could not reach the server at all — check your connection and try again.' };
+            }
+
+            if (!res.ok) {
+                if (res.status === 500) {
+                    return { ok: false, message: '⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.' };
+                }
+                if (res.status === 404) {
+                    return { ok: false, message: '⚠️ That feature is not available on this server yet — try refreshing the page, or check that the latest version is deployed.' };
+                }
+                return { ok: false, message: `⚠️ The server returned an unexpected error (HTTP ${res.status}). Try again in a moment.` };
+            }
+
+            try {
+                const data = await res.json();
+                return { ok: true, data };
+            } catch (e) {
+                return { ok: false, message: '⚠️ The server responded, but not with the data expected — this usually means a real bug. Worth checking the server logs.' };
             }
         }
 
@@ -238,21 +275,21 @@
             }
             status.textContent = '⏳ Clearing…';
             status.className = 'status running';
-            try {
-                const res = await fetch(`/admin/clear-errors/${source}`, { method: 'POST' });
-                const data = await res.json();
-                if (data.error) {
-                    status.textContent = '❌ ' + data.error;
-                    status.className = 'status error';
-                    return;
-                }
-                status.textContent = `✅ Cleared ${data.cleared} error${data.cleared !== 1 ? 's' : ''}.`;
-                status.className = 'status done';
-                loadErrorCounts();
-            } catch (e) {
-                status.textContent = '❌ Request failed: ' + e;
+
+            const result = await friendlyFetchJSON(`/admin/clear-errors/${source}`, { method: 'POST' });
+            if (!result.ok) {
+                status.textContent = result.message;
                 status.className = 'status error';
+                return;
             }
+            if (result.data.error) {
+                status.textContent = '❌ ' + result.data.error;
+                status.className = 'status error';
+                return;
+            }
+            status.textContent = `✅ Cleared ${result.data.cleared} error${result.data.cleared !== 1 ? 's' : ''}.`;
+            status.className = 'status done';
+            loadErrorCounts();
         }
 
         loadErrorCounts();
