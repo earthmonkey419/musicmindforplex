@@ -289,7 +289,8 @@ def admin_error_counts():
     surfaces the real counts so Clear Errors (below) can act on them.
     """
     import sqlite3
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
 
     synapse_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
 
@@ -343,7 +344,14 @@ def admin_clear_errors(source):
 
     delete_sql, required_table = valid_sources[source]
 
-    conn = sqlite3.connect(DB_PATH)
+    # Found real (July 2026): the default sqlite3.connect() with no
+    # timeout at all means an immediate "database is locked" error if
+    # ANYTHING else -- even something briefly checking the database at
+    # the exact same moment -- happens to hold a write lock, instead
+    # of waiting a reasonable amount like every other script in this
+    # codebase already does.
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     if required_table:
         exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (required_table,)
