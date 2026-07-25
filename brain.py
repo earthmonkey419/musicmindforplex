@@ -605,7 +605,17 @@ Answer each dimension:
 
 6. FILTERS: Detect any of these filters from the prompt:
    - gender: "female", "male", or "mixed" if mentioned. null if not mentioned.
-   - country: 2-letter country code if a nationality/country is mentioned. null if not.
+   - country: 2-letter country code ONLY if the prompt EXPLICITLY asks
+     for artists of a specific nationality (e.g. "Brazilian artists",
+     "French music", "artists from Japan", "German bands"). Do NOT
+     set this for: destination/travel language ("going to Cabo" is
+     a vacation MOOD, not a request for Mexican artists specifically),
+     or genre/style names that merely happen to reference a place
+     (samba, bossa nova, flamenco, reggae, salsa, etc. are GENRES —
+     someone asking for "a samba playlist" wants that rhythm/style,
+     not literally only Brazilian-nationality artists). When in
+     doubt, leave this null and let genre/mood do the work instead.
+     null if not an explicit nationality request.
    - era: decade like "70s", "80s" if mentioned. null if not.
    - year: specific year like "1975" if mentioned. null if not.
    - min_plays: if the prompt asks for "comfort picks", "old favorites",
@@ -635,13 +645,16 @@ Respond ONLY with valid JSON, no explanation:
   "artist_search": null,
   "filters": {{
     "gender": "female",
-    "country": "BR",
+    "country": null,
     "era": "70s",
     "year": null,
     "min_plays": null,
     "popularity_min": null
   }}
-}}"""
+}}
+Note: this example prompt didn't mention a nationality, so country is
+null -- it would only be set to a real code like "DE" for something
+that EXPLICITLY says e.g. "German artists"."""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
