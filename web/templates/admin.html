@@ -16,7 +16,8 @@
 
         <div class="admin-card" style="margin-bottom:1.5rem;">
             <h3>⚡ Full Sync</h3>
-            <p>Runs the complete pipeline: scan Plex for new files → ingest into DB → sync Last.fm → tag new tracks.</p>
+            <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
+            <p style="font-size:0.85rem; color:#8b6914;">📡 If your connection drops mid-run, the sync itself keeps going on the server — it does NOT stop. This page will automatically reconnect and pick the real output back up.</p>
             <button onclick="runScript('fullsync', this)">Run Full Sync</button>
             <div class="status" id="status-fullsync"></div>
             <div class="log-box" id="log-fullsync" style="height:200px;"></div>
@@ -145,17 +146,20 @@
             }
             btn.disabled = false;
         }
-        function runScript(name, btn) {
+        function runScript(name, btn, isReconnect) {
             const log    = document.getElementById('log-' + name);
             const status = document.getElementById('status-' + name);
 
             btn.disabled = true;
-            log.textContent = '';
+            if (!isReconnect) {
+                log.textContent = '';
+            }
             log.classList.add('active');
-            status.textContent = '⏳ Running...';
+            status.textContent = isReconnect ? '⏳ Reconnecting to running sync...' : '⏳ Running...';
             status.className = 'status running';
 
-            const es = new EventSource('/run/' + name);
+            const url = (isReconnect && name === 'fullsync') ? '/run/fullsync-tail' : '/run/' + name;
+            const es = new EventSource(url);
 
             es.onmessage = function(e) {
                 if (e.data === '__DONE__') {
@@ -176,9 +180,15 @@
 
             es.onerror = function() {
                 es.close();
-                btn.disabled = false;
-                status.textContent = '❌ Connection error';
-                status.className = 'status error';
+                if (name === 'fullsync') {
+                    status.textContent = '⚠️ Connection lost — the sync itself keeps running on the server. Reconnecting...';
+                    status.className = 'status running';
+                    setTimeout(() => runScript(name, btn, true), 2000);
+                } else {
+                    btn.disabled = false;
+                    status.textContent = '❌ Connection error';
+                    status.className = 'status error';
+                }
             };
         }
     </script>

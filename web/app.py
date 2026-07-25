@@ -365,14 +365,14 @@ def run_script(script):
                 start_new_session=True,  # detach from this Flask worker -- found missing entirely (July 2026) after a real pm2 restart interrupted a live Synapse run started via this exact generic dispatcher. This ONE mechanism serves all 11 admin-page "Run Now" buttons (ingest, tagger, fingerprint, VA-resolve, dedup, Synapse, and more) -- every one of them was equally vulnerable, despite the DEDICATED /run/synapse-full route and Full Sync's own steps both already having this same protection.
             )
             for line in proc.stdout:
-                yield f"data: {line.rstrip()}\n\n"
+                yield emit(line.rstrip())
             proc.wait()
             if proc.returncode == 0:
                 yield "data: ✅ Done.\n\n"
             else:
                 yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
         except Exception as e:
-            yield f"data: ❌ Exception: {e}\n\n"
+            yield emit(f"❌ Exception: {e}")
         finally:
             running[script] = False
         yield "data: __DONE__\n\n"
@@ -714,6 +714,9 @@ def synapse_page():
                             synapse_analyzed=analyzed, synapse_total=total_tracks, synapse_pct=pct)
 
 
+FULLSYNC_LOG_PATH = os.path.join(BASE_DIR, 'fullsync_live.log')
+
+
 @app.route('/run/fullsync')
 def run_fullsync():
     import subprocess
@@ -723,9 +726,24 @@ def run_fullsync():
         return jsonify({'error': 'Already running'}), 400
     def generate():
         running['fullsync'] = True
+        # Found real (July 2026): a dropped browser/SSH connection
+        # kills the SSE stream, but NOT the actual detached subprocess
+        # underneath it (start_new_session=True already protects
+        # that) -- the sync keeps running server-side with no way to
+        # see its output again. Mirror every line to a plain log file
+        # alongside the existing live stream, so /run/fullsync-tail
+        # (below) can pick it back up after a reconnect. Overwritten
+        # fresh at the start of each run.
+        log_file = open(FULLSYNC_LOG_PATH, 'w')
+        def log_line(text):
+            log_file.write(text + "\n")
+            log_file.flush()
+        def emit(text):
+            log_line(text)
+            return f"data: {text}\n\n"
         try:
             # Step 1: Trigger Plex scan
-            yield "data: 🔍 Triggering Plex library scan...\n\n"
+            yield emit("🔍 Triggering Plex library scan...")
             plex = PS(PLEX_URL, PLEX_TOKEN)
             music = plex.library.section(MUSIC_LIB)
             music.update()
@@ -739,7 +757,7 @@ def run_fullsync():
             # Plex had genuinely finished scanning (found July 2026).
             # music.reload() forces a real re-fetch of just this
             # object's own state, bypassing the cache correctly.
-            yield "data: ⏳ Waiting for Plex scan to complete...\n\n"
+            yield emit("⏳ Waiting for Plex scan to complete...")
             max_wait_iterations = 360  # 5s * 360 = 30 minutes safety cap
             waited = 0
             while True:
@@ -752,10 +770,10 @@ def run_fullsync():
                 if not music.refreshing:
                     break
                 if waited >= max_wait_iterations:
-                    yield "data: ⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).\n\n"
+                    yield emit("⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).")
                     break
-                yield "data: ⏳ Still scanning...\n\n"
-            yield "data: ✅ Plex scan complete.\n\n"
+                yield emit("⏳ Still scanning...")
+            yield emit("✅ Plex scan complete.")
 
             # Steps 3-5: Run scripts in sequence
             scripts = [
@@ -781,7 +799,7 @@ def run_fullsync():
                 ('🧠 Analyzing audio (Synapse: BPM/key/danceability)...', os.path.join(BASE_DIR, 'synapse_analyze.py')),
             ]
             for label, script in scripts:
-                yield f"data: {label}\n\n"
+                yield emit(label)
                 proc = subprocess.Popen(
                     ['python3.12', '-u', script],
                     stdout=subprocess.PIPE,
@@ -791,21 +809,75 @@ def run_fullsync():
                     start_new_session=True,  # detach from this Flask worker — a step (e.g. a long Synapse run) now survives a pm2 restart of the parent app, matching the same protection the standalone /run/synapse-full button already had
                 )
                 for line in proc.stdout:
-                    yield f"data: {line.rstrip()}\n\n"
+                    yield emit(line.rstrip())
                 proc.wait()
                 if proc.returncode != 0:
-                    yield f"data: ❌ Error in {script}\n\n"
+                    yield emit(f"❌ Error in {script}")
                     return
 
-            yield "data: ✅ Full sync complete.\n\n"
+            yield emit("✅ Full sync complete.")
 
         except Exception as e:
-            yield f"data: ❌ Exception: {e}\n\n"
+            yield emit(f"❌ Exception: {e}")
         finally:
             running['fullsync'] = False
+            log_file.close()
         yield "data: __DONE__\n\n"
 
     return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/run/fullsync-tail')
+def run_fullsync_tail():
+    """
+    Reconnects to an ALREADY-RUNNING Full Sync's output after a
+    dropped browser tab or SSH connection killed the original SSE
+    stream. Found real (July 2026): the underlying subprocess keeps
+    running just fine (start_new_session=True already protects it),
+    but there was no way to see its output again once the stream
+    died -- the previous "❌ Connection error" message actively
+    implied something had failed, when the sync itself was fine.
+
+    Reads the log file /run/fullsync writes alongside its own live
+    stream: shows everything already written (so a reconnect sees
+    real context, not just new lines), then keeps polling for growth,
+    same as `tail -f`. Stops once the run's own in-memory 'running'
+    flag goes False AND the file hasn't grown for a few seconds --
+    the small grace window covers the moment right after the flag
+    flips but before the very last few lines have been flushed.
+    """
+    import time
+
+    def generate():
+        if not os.path.exists(FULLSYNC_LOG_PATH):
+            yield "data: No Full Sync log found — nothing has run yet.\n\n"
+            yield "data: __DONE__\n\n"
+            return
+
+        with open(FULLSYNC_LOG_PATH, 'r') as f:
+            # Show everything already written first, for real context.
+            for line in f:
+                yield f"data: {line.rstrip()}\n\n"
+
+            stale_seconds = 0
+            while True:
+                pos = f.tell()
+                line = f.readline()
+                if line:
+                    yield f"data: {line.rstrip()}\n\n"
+                    stale_seconds = 0
+                    continue
+
+                f.seek(pos)
+                if not running.get('fullsync') and stale_seconds >= 3:
+                    break
+                time.sleep(1)
+                stale_seconds += 1
+
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
 
 @app.route('/run/gaps')
 def run_gaps():
