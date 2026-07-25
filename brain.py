@@ -556,6 +556,59 @@ def detect_instrumental_intent(prompt):
         return 0
     return None
 
+# Same tiers given to the AI in its own instructions -- kept here too
+# so a raw text value (the AI not reliably following its own
+# instruction to convert "popular" -> 30000, confirmed real July
+# 2026: classify_prompt returned the literal string "popular",
+# producing a `rating_count >= 'popular'` comparison that matches
+# nothing) can still be normalized correctly in code, rather than
+# purely trusting the AI's output format every time.
+POPULARITY_TIERS = {
+    "moderately known": 5000,
+    "somewhat known": 5000,
+    "popular": 30000,
+    "hits": 30000,
+    "well-known": 30000,
+    "well known": 30000,
+    "fan favorite": 30000,
+    "fan favorites": 30000,
+    "crowd pleaser": 30000,
+    "crowd pleasers": 30000,
+    "very popular": 150000,
+    "famous": 150000,
+    "iconic": 500000,
+    "legendary": 500000,
+}
+
+
+def normalize_popularity_min(value):
+    """
+    Defensively normalizes popularity_min to a real number regardless
+    of whether the AI returned the correct numeric tier (as instructed)
+    or the raw text it was supposed to convert. Same "measure, don't
+    blindly trust the AI's own output format" character as everything
+    else in this pipeline -- correctness shouldn't depend on the model
+    following instructions perfectly every single time.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in POPULARITY_TIERS:
+            return POPULARITY_TIERS[text]
+        try:
+            return float(text)
+        except ValueError:
+            pass
+        # Unrecognized text that isn't a real tier or a plain number --
+        # safer to drop the filter entirely than silently apply a
+        # comparison that will never match anything.
+        return None
+    return None
+
+
 def classify_prompt(prompt):
     """
     Multi-dimensional prompt analysis. Returns structured dict with:
@@ -678,7 +731,7 @@ that EXPLICITLY says e.g. "German artists"."""
         "era":        f.get("era"),
         "year":       f.get("year"),
         "min_plays":  f.get("min_plays"),
-        "popularity_min": f.get("popularity_min"),
+        "popularity_min": normalize_popularity_min(f.get("popularity_min")),
     }
 
     # Log immediately — this is the ONE call that runs for nearly
