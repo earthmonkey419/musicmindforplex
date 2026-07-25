@@ -26,12 +26,27 @@ import subprocess
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import PLEX_URL, PLEX_TOKEN, DB_PATH, ACOUSTID_KEY
+from config import PLEX_URL, PLEX_TOKEN, DB_PATH
 
 try:
     from config import PATH_MAP
 except ImportError:
     PATH_MAP = {}
+
+try:
+    from config import ACOUSTID_KEY
+except ImportError:
+    # Found real (July 2026): ACOUSTID_KEY is missing from
+    # config.example.py entirely, meaning a fresh install's config.py
+    # may not have this attribute at all -- without this fallback,
+    # the plain `from config import ACOUSTID_KEY` above would raise
+    # ImportError immediately, crashing this script's exit code, and
+    # since this now runs as part of the automatic Full Sync
+    # pipeline, that would kill the ENTIRE pipeline at this step --
+    # Last.fm sync, enrichment, tagging, and Synapse would never run
+    # for that pass. Same defensive pattern already used for
+    # PATH_MAP just above.
+    ACOUSTID_KEY = ""
 
 import requests
 from plexapi.server import PlexServer
@@ -151,6 +166,16 @@ def main():
 
     print("MusicMind for Plex - Various Artists Resolution")
     print("=" * 50)
+
+    if not ACOUSTID_KEY:
+        # Same graceful pattern already proven in lastfm_sync.py for
+        # its own optional credentials -- exits cleanly (code 0), not
+        # a crash, so Full Sync's pipeline correctly proceeds to the
+        # next step instead of dying here.
+        print("AcoustID key not set in config.py — skipping VA resolution.")
+        print("(This is optional. Get a free key at https://acoustid.org/ and set ACOUSTID_KEY.)")
+        return
+
     print("Connecting to Plex...")
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
     print(f"Connected to: {plex.friendlyName}\n")

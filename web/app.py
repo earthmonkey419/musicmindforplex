@@ -762,6 +762,18 @@ def run_fullsync():
                 ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
                 ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
                 ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
+                # Added to the automatic pipeline (July 2026) -- was
+                # previously manual-only, meaning newly-added Various
+                # Artists tracks never got resolved automatically at
+                # all, and even a manual resolve wouldn't benefit
+                # enrichment/tagging until whatever the NEXT full sync
+                # happened to be. Needs real fingerprints to already
+                # exist (its own AcoustID lookup mechanism), so must
+                # run after fingerprinting. Positioned before both
+                # enrichment steps and tagging so a newly-resolved
+                # artist's real name reaches all three in the SAME
+                # pass, not a future one.
+                ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
