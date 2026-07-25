@@ -16,7 +16,7 @@
 
         <div class="admin-card" style="margin-bottom:1.5rem;">
             <h3>⚡ Full Sync</h3>
-            <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
+            <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
             <p style="font-size:0.85rem; color:#8b6914;">📡 If your connection drops mid-run, the sync itself keeps going on the server — it does NOT stop. This page will automatically reconnect and pick the real output back up.</p>
             <button onclick="runScript('fullsync', this)">Run Full Sync</button>
             <div class="status" id="status-fullsync"></div>
@@ -119,6 +119,14 @@
                 <button onclick="runScript('varesolve', this)">Run Now</button>
                 <div class="status" id="status-varesolve"></div>
                 <div class="log-box" id="log-varesolve"></div>
+            </div>
+
+            <div class="admin-card">
+                <h3>🎼 Resolve Recording IDs</h3>
+                <p>Identifies the specific MusicBrainz recording (not just the artist — precise release/edition) for every fingerprinted track via AcoustID. Free backfill first for anything already resolved via Various Artists, then fresh lookups for everything else. Rate-limited — a full first run can take an hour or more on a large library.</p>
+                <button onclick="runScript('recordingmbid', this)">Run Now</button>
+                <div class="status" id="status-recordingmbid"></div>
+                <div class="log-box" id="log-recordingmbid"></div>
             </div>
 
         </div>

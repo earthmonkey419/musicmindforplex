@@ -362,6 +362,7 @@ def run_script(script):
         'copyforward':  os.path.join(BASE_DIR, 'copy_forward_analysis.py'),
         'dedup':        os.path.join(BASE_DIR, 'dedup_report.py'),
         'varesolve':    os.path.join(BASE_DIR, 'va_resolve.py'),
+        'recordingmbid': os.path.join(BASE_DIR, 'resolve_recording_mbids.py'),
     }
     if script not in scripts:
         return jsonify({'error': 'Unknown script'}), 400
@@ -807,6 +808,22 @@ def run_fullsync():
                 # artist's real name reaches all three in the SAME
                 # pass, not a future one.
                 ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
+                # Added to the automatic pipeline (July 2026) -- found
+                # real gap: track_fingerprints.recording_mbid existed
+                # in the schema since fingerprint_tracks.py was built,
+                # but was NEVER populated for tracks with an already-
+                # known artist -- only va_resolve.py's own artist-
+                # resolution flow ever wrote a recording_mbid, and
+                # only into va_results, never into the more broadly-
+                # useful track_fingerprints table. Without this in the
+                # automatic pipeline, every NEW track on every install
+                # (fresh or existing) would hit the exact same gap
+                # forever. Positioned right after va_resolve.py so its
+                # free Phase-1 backfill (copying already-known
+                # recording_mbids from va_results) always has the
+                # freshest data from the SAME pass, before spending any
+                # real AcoustID lookups on Phase 2.
+                ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
                 ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
                 ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
                 ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
