@@ -1720,6 +1720,19 @@ def search_tracks(tags, filters=None):
         else:
             query += " AND t.year = ?"
             params.append(int(ys))
+    if f.get("bpm_min") is not None or f.get("bpm_max") is not None:
+        # Found real (July 2026): some tracks' measured BPM is
+        # confirmed unreliable via direct listening -- complex
+        # orchestral/layered material (e.g. James Bernard's "Orgy of
+        # Evil") where a beat-tracking algorithm can lock onto the
+        # wrong pulse entirely (a classic "octave error" -- measuring
+        # half or double the true tempo). We don't know whether the
+        # true tempo is actually higher or lower once this happens,
+        # so the measured number can't be trusted for filtering in
+        # EITHER direction, not just "low." Excluded only when a BPM
+        # filter is actually in use -- these tracks' other real,
+        # trusted data (tags, key, danceability) is untouched.
+        query += " AND (taf.bpm_reliable IS NULL OR taf.bpm_reliable = 1)"
     if f.get("bpm_min") is not None:
         query += " AND taf.bpm >= ?"
         params.append(f["bpm_min"])

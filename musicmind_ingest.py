@@ -98,9 +98,14 @@ def init_db(conn):
             scale         TEXT,
             key_strength  REAL,
             danceability  REAL,
-            analyzed_at   TEXT
+            analyzed_at   TEXT,
+            bpm_reliable  INTEGER DEFAULT 1
         )
     """)
+    try:
+        conn.execute("ALTER TABLE track_audio_features ADD COLUMN bpm_reliable INTEGER DEFAULT 1")
+    except Exception:
+        pass  # column already exists (or table just created with it)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS synapse_errors (
             rating_key    TEXT PRIMARY KEY,
