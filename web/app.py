@@ -886,10 +886,23 @@ def run_fullsync():
     import subprocess
     import time
     from plexapi.server import PlexServer as PS
+    # Found real (July 2026): a genuine race condition -- the OLD
+    # code checked `running.get('fullsync')` here in the route
+    # function, but only SET `running['fullsync'] = True` later,
+    # inside generate(). Generators are lazy -- that assignment
+    # didn't actually run until Werkzeug started consuming the
+    # stream, leaving a real window where two rapid clicks (or two
+    # requests handled by different threads) could both pass the
+    # check before either one actually claimed the lock. Confirmed
+    # real: clicking Run Full Sync again during an active run
+    # genuinely started a second overlapping pipeline. Check AND
+    # claim now happen together, synchronously, before any response
+    # is returned at all -- no lazy-evaluation gap left to race.
     if running.get('fullsync'):
         return jsonify({'error': 'Already running'}), 400
+    running['fullsync'] = True
+
     def generate():
-        running['fullsync'] = True
         # Found real (July 2026): a dropped browser/SSH connection
         # kills the SSE stream, but NOT the actual detached subprocess
         # underneath it (start_new_session=True already protects
