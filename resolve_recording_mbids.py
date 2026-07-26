@@ -160,16 +160,37 @@ def main():
         mbid, status = get_recording_mbid(fingerprint, duration, ACOUSTID_KEY)
 
         if mbid:
-            conn.execute(
-                "UPDATE track_fingerprints SET recording_mbid = ? WHERE rating_key = ?",
-                (mbid, rk)
-            )
-            conn.commit()
-            resolved += 1
+            # Found real (July 2026): this write had zero exception
+            # handling -- a genuine "database is locked" error here
+            # (plausible on a real production night with multiple
+            # deploys, restarts, and other scripts running) crashed
+            # the entire script immediately, discarding all progress
+            # on whatever tracks were still left to check. The
+            # connection's own 60s timeout + busy_timeout already
+            # absorbs most transient contention; if it STILL fails
+            # after that, it's a genuinely persistent lock -- catch
+            # it, log it for this one track, and keep going instead
+            # of losing the whole remaining run over it.
+            try:
+                conn.execute(
+                    "UPDATE track_fingerprints SET recording_mbid = ? WHERE rating_key = ?",
+                    (mbid, rk)
+                )
+                conn.commit()
+                resolved += 1
+            except Exception as e:
+                print(f"  ⚠️  DB write failed for rating_key {rk}: {e} — continuing with the rest")
+                counts[f"db_error"] = counts.get("db_error", 0) + 1
         else:
             counts[status] = counts.get(status, 0) + 1
 
-        if total > 200 and i % 500 == 0:
+        # Found real (July 2026): every-500 was a long, genuinely
+        # anxiety-inducing silence on a real run -- at the ~0.4s/track
+        # rate-limit pace, 500 tracks is well over 3 minutes of zero
+        # visible output, easy to mistake for a hang. Every 25 gives
+        # a real heartbeat (roughly every 10 seconds) without being
+        # spammy, so it's always clear something is actively moving.
+        if total > 20 and i % 25 == 0:
             elapsed = time.time() - start
             eta_m = (elapsed / i) * (total - i) / 60
             print(f"  {i}/{total} checked ({resolved} resolved so far) — ETA {eta_m:.1f}m")
