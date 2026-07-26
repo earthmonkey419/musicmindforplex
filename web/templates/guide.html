@@ -25,6 +25,7 @@
             <a href="#stats">The Collection</a>
             <a href="#playlistaudit">Playlist Audit</a>
             <a href="#backoffice">Back Office</a>
+            <a href="#clicommands">CLI Commands</a>
             <a href="#synapse">Synapse</a>
             <a href="#enrichment">MusicBrainz &amp; AI</a>
             <a href="#ledger">The Ledger</a>
@@ -142,6 +143,19 @@
                 <li><strong>Gender / Country / Era</strong> — filter by artist metadata</li>
             </ul>
 
+            <h3>Search hints</h3>
+            <p>A quick-reference cheat sheet — copy, adapt, or just use these as a starting point:</p>
+            <ul>
+                <li><code>chill sunday morning coffee vibes</code> — mood/vibe</li>
+                <li><code>tracks by Fleetwood Mac</code> — artist search, returns everything by that artist (not capped by Tracks per artist, since you already named one specific artist)</li>
+                <li><code>songs with midnight in the title</code> — title search</li>
+                <li><code>popular tracks from the 90s</code> — combines a real, measured popularity signal with an era filter</li>
+                <li><code>female Brazilian artists</code> — filter queries work best when the nationality is explicit and about the artist. "Going to Rio" describes a destination/mood, not a request for Brazilian artists specifically — MusicMind deliberately treats those differently, so vacation-style prompts search by vibe instead of accidentally filtering to one country's artists</li>
+                <li><code>lastfm: played last summer</code> — pulls straight from your real Last.fm history, no AI or tag-matching involved</li>
+                <li>Words like <strong>popular</strong>, <strong>well-known</strong>, or <strong>iconic</strong> map to real, increasing popularity tiers (measured from Plex, not guessed) — <strong>iconic</strong> asks for a much higher bar than <strong>popular</strong></li>
+                <li>Checking a genre bucket narrows the AI's vocabulary to that genre specifically — <code>something moody</code> + Jazz checked returns moody jazz, not just anything moody that happens to brush against jazz</li>
+            </ul>
+
             <div class="guide-tip">
                 <strong>Tip:</strong> Prompt and filters combine. "Late night jazz" + Gender=female + Era=60s finds
                 late night jazz from female artists of the 60s.
@@ -219,19 +233,52 @@
         <!-- ═══════════════════ BACK OFFICE ═══════════════════ -->
         <div class="guide-section" id="backoffice">
             <h2>⚙️ Back Office</h2>
-            <p>One-click maintenance jobs. Each streams live output so you can watch progress.</p>
+            <p>One-click maintenance jobs. Each streams live output so you can watch progress — and the Full Sync card shows a live status of anything else currently running, so you can see at a glance whether it's safe to start.</p>
             <ul>
-                <li><strong>Full Sync</strong> — the complete pipeline: scan → ingest → Last.fm → MusicBrainz enrich → AI fallback enrich → tag tracks</li>
+                <li><strong>Full Sync</strong> — the complete pipeline, in order: scan Plex → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse)</li>
                 <li><strong>Scan / Sync Plex Library</strong> — pull new or changed tracks</li>
                 <li><strong>Sync Last.fm</strong> — update scrobbles, play counts, loved tracks</li>
+                <li><strong>Resolve Various Artists</strong> — identifies real performers for compilation tracks via acoustic fingerprinting + AcoustID, instead of unreliable text matching</li>
+                <li><strong>Resolve Recording IDs</strong> — identifies the specific MusicBrainz recording (not just the artist) for every fingerprinted track</li>
                 <li><strong>Tag New Tracks</strong> — AI genre tagging</li>
                 <li><strong>Refresh Context Playlists</strong> — rebuild Your Afternoon, Weekend Flow, Often Together</li>
                 <li><strong>Enrich Artists</strong> — MusicBrainz and AI Fallback (see below)</li>
                 <li><strong>Refresh Gap Analysis</strong> — re-run Missing From Your Collection</li>
+                <li><strong>Clear Errors</strong> — once a track fails and gets an error recorded (Synapse, VI, or fingerprinting), it's permanently skipped on future runs, even for a transient failure a simple retry would fix. Shows live counts per error source, with a real confirmation before clearing — this only clears the error record, it doesn't re-run anything automatically</li>
             </ul>
             <div class="guide-tip">
                 <strong>Tip:</strong> Long-running jobs may time out behind a reverse proxy or tunnel. Use your NAS's
-                direct IP (<code>http://YOUR_NAS_IP:8787/admin</code>) for anything that takes a while.
+                direct IP (<code>http://YOUR_NAS_IP:8787/admin</code>) for anything that takes a while. If your
+                connection does drop mid-run, Full Sync keeps running on the server regardless — reload the page
+                and it reconnects and picks the real output back up automatically.
+            </div>
+            <a href="#top" class="guide-back-to-top">↑ Back to top</a>
+        </div>
+
+        <!-- ═══════════════════ CLI COMMANDS ═══════════════════ -->
+        <div class="guide-section" id="clicommands">
+            <h2>💻 CLI Commands</h2>
+            <p>
+                Everything in Back Office can also be run directly over SSH — useful for a targeted test batch,
+                a dry run, or just watching raw output without the admin UI. Run these from the app's directory
+                on your NAS.
+            </p>
+            <ul>
+                <li><code>python3.12 musicmind_ingest.py</code> — scan and ingest from Plex</li>
+                <li><code>python3.12 fingerprint_tracks.py</code> — <code>--limit N</code> to test on a small batch first</li>
+                <li><code>python3.12 copy_forward_analysis.py</code> — reuse Synapse/VI results for known duplicate audio</li>
+                <li><code>python3.12 va_resolve.py</code> — <code>--limit N</code> for a small batch</li>
+                <li><code>python3.12 resolve_recording_mbids.py</code> — <code>--dry-run</code> to see counts with zero API calls, <code>--limit N</code> for a small batch</li>
+                <li><code>python3.12 lastfm_sync.py</code> — the full unmatched-scrobble recheck is throttled to once a day automatically; add <code>--rematch</code> to force it right now regardless</li>
+                <li><code>python3.12 mb_enrich_artists.py</code> — <code>--test</code> for a dry run (prints what it would do, writes nothing), <code>--limit N</code> for a small batch</li>
+                <li><code>python3.12 enrich_artists.py</code> — same <code>--test</code> and <code>--limit N</code> flags</li>
+                <li><code>python3.12 plex_tag_tracks.py</code> — AI genre tagging</li>
+                <li><code>python3.12 synapse_analyze.py</code> — <code>--limit N</code> for a small batch, <code>--count</code> to just report how many tracks still need analysis, <code>--estimate</code> for a time estimate without actually running anything</li>
+            </ul>
+            <div class="guide-tip">
+                <strong>Tip:</strong> <code>--dry-run</code> and <code>--test</code> mean different things depending on
+                the script — always check what a script actually prints for a small <code>--limit</code> batch
+                before trusting either flag to mean "definitely writes nothing."
             </div>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
