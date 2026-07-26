@@ -308,16 +308,30 @@ def admin_error_counts():
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='track_fingerprints'"
     ).fetchone() is not None
     fingerprint_count = 0
+    mbid_no_match_count = 0
     if has_fingerprints:
         fingerprint_count = conn.execute(
             "SELECT COUNT(*) FROM track_fingerprints WHERE error IS NOT NULL"
         ).fetchone()[0]
+        # Found real (July 2026): "no match" from AcoustID isn't
+        # necessarily permanent -- its database is crowdsourced and
+        # keeps growing, so a genuine no-match today could resolve
+        # on its own after enough time passes (already handled
+        # automatically). This lets it happen sooner, on demand.
+        has_status_col = conn.execute(
+            "SELECT 1 FROM pragma_table_info('track_fingerprints') WHERE name='mbid_check_status'"
+        ).fetchone() is not None
+        if has_status_col:
+            mbid_no_match_count = conn.execute(
+                "SELECT COUNT(*) FROM track_fingerprints WHERE mbid_check_status IS NOT NULL"
+            ).fetchone()[0]
 
     conn.close()
     return jsonify({
         'synapse': synapse_count,
         'vi': vi_count,
         'fingerprint': fingerprint_count,
+        'mbid_no_match': mbid_no_match_count,
     })
 
 
@@ -339,6 +353,12 @@ def admin_clear_errors(source):
         'synapse': ("DELETE FROM synapse_errors", None),
         'vi': ("DELETE FROM vi_results WHERE verdict = 'ERROR'", 'vi_results'),
         'fingerprint': ("DELETE FROM track_fingerprints WHERE error IS NOT NULL", 'track_fingerprints'),
+        # UPDATE, not DELETE -- these rows hold real, valid fingerprint
+        # data, only the "no match" determination itself should reset.
+        'mbid_no_match': (
+            "UPDATE track_fingerprints SET mbid_check_status = NULL, mbid_checked_at = NULL WHERE mbid_check_status IS NOT NULL",
+            'track_fingerprints'
+        ),
     }
     if source not in valid_sources:
         return jsonify({'error': 'Unknown error source'}), 400

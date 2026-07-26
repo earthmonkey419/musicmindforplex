@@ -209,9 +209,10 @@
         }
 
         const ERROR_SOURCE_LABELS = {
-            synapse:     'Synapse (BPM/key/danceability) errors',
-            vi:          'Voice/Instrumental errors',
-            fingerprint: 'Fingerprinting errors',
+            synapse:      'Synapse (BPM/key/danceability) errors',
+            vi:           'Voice/Instrumental errors',
+            fingerprint:  'Fingerprinting errors',
+            mbid_no_match: 'Recording ID — no match found (AcoustID)',
         };
 
         async function loadErrorCounts() {

@@ -38,6 +38,45 @@ except ImportError:
 
 SCORE_FLOOR = 0.90
 
+# Found real (July 2026): recording_mbid alone can't distinguish
+# "never checked" from "checked, genuinely no match" -- both leave it
+# NULL, meaning every future run re-queries AcoustID for tracks that
+# already got a real, final answer, forever. This status column
+# records that answer. Only DEFINITIVE outcomes go here -- AcoustID
+# genuinely has no match, or its best match scored too low to trust.
+# Deliberately NOT applied to transient failures (a network hiccup,
+# a local DB lock) -- those represent bad luck, not a real answer,
+# and should still be retried on the next run.
+DEFINITIVE_STATUSES = {"no_results", "no_recordings"}
+
+
+def is_definitive(status):
+    """low_score:0.87 etc. are also definitive -- AcoustID DID
+    return a real answer, it just wasn't confident enough to trust."""
+    if status in DEFINITIVE_STATUSES:
+        return True
+    if status and status.startswith("low_score:"):
+        return True
+    return False
+
+
+RECHECK_AFTER_DAYS = 180  # AcoustID's crowdsourced database keeps
+# growing -- a genuine "no match" today isn't necessarily a "no
+# match" forever. Old enough that this doesn't waste API calls
+# re-asking the same question too often, short enough that a real,
+# newly-available match doesn't sit undiscovered for years.
+
+
+def init_status_column(conn):
+    try:
+        conn.execute("ALTER TABLE track_fingerprints ADD COLUMN mbid_check_status TEXT")
+    except Exception:
+        pass  # column already exists
+    try:
+        conn.execute("ALTER TABLE track_fingerprints ADD COLUMN mbid_checked_at TEXT")
+    except Exception:
+        pass  # column already exists
+
 
 def backfill_from_va_results(conn, dry_run=False):
     """
@@ -104,12 +143,16 @@ def get_needing_lookup(conn, limit=None):
     Phase 2 candidates: tracks with a real, usable stored fingerprint
     but still no recording_mbid (after Phase 1's free backfill).
     """
-    query = """
+    query = f"""
         SELECT rating_key, fingerprint, fp_duration
         FROM track_fingerprints
         WHERE fingerprint IS NOT NULL
           AND fp_duration IS NOT NULL
           AND recording_mbid IS NULL
+          AND (
+              mbid_check_status IS NULL
+              OR mbid_checked_at < datetime('now', '-{RECHECK_AFTER_DAYS} days')
+          )
         ORDER BY rating_key
     """
     if limit:
@@ -135,6 +178,7 @@ def main():
 
     conn = sqlite3.connect(DB_PATH, timeout=60)
     conn.execute("PRAGMA busy_timeout=60000")
+    init_status_column(conn)
 
     backfilled = backfill_from_va_results(conn, dry_run=dry_run)
 
@@ -183,6 +227,18 @@ def main():
                 counts[f"db_error"] = counts.get("db_error", 0) + 1
         else:
             counts[status] = counts.get(status, 0) + 1
+            if is_definitive(status):
+                try:
+                    conn.execute(
+                        "UPDATE track_fingerprints SET mbid_check_status = ?, mbid_checked_at = datetime('now') WHERE rating_key = ?",
+                        (status, rk)
+                    )
+                    conn.commit()
+                except Exception as e:
+                    print(f"  ⚠️  Status write failed for rating_key {rk}: {e} — will just get rechecked next run")
+            # transient failures (request_error, etc.) deliberately
+            # leave mbid_check_status untouched, so this track stays
+            # eligible for a fresh lookup on the next run
 
         # Found real (July 2026): every-500 was a long, genuinely
         # anxiety-inducing silence on a real run -- at the ~0.4s/track
