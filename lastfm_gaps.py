@@ -47,6 +47,23 @@ def normalize_artist_name(name):
     name = name.replace(' and ', ' & ')
     return name
 
+
+# Found real (August 2026): normalize_artist_name() alone still
+# missed a real, confirmed case -- "The B-52's" (scrobble, WITH an
+# apostrophe) vs the library's actual "The B‐52s" (confirmed via
+# direct inspection -- genuinely NO apostrophe at all, not just a
+# different quote style). Normalizing curly-vs-straight quotes
+# doesn't help when one side has no apostrophe whatsoever. This goes
+# further specifically for matching purposes -- stripping apostrophes
+# and hyphens out entirely, not just normalizing their style. Kept
+# separate from normalize_artist_name() itself, which stays available
+# for anywhere punctuation might still matter (e.g. display).
+def normalize_for_matching(name):
+    name = normalize_artist_name(name)
+    name = name.replace("'", '').replace('-', '')
+    name = ' '.join(name.split())
+    return name
+
 def init_table(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS artist_gaps (
@@ -66,12 +83,12 @@ def cleanup_acquired(conn):
         WHERE artist IS NOT NULL AND artist != ''
     """).fetchall():
         if row[0]:
-            known.add(normalize_artist_name(row[0]))
+            known.add(normalize_for_matching(row[0]))
 
     gaps = conn.execute("SELECT artist FROM artist_gaps").fetchall()
     deleted = 0
     for (gap_artist,) in gaps:
-        ga = normalize_artist_name(gap_artist)
+        ga = normalize_for_matching(gap_artist)
         # Exact match OR gap artist is contained in a library artist OR vice versa
         match = any(
             ga == k or ga in k or k in ga
@@ -101,7 +118,7 @@ def get_gap_artists(conn):
           AND COALESCE(real_artist, artist) != ''
     """).fetchall():
         if row[0]:
-            known.add(normalize_artist_name(row[0]))
+            known.add(normalize_for_matching(row[0]))
 
     scrobble_counts = conn.execute("""
         SELECT artist, COUNT(*) as scrobbles
@@ -113,7 +130,7 @@ def get_gap_artists(conn):
 
     gaps = []
     for artist, scrobbles in scrobble_counts:
-        na = normalize_artist_name(artist)
+        na = normalize_for_matching(artist)
         if not any(na == k or na in k or k in na for k in known):
             gaps.append((artist, scrobbles))
     return gaps
