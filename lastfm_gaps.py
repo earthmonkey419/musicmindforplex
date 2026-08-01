@@ -18,6 +18,35 @@ BATCH_SIZE    = 20
 
 client = OpenAI(api_key=OPENAI_KEY)
 
+# Found real (August 2026): several confirmed, real mismatches between
+# how Last.fm reports an artist name and how it's actually stored in
+# the library -- none of these are "different artists," they're the
+# exact same artist written slightly differently:
+#   - Case ("Nvdes" vs "NVDES", "Galt Macdermot" vs "Galt MacDermot")
+#   - "and" vs "&" ("Jonathan Richman And..." vs "...& The Modern Lovers")
+#   - Smart/curly quotes vs straight ones -- confirmed with "Howlin' Wolf"
+#     (library uses U+2019, a real, different character from the
+#     ordinary U+0027 apostrophe, genuinely invisible to the eye)
+#   - Various Unicode hyphens/dashes vs a plain ASCII hyphen --
+#     confirmed with "The B‐52s" (library uses U+2010, not U+002D)
+# Deliberately does NOT try to fix genuine artist aliases (e.g. "Mos
+# Def" vs "Yasiin Bey" -- literally different names for the same
+# person) or word-spacing differences ("Colourfield" vs "Colour
+# Field") -- no safe, general normalization bridges those without
+# real risk of new false matches elsewhere; they're a separate,
+# harder problem, not a formatting bug.
+def normalize_artist_name(name):
+    if not name:
+        return ''
+    name = name.replace('\u2018', "'").replace('\u2019', "'")  # curly single quotes
+    name = name.replace('\u201c', '"').replace('\u201d', '"')  # curly double quotes
+    for dash in ('\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2212'):
+        name = name.replace(dash, '-')  # various Unicode hyphens/dashes
+    name = name.lower().strip()
+    name = ' '.join(name.split())  # collapse repeated whitespace
+    name = name.replace(' and ', ' & ')
+    return name
+
 def init_table(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS artist_gaps (
@@ -31,20 +60,18 @@ def init_table(conn):
 
 def cleanup_acquired(conn):
     """Remove artists from gap list who are now in the library."""
-    # Build set of all known artists from library (exact + real_artist)
     known = set()
     for row in conn.execute("""
         SELECT DISTINCT COALESCE(real_artist, artist) FROM tracks
         WHERE artist IS NOT NULL AND artist != ''
     """).fetchall():
         if row[0]:
-            known.add(row[0].lower().strip())
+            known.add(normalize_artist_name(row[0]))
 
-    # Get all gap artists
     gaps = conn.execute("SELECT artist FROM artist_gaps").fetchall()
     deleted = 0
     for (gap_artist,) in gaps:
-        ga = gap_artist.lower().strip()
+        ga = normalize_artist_name(gap_artist)
         # Exact match OR gap artist is contained in a library artist OR vice versa
         match = any(
             ga == k or ga in k or k in ga
@@ -59,30 +86,37 @@ def cleanup_acquired(conn):
         print(f"Removed {deleted} artists now in library.\n")
 
 def get_gap_artists(conn):
-    # Found real (July 2026): this only checked the raw artist
-    # column -- not COALESCE(real_artist, artist), unlike
-    # cleanup_acquired() just above, which already gets this right.
-    # A VA-resolved track (real artist identified, raw artist column
-    # still literally "Various Artists") would never match here,
-    # showing up as a false gap -- "you don't own this" for an
-    # artist genuinely already in the library. Same class of bug
-    # already found and fixed in mb_enrich_artists.py and
-    # plex_tag_tracks.py's own selection queries earlier this
-    # session.
-    return conn.execute("""
-        SELECT 
-            s.artist,
-            COUNT(*) as scrobbles
-        FROM lastfm_scrobbles s
-        WHERE s.artist NOT IN (
-            SELECT DISTINCT COALESCE(real_artist, artist) FROM tracks
-            WHERE COALESCE(real_artist, artist) IS NOT NULL
-              AND COALESCE(real_artist, artist) != ''
-        )
-        GROUP BY s.artist
+    # Found real (August 2026): this used to be a pure SQL NOT IN
+    # query, checked via SQLite's default (case-sensitive, Unicode-
+    # unaware) string comparison -- a genuinely different, weaker
+    # match than cleanup_acquired()'s own Python-side fuzzy check
+    # just above. That inconsistency was the real root cause behind
+    # several confirmed false gaps. Now shares the exact same
+    # normalize_artist_name() + fuzzy substring logic as
+    # cleanup_acquired(), so both paths can never drift apart again.
+    known = set()
+    for row in conn.execute("""
+        SELECT DISTINCT COALESCE(real_artist, artist) FROM tracks
+        WHERE COALESCE(real_artist, artist) IS NOT NULL
+          AND COALESCE(real_artist, artist) != ''
+    """).fetchall():
+        if row[0]:
+            known.add(normalize_artist_name(row[0]))
+
+    scrobble_counts = conn.execute("""
+        SELECT artist, COUNT(*) as scrobbles
+        FROM lastfm_scrobbles
+        GROUP BY artist
         HAVING scrobbles >= ?
         ORDER BY scrobbles DESC
     """, (MIN_SCROBBLES,)).fetchall()
+
+    gaps = []
+    for artist, scrobbles in scrobble_counts:
+        na = normalize_artist_name(artist)
+        if not any(na == k or na in k or k in na for k in known):
+            gaps.append((artist, scrobbles))
+    return gaps
 
 def get_uncategorized(conn, artists):
     existing = set(row[0] for row in conn.execute("SELECT artist FROM artist_gaps"))
