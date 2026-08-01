@@ -59,14 +59,25 @@ def cleanup_acquired(conn):
         print(f"Removed {deleted} artists now in library.\n")
 
 def get_gap_artists(conn):
+    # Found real (July 2026): this only checked the raw artist
+    # column -- not COALESCE(real_artist, artist), unlike
+    # cleanup_acquired() just above, which already gets this right.
+    # A VA-resolved track (real artist identified, raw artist column
+    # still literally "Various Artists") would never match here,
+    # showing up as a false gap -- "you don't own this" for an
+    # artist genuinely already in the library. Same class of bug
+    # already found and fixed in mb_enrich_artists.py and
+    # plex_tag_tracks.py's own selection queries earlier this
+    # session.
     return conn.execute("""
         SELECT 
             s.artist,
             COUNT(*) as scrobbles
         FROM lastfm_scrobbles s
         WHERE s.artist NOT IN (
-            SELECT DISTINCT artist FROM tracks
-            WHERE artist IS NOT NULL AND artist != ''
+            SELECT DISTINCT COALESCE(real_artist, artist) FROM tracks
+            WHERE COALESCE(real_artist, artist) IS NOT NULL
+              AND COALESCE(real_artist, artist) != ''
         )
         GROUP BY s.artist
         HAVING scrobbles >= ?
