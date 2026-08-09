@@ -493,6 +493,47 @@ BUCKETS = [
         'torch song',
         'traditional blues',
     ]),
+    # Found real (August 2026): no dedicated Country bucket existed
+    # at all -- only 'country' and 'country rock' were recognized
+    # anywhere in the vocabulary, buried inside Folk above, with no
+    # explicit way to search for country music specifically.
+    # Confirmed via real library data: 28 distinct country-related
+    # tags actually present (country rock alone: 122 tracks), most
+    # of them -- classic country, honky-tonk, outlaw country,
+    # americana, bluegrass, alternative country, and more --
+    # completely invisible to any bucket-constrained search before
+    # this. 'countryside' deliberately excluded -- confirmed
+    # unrelated (an ambient/nature-sounds tag, not country music).
+    ("Country / Americana / Bluegrass", [
+        '1960s country',
+        '1970s country',
+        '90s country',
+        'alternative country',
+        'americana',
+        'bluegrass',
+        'classic country',
+        'country',
+        'country ballad',
+        'country blues',
+        'country fusion',
+        'country influence',
+        'country influences',
+        'country jazz',
+        'country pop',
+        'country rap',
+        'country reggae',
+        'country rock',
+        'country soul',
+        'country-inflected',
+        'country-influenced',
+        'country-influenced pop',
+        'country-infused',
+        'country-pop',
+        'honky-tonk',
+        'outlaw country',
+        'pop country',
+        'traditional country',
+    ]),
     ("Electronic / House / Techno / Downtempo", [
         '80s electronic',
         'ambient electronic',
