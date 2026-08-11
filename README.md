@@ -78,6 +78,17 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
     sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
     sudo pm2 save
 
+**Viewing logs**
+
+    pm2 logs musicmind                          # live, everything the app outputs
+    tail -f ~/.pm2/logs/musicmind-out.log        # same thing, direct file
+    tail -f ~/.pm2/logs/musicmind-error.log      # errors only
+
+    tail -f ~/musicmind/fullsync_live.log        # just the current Full Sync run —
+                                                  # survives a dropped connection, so
+                                                  # this keeps updating even if the
+                                                  # admin page loses its connection
+
 5. Open in browser
 
     http://YOUR_NAS_IP:8787
