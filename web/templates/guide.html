@@ -275,6 +275,16 @@
                 <li><code>python3.12 plex_tag_tracks.py</code> — AI genre tagging</li>
                 <li><code>python3.12 synapse_analyze.py</code> — <code>--limit N</code> for a small batch, <code>--count</code> to just report how many tracks still need analysis, <code>--estimate</code> for a time estimate without actually running anything</li>
             </ul>
+
+            <h3>Viewing logs</h3>
+            <p>Useful for watching a script run live, or checking what actually happened after the fact.</p>
+            <ul>
+                <li><code>pm2 logs musicmind</code> — live, everything the app outputs</li>
+                <li><code>tail -f ~/.pm2/logs/musicmind-out.log</code> — same thing, direct file</li>
+                <li><code>tail -f ~/.pm2/logs/musicmind-error.log</code> — errors only</li>
+                <li><code>tail -f ~/musicmind/fullsync_live.log</code> — just the current Full Sync run specifically — this one survives a dropped connection, so it keeps updating even if the admin page itself loses its connection mid-run</li>
+            </ul>
+
             <div class="guide-tip">
                 <strong>Tip:</strong> <code>--dry-run</code> and <code>--test</code> mean different things depending on
                 the script — always check what a script actually prints for a small <code>--limit</code> batch
