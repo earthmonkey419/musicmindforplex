@@ -1,0 +1,22 @@
+# Never bake real credentials or personal data into the image
+config.py
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Licensed model file — deliberately never bundled, downloaded at
+# runtime instead (see docker-entrypoint.sh)
+models/
+
+# Version control and CI
+.git
+.github
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS cruft
+.DS_Store

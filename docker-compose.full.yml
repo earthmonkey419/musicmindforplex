@@ -1,0 +1,50 @@
+# MusicMind for Plex — full variant
+#
+# Deploy as its own Portainer Stack, separate from slim. Same
+# environment-variable pattern — see docker-compose.slim.yml's header
+# for the full list of what each variable does; this file adds one
+# more optional volume for the VI model.
+#
+# Adds essentia-tensorflow (a genuinely large dependency, real
+# TensorFlow) so VI (voice/instrumental detection) becomes capable.
+# The VI model file itself is never baked into the image — it's a
+# CC BY-NC-SA licensed file, downloaded automatically on first boot
+# directly from essentia.upf.edu into the musicmind_full_models
+# volume below, never redistributed as part of this image.
+
+services:
+  musicmind-full:
+    build:
+      context: .
+      args:
+        VARIANT: full
+    image: musicmind:full
+    container_name: musicmind-full
+    ports:
+      - "${MUSICMIND_PORT:-8787}:8787"
+    environment:
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - MUSIC_LIB=${MUSIC_LIB:-Music}
+      - OPENAI_KEY=${OPENAI_KEY}
+      - LASTFM_KEY=${LASTFM_KEY:-}
+      - LASTFM_USER=${LASTFM_USER:-}
+      - PATH_MAP_JSON=${PATH_MAP_JSON:-{}}
+    volumes:
+      - musicmind_full_data:/app/data
+      - musicmind_full_models:/app/models
+      - ${MUSIC_PATH}:${MUSIC_PATH}:ro
+    # Same real reasoning as docker-compose.slim.yml -- Flask's own
+    # dev server logs a real line per request, including the
+    # periodic status poll on the Admin page. Capped rather than
+    # left to accumulate unbounded.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  musicmind_full_data:
+  musicmind_full_models:

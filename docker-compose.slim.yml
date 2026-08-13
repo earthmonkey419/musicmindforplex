@@ -1,0 +1,68 @@
+# MusicMind for Plex — slim variant
+#
+# Deploy as its own Portainer Stack. Everything environment-specific
+# (port, paths, real credentials) is a ${VARIABLE} filled in through
+# Portainer's own "Environment variables" section when you deploy —
+# never typed directly into this file.
+#
+# Required:
+#   PLEX_URL        e.g. http://10.0.0.251:32400
+#   PLEX_TOKEN
+#   OPENAI_KEY
+#   MUSIC_PATH      the real folder on this host where your music
+#                   lives — see the mount note below for the one
+#                   detail that actually matters
+#
+# Optional (sensible defaults if left unset):
+#   MUSICMIND_PORT  host port to expose this on (default 8787 —
+#                   change this if something else on this host
+#                   already uses 8787, e.g. an existing native install)
+#   MUSIC_LIB       your Plex library section name (default "Music")
+#   LASTFM_KEY, LASTFM_USER   leave unset to disable Last.fm features
+#   PATH_MAP_JSON   only needed if Plex reports a DIFFERENT path than
+#                   where this container sees the same files — see
+#                   the mount note below
+
+services:
+  musicmind-slim:
+    build:
+      context: .
+      args:
+        VARIANT: slim
+    image: musicmind:slim
+    container_name: musicmind-slim
+    ports:
+      - "${MUSICMIND_PORT:-8787}:8787"
+    environment:
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - MUSIC_LIB=${MUSIC_LIB:-Music}
+      - OPENAI_KEY=${OPENAI_KEY}
+      - LASTFM_KEY=${LASTFM_KEY:-}
+      - LASTFM_USER=${LASTFM_USER:-}
+      - PATH_MAP_JSON=${PATH_MAP_JSON:-{}}
+    volumes:
+      - musicmind_slim_data:/app/data
+      # This app reads whatever file path Plex ITSELF reports for
+      # each track, not a path it decides on its own. MUSIC_PATH
+      # needs to be the SAME path inside this container that Plex
+      # reports internally for your library -- e.g. if Plex says a
+      # track lives at /volume1/music/Artist/Album/track.mp3, set
+      # MUSIC_PATH=/volume1/music (this is the common case when Plex
+      # and this container run on the same physical machine -- no
+      # translation needed). If the paths genuinely can't match
+      # (Plex on a different host, or Windows-style paths), use
+      # PATH_MAP_JSON above instead of forcing a matching mount.
+      - ${MUSIC_PATH}:${MUSIC_PATH}:ro
+    # Flask's own dev server logs a real line per request, including
+    # the periodic status poll on the Admin page — capped rather than
+    # left to accumulate unbounded (10MB x 3 files = 30MB max).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  musicmind_slim_data:

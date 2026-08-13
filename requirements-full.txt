@@ -1,0 +1,8 @@
+# Only installed for the "full" build variant (see Dockerfile).
+# essentia-tensorflow includes real TensorFlow inference support,
+# needed for TensorflowPredictMusiCNN (VI — voice/instrumental
+# detection). This is a genuinely large dependency; the slim variant
+# deliberately skips it entirely in favor of plain `essentia`, which
+# is all Synapse's core BPM/key/danceability measurement needs.
+essentia-tensorflow
+numpy

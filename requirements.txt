@@ -1,0 +1,13 @@
+# Core dependencies — needed for every variant (slim and full alike).
+# essentia itself is intentionally NOT listed here — see Dockerfile,
+# which installs either plain `essentia` (slim) or the full
+# `essentia-tensorflow` (full, via requirements-full.txt) depending
+# on the build variant.
+#
+# Verified against the real, actual import statements across the
+# whole codebase (grep -rhE "^import |^from " *.py), not assumed.
+flask
+plexapi
+openai
+mutagen
+requests
