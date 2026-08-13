@@ -19,7 +19,7 @@
             <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
             <p style="font-size:0.85rem; color:#8b6914;">📡 If your connection drops mid-run, the sync itself keeps going on the server — it does NOT stop. This page will automatically reconnect and pick the real output back up.</p>
             <div id="other-processes-status" style="font-size:0.85rem; margin-bottom:0.75rem;">Checking for other running processes…</div>
-            <button onclick="runScript('fullsync', this)">Run Full Sync</button>
+            <button id="btn-fullsync" onclick="runScript('fullsync', this)">Run Full Sync</button>
             <div class="status" id="status-fullsync"></div>
             <div class="log-box" id="log-fullsync" style="height:200px;"></div>
         </div>
@@ -345,6 +345,24 @@
 
         checkOtherProcesses();
         setInterval(checkOtherProcesses, 8000);
+
+        // Found real (Aug 2026): reconnecting to an in-progress Full
+        // Sync only ever happened via runScript's own onerror handler
+        // -- meaning it only helped if the tab stayed open through a
+        // dropped connection. Navigating away and coming back later
+        // left no code path that checked "is Full Sync already
+        // running?" and reconnected the log box -- the backend
+        // already supported this via /run/fullsync-tail, only the
+        // frontend was missing the hook. One-shot check on page load
+        // only, not inside the repeating 8s poll above, so it can
+        // never fire a second EventSource on top of an already-open one.
+        (async function reconnectFullsyncIfRunning() {
+            const result = await friendlyFetchJSON('/admin/other-processes-status');
+            if (result.ok && result.data.fullsync_running) {
+                const btn = document.getElementById('btn-fullsync');
+                if (btn) runScript('fullsync', btn, true);
+            }
+        })();
 
         loadErrorCounts();
     </script>

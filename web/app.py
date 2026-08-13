@@ -271,9 +271,72 @@ def create():
 
 import subprocess
 import threading
+import tempfile
+import time
 
 # Track running processes
 running = {}
+
+
+def tail_subprocess(cmd, result, cwd=None, extra_popen_kwargs=None):
+    """
+    Runs `cmd`, writing its combined stdout/stderr to a real temp log
+    file -- never subprocess.PIPE -- then tails that file back to the
+    caller line by line as the subprocess writes to it.
+
+    Fixes a real production deadlock (Aug 2026): SSE-streaming routes
+    previously read proc.stdout directly inside the generator via
+    `for line in proc.stdout`. If the SSE connection dropped (tunnel
+    hiccup, phone locked, tab/browser closed), nothing was left to
+    drain the pipe. Confirmed via py-spy on a real hung process: the
+    generator's read loop was blocked in native readline() between
+    yields, not suspended at a yield -- unreachable even by Werkzeug's
+    own disconnect handling. Once the OS pipe buffer (~64KB) filled,
+    the subprocess itself blocked on write() and hung silently for
+    hours (wchan: pipe_wait), even after doing nearly all its real work.
+
+    Writing to a real file instead of a PIPE removes the failure mode
+    at the source: write() to a file never blocks waiting for a
+    reader the way a pipe does, so the subprocess can never deadlock
+    on output again, regardless of whether anyone is still listening
+    on the SSE side.
+
+    `result` is a dict the caller provides; this generator sets
+    result['returncode'] once the subprocess exits, so callers can
+    check success/failure after iterating (matches every existing
+    call site's proc.wait() + proc.returncode check).
+    """
+    log_fd, log_path = tempfile.mkstemp(prefix='streamlog_', suffix='.log', dir=cwd or BASE_DIR)
+    os.close(log_fd)
+    try:
+        with open(log_path, 'w') as logfile:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=logfile,
+                stderr=subprocess.STDOUT,
+                cwd=cwd or BASE_DIR,
+                text=True,
+                **(extra_popen_kwargs or {}),
+            )
+        with open(log_path, 'r') as f:
+            while True:
+                line = f.readline()
+                if line:
+                    yield line.rstrip()
+                    continue
+                if proc.poll() is not None:
+                    for tail_line in f.read().splitlines():
+                        if tail_line.strip():
+                            yield tail_line.rstrip()
+                    break
+                time.sleep(0.3)
+        proc.wait()
+        result['returncode'] = proc.returncode
+    finally:
+        try:
+            os.remove(log_path)
+        except OSError:
+            pass
 
 @app.route('/admin/error-counts')
 def admin_error_counts():
@@ -901,143 +964,125 @@ def other_processes_status():
     })
 
 
-@app.route('/run/fullsync')
-def run_fullsync():
-    import subprocess
+def _run_fullsync_pipeline():
+    """
+    Runs the actual Full Sync pipeline (Plex scan + all ten pipeline
+    scripts), writing every line to FULLSYNC_LOG_PATH as it goes.
+
+    Found real (Aug 2026): even after tail_subprocess() fixed the
+    per-script pipe deadlock, a Full Sync still silently stopped
+    mid-pipeline the moment the browser tab disconnected -- because
+    the loop walking through all ten scripts lived inside the SAME
+    generator function that was directly streaming to the SSE
+    response. A dropped connection throws GeneratorExit at that
+    generator's current yield point, permanently unwinding the loop --
+    the individual subprocess that happened to be running might
+    finish fine on its own (file-backed now, no longer PIPE-deadlock
+    prone), but nothing was left alive to start the NEXT step.
+    Confirmed live: a real run froze mid-copy_forward_analysis.py
+    with no process left running and no error logged anywhere,
+    exactly matching this failure mode.
+
+    This function has ZERO dependency on any HTTP connection -- it's
+    started once via threading.Thread from the /run/fullsync route
+    and runs to completion (or real failure) regardless of who, if
+    anyone, is watching. /run/fullsync and /run/fullsync-tail are now
+    both pure log-file tailers; neither one drives the pipeline.
+    """
     import time
     from plexapi.server import PlexServer as PS
+
+    log_file = open(FULLSYNC_LOG_PATH, 'w')
+    def log_line(text):
+        log_file.write(text + "\n")
+        log_file.flush()
+
+    try:
+        # Step 1: Trigger Plex scan
+        log_line("🔍 Triggering Plex library scan...")
+        plex = PS(PLEX_URL, PLEX_TOKEN)
+        music = plex.library.section(MUSIC_LIB)
+        music.update()
+
+        # Step 2: Poll until scan complete
+        # NOTE: plex.library is a cached_data_property in plexapi —
+        # re-calling plex.library.section(...) does NOT re-fetch
+        # from the server after the first access, it just returns
+        # the same cached object. That caused this loop to spin
+        # forever on a stale .refreshing=True value even after
+        # Plex had genuinely finished scanning (found July 2026).
+        # music.reload() forces a real re-fetch of just this
+        # object's own state, bypassing the cache correctly.
+        log_line("⏳ Waiting for Plex scan to complete...")
+        max_wait_iterations = 360  # 5s * 360 = 30 minutes safety cap
+        waited = 0
+        while True:
+            time.sleep(5)
+            waited += 1
+            try:
+                music.reload()
+            except Exception:
+                pass  # transient hiccup — try again next iteration
+            if not music.refreshing:
+                break
+            if waited >= max_wait_iterations:
+                log_line("⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).")
+                break
+            log_line("⏳ Still scanning...")
+        log_line("✅ Plex scan complete.")
+
+        # Steps 3-5: Run scripts in sequence
+        scripts = [
+            ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
+            ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
+            ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
+            ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
+            ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
+            ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
+            ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
+            ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
+            ('🏷️ Tagging new tracks...', os.path.join(BASE_DIR, 'plex_tag_tracks.py')),
+            ('🧠 Analyzing audio (Synapse: BPM/key/danceability)...', os.path.join(BASE_DIR, 'synapse_analyze.py')),
+        ]
+        for label, script in scripts:
+            log_line(label)
+            sync_result = {}
+            for line in tail_subprocess(
+                ['python3.12', '-u', script],
+                sync_result,
+                extra_popen_kwargs={'start_new_session': True},
+            ):
+                log_line(line)
+            if sync_result.get('returncode', 1) != 0:
+                log_line(f"❌ Error in {script}")
+                return
+
+        log_line("✅ Full sync complete.")
+
+    except Exception as e:
+        log_line(f"❌ Exception: {e}")
+    finally:
+        running['fullsync'] = False
+        log_file.close()
+
+
+@app.route('/run/fullsync')
+def run_fullsync():
     # Found real (July 2026): a genuine race condition -- the OLD
     # code checked `running.get('fullsync')` here in the route
     # function, but only SET `running['fullsync'] = True` later,
-    # inside generate(). Generators are lazy -- that assignment
-    # didn't actually run until Werkzeug started consuming the
-    # stream, leaving a real window where two rapid clicks (or two
-    # requests handled by different threads) could both pass the
-    # check before either one actually claimed the lock. Confirmed
-    # real: clicking Run Full Sync again during an active run
-    # genuinely started a second overlapping pipeline. Check AND
-    # claim now happen together, synchronously, before any response
-    # is returned at all -- no lazy-evaluation gap left to race.
+    # inside generate(). Check AND claim now happen together,
+    # synchronously, before any response is returned at all.
     if running.get('fullsync'):
         return jsonify({'error': 'Already running'}), 400
     running['fullsync'] = True
-
-    def generate():
-        # Found real (July 2026): a dropped browser/SSH connection
-        # kills the SSE stream, but NOT the actual detached subprocess
-        # underneath it (start_new_session=True already protects
-        # that) -- the sync keeps running server-side with no way to
-        # see its output again. Mirror every line to a plain log file
-        # alongside the existing live stream, so /run/fullsync-tail
-        # (below) can pick it back up after a reconnect. Overwritten
-        # fresh at the start of each run.
-        log_file = open(FULLSYNC_LOG_PATH, 'w')
-        def log_line(text):
-            log_file.write(text + "\n")
-            log_file.flush()
-        def emit(text):
-            log_line(text)
-            return f"data: {text}\n\n"
-        try:
-            # Step 1: Trigger Plex scan
-            yield emit("🔍 Triggering Plex library scan...")
-            plex = PS(PLEX_URL, PLEX_TOKEN)
-            music = plex.library.section(MUSIC_LIB)
-            music.update()
-
-            # Step 2: Poll until scan complete
-            # NOTE: plex.library is a cached_data_property in plexapi —
-            # re-calling plex.library.section(...) does NOT re-fetch
-            # from the server after the first access, it just returns
-            # the same cached object. That caused this loop to spin
-            # forever on a stale .refreshing=True value even after
-            # Plex had genuinely finished scanning (found July 2026).
-            # music.reload() forces a real re-fetch of just this
-            # object's own state, bypassing the cache correctly.
-            yield emit("⏳ Waiting for Plex scan to complete...")
-            max_wait_iterations = 360  # 5s * 360 = 30 minutes safety cap
-            waited = 0
-            while True:
-                time.sleep(5)
-                waited += 1
-                try:
-                    music.reload()
-                except Exception:
-                    pass  # transient hiccup — try again next iteration
-                if not music.refreshing:
-                    break
-                if waited >= max_wait_iterations:
-                    yield emit("⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).")
-                    break
-                yield emit("⏳ Still scanning...")
-            yield emit("✅ Plex scan complete.")
-
-            # Steps 3-5: Run scripts in sequence
-            scripts = [
-                ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
-                ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
-                ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
-                # Added to the automatic pipeline (July 2026) -- was
-                # previously manual-only, meaning newly-added Various
-                # Artists tracks never got resolved automatically at
-                # all, and even a manual resolve wouldn't benefit
-                # enrichment/tagging until whatever the NEXT full sync
-                # happened to be. Needs real fingerprints to already
-                # exist (its own AcoustID lookup mechanism), so must
-                # run after fingerprinting. Positioned before both
-                # enrichment steps and tagging so a newly-resolved
-                # artist's real name reaches all three in the SAME
-                # pass, not a future one.
-                ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
-                # Added to the automatic pipeline (July 2026) -- found
-                # real gap: track_fingerprints.recording_mbid existed
-                # in the schema since fingerprint_tracks.py was built,
-                # but was NEVER populated for tracks with an already-
-                # known artist -- only va_resolve.py's own artist-
-                # resolution flow ever wrote a recording_mbid, and
-                # only into va_results, never into the more broadly-
-                # useful track_fingerprints table. Without this in the
-                # automatic pipeline, every NEW track on every install
-                # (fresh or existing) would hit the exact same gap
-                # forever. Positioned right after va_resolve.py so its
-                # free Phase-1 backfill (copying already-known
-                # recording_mbids from va_results) always has the
-                # freshest data from the SAME pass, before spending any
-                # real AcoustID lookups on Phase 2.
-                ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
-                ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
-                ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
-                ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
-                ('🏷️ Tagging new tracks...', os.path.join(BASE_DIR, 'plex_tag_tracks.py')),
-                ('🧠 Analyzing audio (Synapse: BPM/key/danceability)...', os.path.join(BASE_DIR, 'synapse_analyze.py')),
-            ]
-            for label, script in scripts:
-                yield emit(label)
-                proc = subprocess.Popen(
-                    ['python3.12', '-u', script],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    start_new_session=True,  # detach from this Flask worker — a step (e.g. a long Synapse run) now survives a pm2 restart of the parent app, matching the same protection the standalone /run/synapse-full button already had
-                )
-                for line in proc.stdout:
-                    yield emit(line.rstrip())
-                proc.wait()
-                if proc.returncode != 0:
-                    yield emit(f"❌ Error in {script}")
-                    return
-
-            yield emit("✅ Full sync complete.")
-
-        except Exception as e:
-            yield emit(f"❌ Exception: {e}")
-        finally:
-            running['fullsync'] = False
-            log_file.close()
-        yield "data: __DONE__\n\n"
-
-    return app.response_class(generate(), mimetype='text/event-stream')
+    # Aug 2026: the actual pipeline now runs in a background thread
+    # (see _run_fullsync_pipeline's own docstring for why) -- this
+    # route just starts it, then reuses run_fullsync_tail()'s own
+    # already-proven log-tailing logic to stream it back, instead of
+    # duplicating that logic here.
+    threading.Thread(target=_run_fullsync_pipeline, daemon=True).start()
+    return run_fullsync_tail()
 
 
 @app.route('/run/fullsync-tail')
