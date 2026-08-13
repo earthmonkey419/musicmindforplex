@@ -43,6 +43,15 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 
 ---
 
+## Docker / Portainer
+
+Prefer not to install Python dependencies directly on your NAS? See
+**[DOCKER.md](DOCKER.md)** for a Docker/Portainer install — two
+variants (slim / full), no manual `pip install` step. The Quick
+Start below is for a direct, native install instead.
+
+---
+
 ## Quick Start
 
 1. Install dependencies

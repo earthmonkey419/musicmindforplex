@@ -44,6 +44,22 @@ keeping the two fully isolated by default is safer for real testing.
      optional, sensible defaults if left blank
    - If your Portainer version doesn't auto-detect the variables,
      add them manually as the same names shown above
+
+   **⚠️ All four required variables — `PLEX_URL`, `PLEX_TOKEN`,
+   `OPENAI_KEY`, `MUSIC_PATH` — must have a real value before you
+   deploy.** Unlike the optional ones, there's no fallback default
+   for these, and `MUSIC_PATH` in particular is used directly inside
+   the file-sharing (volume) setup — if it's left blank, Docker
+   itself will reject the whole deploy with an error like:
+
+   ```
+   invalid spec: ::ro: empty section between colons
+   ```
+
+   That error is confusing on its own, but it means exactly one
+   thing: `MUSIC_PATH` was left empty. Go back to the Environment
+   variables section, fill it in with the real path (e.g.
+   `/volume1/music`), and redeploy.
 5. **Deploy the stack.** Watch the container's logs from Portainer's
    own Containers view for the first-run output — on full, you
    should see the VI model download happen automatically.
