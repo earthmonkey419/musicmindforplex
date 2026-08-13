@@ -63,7 +63,34 @@ keeping the two fully isolated by default is safer for real testing.
 5. **Deploy the stack.** Watch the container's logs from Portainer's
    own Containers view for the first-run output — on full, you
    should see the VI model download happen automatically.
-6. Visit `http://YOUR_HOST:PORT` and `.../admin` to run your first
+6. **Run initial setup before visiting the app.** A freshly deployed
+   container has an empty database — no tables exist yet. Visiting
+   the app before this step will show a **500 error**; the container
+   logs (Portainer → Containers → `musicmind-slim` or `-full` →
+   Logs) will show `sqlite3.OperationalError: no such table: tracks`.
+   That error means exactly this — run initial setup, not a sign
+   anything is broken. From Portainer's Console (or `docker exec -it
+   musicmind-slim sh` from the command line), run once, in order:
+
+   ```bash
+   python3 musicmind_ingest.py
+   python3 plex_tag_tracks.py
+   python3 mb_enrich_artists.py
+   python3 enrich_artists.py
+   python3 enrich_compilations.py
+   python3 lastfm_sync.py
+   python3 lastfm_gaps.py
+   python3 listening_context.py
+   ```
+
+   The 500 error clears as soon as `musicmind_ingest.py` finishes
+   (it's the one that creates the `tracks` table) — you don't need
+   to wait for the rest to reload the page, though the rest fill in
+   tagging, enrichment, and Last.fm data and are worth letting run
+   to completion before real use. Same commands, same order, as the
+   native README's Quick Start — just run inside the container
+   instead of directly on the host.
+7. Visit `http://YOUR_HOST:PORT` and `.../admin` to run your first
    Full Sync.
 
 ## Quick start — command line
