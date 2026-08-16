@@ -1,6 +1,8 @@
 # 🎵 MusicMind for Plex
 *formerly Plex Music Brain*
 
+![MusicMind for Plex — Dig into your stacks.](assets/og-image.jpg)
+
 > The AI-enhanced music companion Plex should have built.
 
 [![Support MusicMind](https://img.shields.io/badge/%E2%9D%A4%EF%B8%8F_Support-MusicMind-c56fa4?style=for-the-badge)](https://www.paypal.com/ncp/payment/THHJJDVQRH366)
@@ -145,7 +147,7 @@ musicmind/
 
 ## Full Documentation
 
-See PLEX-MUSIC-BRAIN.md for complete documentation including all script flags, database schema, Task Scheduler setup, known issues, and PM2 reference. See CHANGELOG.md for release history.
+See USER-MANUAL.md for complete documentation including all script flags, database schema, Task Scheduler setup, known issues, and PM2 reference. See CHANGELOG.md for release history.
 
 ---
 
