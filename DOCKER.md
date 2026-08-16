@@ -242,10 +242,3 @@ actually needed, so the Dockerfile can be updated for everyone.
   (matching its existing production behavior) rather than a
   separate production WSGI server — consistent with how it already
   runs today, not a new architectural decision introduced here.
-- This has been tested thoroughly at the logic level (the entrypoint
-  script's real behavior, every real Python dependency verified
-  against actual imports, YAML syntax validated) but **not yet
-  through an actual `docker build`**, since Docker isn't available
-  in the environment this was built in. The first real build should
-  be treated as the real test — if anything surfaces, it's genuinely
-  useful information, not a sign anything was rushed.
