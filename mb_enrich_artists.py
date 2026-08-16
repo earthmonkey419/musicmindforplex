@@ -254,7 +254,8 @@ def main():
         idx = sys.argv.index("--limit")
         if idx + 1 < len(sys.argv):
             limit = int(sys.argv[idx + 1])
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = sqlite3.connect(DB_PATH, timeout=60)
+    conn.execute("PRAGMA busy_timeout=60000")
     enrich(conn, test_mode=test_mode, limit=limit)
     conn.close()
 

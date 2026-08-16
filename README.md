@@ -60,51 +60,93 @@ Start below is for a direct, native install instead.
 
 1. Install dependencies
 
+    ```bash
     sudo python3.12 -m pip install plexapi openai flask mutagen essentia --break-system-packages
+    ```
 
 2. Configure
 
+    ```bash
     cp config.example.py config.py
     # Edit config.py with your Plex token, OpenAI key, Last.fm key
+    ```
 
-3. Initial setup (run once, in order)
+3. Initial setup (run once, in order — each is its own command)
 
+    ```bash
     python3.12 musicmind_ingest.py
+    ```
+    ```bash
     python3.12 plex_tag_tracks.py
+    ```
+    ```bash
     python3.12 mb_enrich_artists.py
+    ```
+    ```bash
     python3.12 enrich_artists.py
+    ```
+    ```bash
     sudo python3.12 enrich_compilations.py
+    ```
+    ```bash
     python3.12 lastfm_sync.py
+    ```
+    ```bash
     python3.12 lastfm_gaps.py
+    ```
+    ```bash
     python3.12 listening_context.py
-    # Synapse audio analysis (BPM / key / danceability) — start with an estimate
+    ```
+
+    Synapse audio analysis (BPM / key / danceability) — start with an estimate:
+
+    ```bash
     python3.12 synapse_analyze.py --estimate
-    python3.12 synapse_analyze.py            # or run from the admin page
-    # Optional — writes AI genres back into Plex (Plexamp genre browser)
-    # Skip these if you don't want to modify your Plex metadata
-    sudo python3.12 write_genres_to_plex.py --test   # preview only, nothing written
+    ```
+    ```bash
+    python3.12 synapse_analyze.py
+    ```
+    (or run Synapse from the admin page instead of the command line)
+
+    Optional — writes AI genres back into Plex (Plexamp genre browser).
+    Skip this block entirely if you don't want to modify your Plex metadata:
+
+    ```bash
+    sudo python3.12 write_genres_to_plex.py --test  # preview only, nothing written
+    ```
+    ```bash
     sudo python3.12 write_genres_to_plex.py --run    # actually writes to Plex
-    # To undo: sudo python3.12 write_genres_to_plex.py --revert
+    ```
+    ```bash
+    sudo python3.12 write_genres_to_plex.py --revert  # to undo
+    ```
 
 4. Start the web app
 
+    ```bash
     sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
     sudo pm2 save
+    ```
 
-**Viewing logs**
+    **Viewing logs**
 
+    ```bash
     pm2 logs musicmind                          # live, everything the app outputs
     tail -f ~/.pm2/logs/musicmind-out.log        # same thing, direct file
     tail -f ~/.pm2/logs/musicmind-error.log      # errors only
-
+    ```
+    ```bash
     tail -f ~/musicmind/fullsync_live.log        # just the current Full Sync run —
                                                   # survives a dropped connection, so
                                                   # this keeps updating even if the
                                                   # admin page loses its connection
+    ```
 
 5. Open in browser
 
+    ```
     http://YOUR_NAS_IP:8787
+    ```
 
 ---
 

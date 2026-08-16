@@ -166,8 +166,9 @@ def main():
     print("\n✅ Migration complete.")
     print(f"   Database:  {new_db_path}")
     print(f"   config.py: {CONFIG_PATH} (backup at {config_backup})")
-    print("\nRestart the app (pm2 restart plex-music-brain, or your "
-          "equivalent) to pick up the change.")
+    print("\nRestart the app to pick up the change -- e.g. `pm2 restart "
+          "<your process name>` (run `pm2 list` if you're not sure what "
+          "yours is called), or redeploy your Docker stack.")
 
 
 if __name__ == "__main__":
