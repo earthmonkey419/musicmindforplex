@@ -232,13 +232,11 @@ actually needed, so the Dockerfile can be updated for everyone.
 
 ## A few honest things worth knowing
 
-- This container runs as `root`, matching how this app already runs
-  in its existing real-world deployment (a Synology NAS via pm2) —
-  a deliberate choice for this first Docker release, not an
-  oversight. A more hardened non-root setup is a reasonable future
-  improvement once this base path is proven working across real
-  installs.
-- The app runs its own built-in Flask development server directly
-  (matching its existing production behavior) rather than a
-  separate production WSGI server — consistent with how it already
-  runs today, not a new architectural decision introduced here.
+- This container runs as `root`, so files it creates on disk (the
+  database, the downloaded VI model) will be owned by root. Worth
+  knowing if you ever inspect or back up those files directly on
+  the host filesystem.
+- The app serves itself via Flask's built-in development server,
+  not a hardened production WSGI server. Fine for use on your own
+  network; don't port-forward this container straight to the
+  public internet without putting a reverse proxy in front of it.
