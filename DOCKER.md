@@ -31,19 +31,58 @@ keeping the two fully isolated by default is safer for real testing.
    design, not one combined file, so you can run either independently
    and switch later without conflict).
 4. Portainer should detect the `${VARIABLE}` placeholders and show an
-   **Environment variables** section — fill in the real values there,
-   never in the pasted YAML itself:
+   **Environment variables** section below the pasted YAML — fill in
+   the real values there, never in the pasted YAML itself.
+
+   **This section expects plain `KEY=VALUE` lines — one variable per
+   line, no dashes, no `$`, no quotes.** It's easy to accidentally
+   paste the YAML's own `environment:` block instead (the part
+   inside the compose file that looks like `- PLEX_URL=${PLEX_URL}`)
+   — don't do that; it'll fail with an error like `key cannot
+   contain a space`, since Portainer is reading `- PLEX_URL` as one
+   malformed key. Correct format looks like this:
+
+   ```
+   PLEX_URL=http://10.0.0.251:32400
+   PLEX_TOKEN=your-real-plex-token
+   OPENAI_KEY=sk-proj-your-real-key
+   MUSIC_PATH=/volume1/your/real/music/folder
+   MUSIC_LIB=Music
+   MUSICMIND_PORT=7787
+   LASTFM_KEY=
+   LASTFM_USER=
+   PATH_MAP_JSON={}
+   ```
+
    - `PLEX_URL`, `PLEX_TOKEN`, `OPENAI_KEY` — required
    - `MUSIC_PATH` — required; the real folder on this host where your
      music lives (see the mount note inside the compose file for the
      one detail that actually matters — it needs to match Plex's own
-     reported path)
+     reported path). **If Plex itself also runs in its own Docker
+     container** (not natively on this host), the path Plex reports
+     for a track (via Get Info → View XML, look for the `file="..."`
+     attribute) is very likely *not* a real host path — it's whatever
+     internal mount name Plex's own container uses (commonly
+     `/music`). In that case, run `docker inspect <your-plex-
+     container-name>` and look for the `Mounts` section — the real
+     host path is the `Source` value paired with a `Destination` of
+     whatever Plex reported (e.g. `/music`). Use that real `Source`
+     path as `MUSIC_PATH`, and see `PATH_MAP_JSON` below to bridge
+     the difference.
    - `MUSICMIND_PORT` — only if something else on this host already
      uses 8787 (e.g. an existing native install)
-   - `MUSIC_LIB`, `LASTFM_KEY`, `LASTFM_USER`, `PATH_MAP_JSON` —
-     optional, sensible defaults if left blank
+   - `MUSIC_LIB` — the exact Plex library **section** name (visible
+     under Settings → Manage → Libraries in Plex's own web app, not
+     any nickname or server name shown elsewhere in Plex's UI).
+     Defaults to `Music` if left blank, which covers most setups.
+   - `LASTFM_KEY`, `LASTFM_USER` — optional, leave blank to disable
+     Last.fm features
+   - `PATH_MAP_JSON` — optional, only needed if Plex's reported path
+     doesn't match a real host path (see the Plex-in-Docker note
+     above). Example: `{"/music": "/volume1/your/real/music/folder"}`
    - If your Portainer version doesn't auto-detect the variables,
-     add them manually as the same names shown above
+     add them manually as the same names shown above, same
+     `KEY=VALUE` format
 
    **⚠️ All four required variables — `PLEX_URL`, `PLEX_TOKEN`,
    `OPENAI_KEY`, `MUSIC_PATH` — must have a real value before you
