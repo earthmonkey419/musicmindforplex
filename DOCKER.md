@@ -82,7 +82,7 @@ every file the build needs is actually present.
      `/music`). In that case, run `docker inspect <your-plex-
      container-name>` and look for the `Mounts` section — the real
      host path is the `Source` value paired with a `Destination` of
-     whatever Plex reported (e.g. `/music`). Use that real `Source
+     whatever Plex reported (e.g. `/music`). Use that real `Source`
      path as `MUSIC_PATH`, and see `PATH_MAP_JSON` below to bridge
      the difference.
    - `MUSICMIND_PORT` — only if something else on this host already
