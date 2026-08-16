@@ -2,6 +2,29 @@
 
 All notable changes to MusicMind for Plex are documented here.
 
+## [3.0.0] — 2026-08-16
+
+### ⚠️ Breaking change — database filename
+
+The default database filename changed from `plex_music_brain.db` to
+`musicmind.db`, matching the app's rebrand. **Existing v2 installs
+must run the migration script before starting v3** — see
+[Upgrading from v2](README.md#upgrading-from-v2) in the README.
+
+Fresh installs are unaffected; this only matters for existing
+installs upgrading in place.
+
+### Added
+- **Docker support** — two variants (slim / full), deployable via
+  Portainer or `docker compose`. See [DOCKER.md](DOCKER.md).
+- `migrate_v2_to_v3.py` — one-time migration script for existing v2
+  installs (renames the database file, updates `config.py`, backs
+  up before touching anything, safe to run more than once).
+- A startup guard now refuses to silently create a fresh, empty
+  database if an unmigrated v2 database is found sitting next to
+  where the new one should be — points you at the migration script
+  instead of letting your real library data look like it vanished.
+
 ## [2.0.0] — 2026-07-07
 
 ### Added

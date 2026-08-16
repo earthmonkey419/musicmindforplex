@@ -3,6 +3,8 @@
 
 ![MusicMind for Plex — Dig into your stacks.](assets/og-image.jpg)
 
+> **⚠️ Upgrading from v2? You must run a migration script before starting v3, or the app will refuse to start against your existing database rather than risk creating an empty one by mistake. See [Upgrading from v2](#upgrading-from-v2) below.**
+
 > The AI-enhanced music companion Plex should have built.
 
 [![Support MusicMind](https://img.shields.io/badge/%E2%9D%A4%EF%B8%8F_Support-MusicMind-c56fa4?style=for-the-badge)](https://www.paypal.com/ncp/payment/THHJJDVQRH366)
@@ -103,6 +105,33 @@ Start below is for a direct, native install instead.
 5. Open in browser
 
     http://YOUR_NAS_IP:8787
+
+---
+
+## Upgrading from v2
+
+**Run this once, before starting v3, if you have an existing v2
+install.** v3 renamed the default database filename
+(`plex_music_brain.db` → `musicmind.db`) — your existing `config.py`
+and database file still use the old name until you migrate them.
+
+```bash
+python3.12 migrate_v2_to_v3.py
+```
+
+This renames your real database file, updates `DB_PATH` in
+`config.py`, and backs up `config.py` first. Safe to run more than
+once — if it detects you're already migrated, it exits immediately
+with no changes.
+
+**If you skip this:** the app won't silently create a fresh, empty
+database in place of your real one. It'll refuse to start and print
+a message pointing you back to this script — your existing library
+data (tags, listening history, enrichment) is never at risk, it just
+won't be usable until the migration runs.
+
+Fresh installs (native or Docker) never hit this — it's specifically
+for existing installs upgrading in place.
 
 ---
 
