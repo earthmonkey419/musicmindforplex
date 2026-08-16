@@ -41,7 +41,7 @@ every file the build needs is actually present.
    Fill in:
    - **Repository URL:**
      `https://github.com/earthmonkey419/musicmindforplex.git`
-   - **Repository reference:** `refs/heads/v3-dev`
+   - **Repository reference:** `refs/heads/main`
    - **Compose path:** `docker-compose.slim.yml` **or**
      `docker-compose.full.yml` (not both — they're separate stacks
      by design, not one combined file, so you can run either
