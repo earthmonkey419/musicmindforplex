@@ -24,12 +24,28 @@ keeping the two fully isolated by default is safer for real testing.
 
 ## Quick start — Portainer
 
+**Use the Repository method, not Web editor.** This compose file
+builds its own image from the Dockerfile in this repo (`build:
+context: .`) — that build needs the actual `Dockerfile`,
+`requirements.txt`, and `docker-entrypoint.sh` files on disk, not
+just the compose YAML's text. Pasting the compose file into
+Portainer's Web editor gives Portainer only that text, with none of
+the files the build actually needs — it'll fail with an error like
+`failed to read dockerfile: ... no such file or directory`. The
+Repository method has Portainer clone the whole repo itself, so
+every file the build needs is actually present.
+
 1. In Portainer: **Stacks** (left sidebar) → **Add stack**.
 2. Name it (e.g. `musicmind-slim` or `musicmind-full`).
-3. Paste the contents of `docker-compose.slim.yml` **or**
-   `docker-compose.full.yml` (not both — they're separate stacks by
-   design, not one combined file, so you can run either independently
-   and switch later without conflict).
+3. Under **Build method**, choose **Repository** (not Web editor).
+   Fill in:
+   - **Repository URL:**
+     `https://github.com/earthmonkey419/musicmindforplex.git`
+   - **Repository reference:** `refs/heads/v3-dev`
+   - **Compose path:** `docker-compose.slim.yml` **or**
+     `docker-compose.full.yml` (not both — they're separate stacks
+     by design, not one combined file, so you can run either
+     independently and switch later without conflict)
 4. Portainer should detect the `${VARIABLE}` placeholders and show an
    **Environment variables** section below the pasted YAML — fill in
    the real values there, never in the pasted YAML itself.
@@ -66,7 +82,7 @@ keeping the two fully isolated by default is safer for real testing.
      `/music`). In that case, run `docker inspect <your-plex-
      container-name>` and look for the `Mounts` section — the real
      host path is the `Source` value paired with a `Destination` of
-     whatever Plex reported (e.g. `/music`). Use that real `Source`
+     whatever Plex reported (e.g. `/music`). Use that real `Source
      path as `MUSIC_PATH`, and see `PATH_MAP_JSON` below to bridge
      the difference.
    - `MUSICMIND_PORT` — only if something else on this host already
