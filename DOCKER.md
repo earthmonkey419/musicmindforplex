@@ -46,9 +46,11 @@ every file the build needs is actually present.
      `docker-compose.full.yml` (not both — they're separate stacks
      by design, not one combined file, so you can run either
      independently and switch later without conflict)
-4. Portainer should detect the `${VARIABLE}` placeholders and show an
-   **Environment variables** section below the pasted YAML — fill in
-   the real values there, never in the pasted YAML itself.
+4. With the Repository method, the **Environment variables** section
+   is hidden by default — click **Advanced Mode** (near the bottom
+   of the form) to reveal it. Portainer should then detect the
+   `${VARIABLE}` placeholders and show the section — fill in the
+   real values there, never in the pasted YAML itself.
 
    **This section expects plain `KEY=VALUE` lines — one variable per
    line, no dashes, no `$`, no quotes.** It's easy to accidentally
