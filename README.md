@@ -187,7 +187,7 @@ for existing installs upgrading in place.
 
 ## Cost
 
-OpenAI API costs vary depending on your library size and usage. Initial tagging of a large library typically costs a few dollars; ongoing costs for new tracks are minimal. Synapse audio analysis, MusicBrainz enrichment, and Last.fm are completely free and run locally. See [OpenAI pricing](https://openai.com/pricing) for current rates.
+OpenAI API costs are low. In real day-to-day use — including frequent testing and re-tagging — ongoing costs run around $0.50/month. Initial tagging of a full library is a one-time cost that scales with library size, since every track gets tagged once; check your OpenAI usage dashboard after your first tagging run for your own real number. Synapse audio analysis, MusicBrainz enrichment, and Last.fm are completely free and run locally. See [OpenAI pricing](https://openai.com/pricing) for current rates.
 
 ---
 
@@ -224,9 +224,7 @@ See USER-MANUAL.md for complete documentation including all script flags, databa
 
 ## Roadmap
 
-- Voice/instrumental detection measured from the actual audio (replacing text-based guessing — in progress)
-- Acoustic fingerprinting: resolve "Various Artists" tracks to their real performers, plus rigorous duplicate detection
-- Docker installation
+- Duplicate detection — a report grouping tracks by acoustic fingerprint (fingerprinting itself and "Various Artists" artist resolution are already shipped; this specific report is the remaining piece)
 - Ollama support for local AI tagging (no OpenAI cost)
 - Rediscovery playlist — tracks you loved but have not played in 2+ years
 - Mobile-optimized UI
