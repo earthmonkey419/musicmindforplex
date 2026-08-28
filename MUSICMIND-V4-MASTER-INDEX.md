@@ -74,6 +74,32 @@ finalizing, strict source-order preservation. **Depends on the
 artist-aliases feature** (#2 above) — matching quality benefits
 directly from alias resolution.
 
+### 5. Artist-name normalization for AcoustID vote counting
+*See `MUSICMIND-V4-SCOPE-VA-VOTE-NORMALIZATION.md`*
+
+**Status:** Scoped 2026-08-27. Promoted from the v3 punch list's
+"leave as-is for now (July 25)" entry — real evidence now exists,
+which was the explicit condition for revisiting it. A read-only
+diagnostic against real production `va_results` (8,766 resolved
+tracks) found 923 (10.5%) with a close vote between top two
+candidates; scanning them shows a real, repeated pattern (case,
+"and"/"&", "The" prefix, Unicode punctuation, "Orchestra"-suffix
+phrasing), not noise — including Percy Faith's 22 real votes
+fragmented five ways. `chosen_artist` writes directly to
+`tracks.real_artist`, which tagging, enrichment, and MBID backfill
+all read from downstream, so a bad split doesn't stay contained to
+one field.
+
+Proposed fix reuses the already-proven `normalize_for_matching()`
+(handles case, Unicode punctuation, "and"↔"&") for vote-counting
+keys only — display name stays the original string. Explicitly does
+NOT attempt "The"-prefix stripping or "Orchestra"-suffix collapsing
+in this first pass (both real, but riskier, separate follow-ups).
+Open question, not yet decided: fix going forward only, vs. a
+targeted re-tabulation pass over the 923 already-identified
+close-vote tracks (cheap — re-tabulates existing `votes_json`, no
+re-fingerprinting needed).
+
 ---
 
 ## 🟡 Described, not formally scoped
@@ -84,27 +110,27 @@ the four items above do. Flagging that distinction explicitly rather
 than treating them as equally ready — worth a proper scope doc each
 before starting, same discipline as the rest of v4.
 
-### 5. Date-range playlist generator
+### 6. Date-range playlist generator
 Date range as a composable filter dimension, combinable with
 existing tag/mood/bucket filtering (optional, not required). Gating
 question: confirming a reliable "date added" field exists
 consistently across the full library. No dependency on the alias or
 thematic-relevance work — could be picked up independently.
 
-### 6. Ollama integration (local LLM inference)
+### 7. Ollama integration (local LLM inference)
 Goal: reduce or eliminate OpenAI dependency for tagging. Docker/
 Portainer install path preferred over a standard script, since DSM
 lacks systemd. A hardware upgrade (mini PC with a newer CPU) has been
 informally discussed but not decided. Only appears as a single line
 in the general roadmap doc currently — no scope doc yet.
 
-### 7. `fullsync.lock` file-based lock
+### 8. `fullsync.lock` file-based lock
 Prevents `pm2 restart` from killing a Full Sync run mid-execution.
 Explicitly deferred until the SSE/subprocess threading fix (already
 shipped — `tail_subprocess()`, commit `8dee1f4`) proves stable over
 more real-world runs first.
 
-### 8. Streamline analysis speed
+### 9. Streamline analysis speed
 *Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 2, and the v3 punch
 list's "v4 basket."* Real target: the one-time initial backlog clear,
 not ongoing incremental syncs. Levers, roughly by likely impact:
@@ -116,7 +142,7 @@ Synapse and VI (already proven to hurt accuracy via a real
 ground-truth BPM test). Hard external ceiling: AcoustID's 3 req/s
 rate limit.
 
-### 9. Additional self-hosted audio tools
+### 10. Additional self-hosted audio tools
 *Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 3.* Essentia's own
 pre-trained mood/genre classifiers (same library already integrated
 for BPM/key/danceability and voice/instrumental detection — no new
@@ -128,31 +154,13 @@ be *asked*, not just how well it answers what it's asked today;
 working Mureka lyrics-extraction code already exists from a related
 project, Musixmatch is another path if licensing works out.
 
-### 10. A real "calm/ambient" signal distinct from raw BPM
+### 11. A real "calm/ambient" signal distinct from raw BPM
 *Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 5.* Found investigating
 `bpm_reliable`: reverb-heavy, atmospheric material can measure as
 genuinely slow-tempo while still feeling tense or driving rather than
 restful. Low BPM is a real signal but an incomplete proxy for
 "relaxing." Nothing built, no scope decided yet — a confirmed gap
 worth considering.
-
-### 11. Artist-name normalization for AcoustID vote counting
-*From the v3 punch list (July 25), carried forward as unfinished
-rather than closed.* `va_resolve.py` resolves Various Artists tracks
-via AcoustID fingerprinting by plurality vote across candidate
-matches, counted by exact artist-name string. If the same real artist
-appears under slightly different spellings across matches — "The 4
-Seasons" vs. "The Four Seasons," numerals vs. spelled-out, "&" vs.
-"and," multi-artist ordering — votes could theoretically split and
-weaken confidence. Deliberately left as-is in v3: stayed purely
-theoretical, the plurality logic worked correctly on every real run,
-including the full 4,254/5,033 production run. Explicit standing
-plan from that decision: revisit only if a real track actually
-resolves incorrectly because of a split vote, and fix that specific
-pattern with real evidence then — not build speculative fuzzy-
-matching now. Re-check whether that's still true before scoping this
-for real; if no real failure has surfaced since July, the original
-"leave as-is" reasoning still holds.
 
 ### 12. Second-opinion re-check for already-flagged tracks
 *From the v3 punch list, noted as "genuinely good future direction,
@@ -213,10 +221,12 @@ scoped and what depends on what:
 4. **Thematic relevance** (#3) — independent of the above, can slot
    in anywhere; the most complex of the remaining scoped items (LLM
    candidate-pool pass), worth its own dedicated stretch.
-5. Everything in the 🟡 section (#5–#12) — pick up opportunistically,
+5. **VA vote-count normalization** (#5) — small, self-contained,
+   confirmed against real data (923/8,766 close-vote tracks). Could
+   reasonably jump the queue given how cheap it is relative to its
+   confirmed real impact — worth considering ahead of #2–#4 rather
+   than strictly after them.
+6. Everything in the 🟡 section (#6–#12) — pick up opportunistically,
    but each deserves its own scope doc (matching the discipline
-   already applied to #1–#4) before implementation starts, not a
-   shortcut straight to code. #11 in particular is worth a quick
-   "has this actually failed yet?" check before writing a scope doc
-   at all — the original July decision to leave it alone may still
-   be correct.
+   already applied to #1–#5) before implementation starts, not a
+   shortcut straight to code.
