@@ -75,7 +75,7 @@ artist still needs a full response regardless.
 
 Fields:
 - gender: "female", "male", "mixed" (band with multiple genders), "unknown"
-- country: 2-letter ISO country code (e.g. "US", "UK", "BR", "FR") or "unknown"
+- country: full country name matching MusicBrainz's own convention (e.g. "United States", "United Kingdom", "Brazil", "France") or "unknown"
 - era: primary decade of activity — "50s", "60s", "70s", "80s", "90s", "00s", "10s", "20s", or "unknown"
 - group_type: "solo", "duo", "band", "orchestra", "dj", "unknown"
 - active_since: year as integer, or null if unknown
@@ -227,19 +227,30 @@ def main():
     print(f"\nDone. Enriched {done} artists.")
 
     # Quick summary
+    from country_aliases import get_country_aliases
     print("\n=== Summary ===")
     for label, field, val in [
         ("Female artists",  "gender",     "female"),
         ("Male artists",    "gender",     "male"),
         ("Mixed bands",     "gender",     "mixed"),
-        ("US artists",      "country",    "US"),
-        ("UK artists",      "country",    "UK"),
+        ("US artists",      "country",    "United States"),
+        ("UK artists",      "country",    "United Kingdom"),
         ("Solo artists",    "group_type", "solo"),
         ("Bands",           "group_type", "band"),
     ]:
-        count = conn.execute(
-            f"SELECT COUNT(*) FROM artist_meta WHERE {field} = ?", (val,)
-        ).fetchone()[0]
+        if field == "country":
+            # Count every known raw variant (e.g. "United States" and
+            # legacy "US" rows both), not just the canonical spelling.
+            aliases = get_country_aliases(val)
+            placeholders = ", ".join("?" for _ in aliases)
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} IN ({placeholders})",
+                aliases
+            ).fetchone()[0]
+        else:
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} = ?", (val,)
+            ).fetchone()[0]
         print(f"  {label:20s}  {count}")
 
     conn.close()

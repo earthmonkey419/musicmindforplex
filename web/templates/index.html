@@ -117,16 +117,6 @@
             <label>Country
                 <select id="country">
                     <option value="">Any</option>
-                    <option value="US">US</option>
-                    <option value="UK">UK</option>
-                    <option value="BR">Brazil</option>
-                    <option value="FR">France</option>
-                    <option value="JP">Japan</option>
-                    <option value="AU">Australia</option>
-                    <option value="IE">Ireland</option>
-                    <option value="CA">Canada</option>
-                    <option value="SE">Sweden</option>
-                    <option value="DE">Germany</option>
                 </select>
             </label>
             <label>Era
@@ -587,9 +577,31 @@
             });
         }
 
+        // Load real country data on page load -- same pattern as
+        // loadGenres() above. Values are canonical country names
+        // (e.g. "United Kingdom"), not 2-letter codes, matching what
+        // the /countries endpoint returns.
+        async function loadCountries() {
+            const result = await friendlyFetchJSON('/countries');
+            if (!result.ok) {
+                console.warn('Could not load country list:', result.message);
+                return;
+            }
+            const data = result.data;
+            data.sort((a, b) => a.country.localeCompare(b.country));
+            const select = document.getElementById('country');
+            data.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.country;
+                opt.textContent = c.country + ' (' + c.count + ')';
+                select.appendChild(opt);
+            });
+        }
+
         // Enter key triggers preview
         document.addEventListener('DOMContentLoaded', () => {
             loadGenres();
+            loadCountries();
             document.getElementById('prompt').addEventListener('keydown', e => {
                 if (e.key === 'Enter') preview();
             });

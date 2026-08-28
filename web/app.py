@@ -1248,6 +1248,38 @@ def genres():
     conn.close()
     return jsonify([{'tag': r[0], 'count': r[1]} for r in rows])
 
+@app.route('/countries')
+def countries():
+    import sqlite3
+    from collections import Counter
+    from country_aliases import canonicalize_country
+
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
+    rows = conn.execute('''
+        SELECT country, COUNT(*) as cnt
+        FROM artist_meta
+        WHERE country IS NOT NULL AND country != 'unknown'
+        GROUP BY country
+    ''').fetchall()
+    conn.close()
+
+    # Fold raw variants (e.g. "United States" / "US" / "New York")
+    # into one canonical entry per real country. Raw values not yet
+    # in the alias map (canonicalize_country returns None) are
+    # skipped, not surfaced as their own confusing entries.
+    canonical_counts = Counter()
+    for raw_country, cnt in rows:
+        canonical = canonicalize_country(raw_country)
+        if canonical:
+            canonical_counts[canonical] += cnt
+
+    result = [
+        {'country': name, 'count': cnt}
+        for name, cnt in canonical_counts.items()
+    ]
+    return jsonify(result)
+
 @app.route('/update')
 def update():
     import subprocess

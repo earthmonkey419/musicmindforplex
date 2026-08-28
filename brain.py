@@ -1710,11 +1710,19 @@ def search_tracks(tags, filters=None):
         query += " AND am.gender = ?"
         params.append(f["gender"])
     if f.get("country"):
-        query += " AND am.country IN (?, ?)"
-        # normalize UK/GB
-        c = f["country"]
-        alt = "GB" if c == "UK" else ("UK" if c == "GB" else c)
-        params.extend([c, alt])
+        # Canonicalize whatever we were given -- a 2-letter code from
+        # classify_prompt()'s country_map, or a canonical full name
+        # from the dropdown -- then expand to every raw variant
+        # actually seen in artist_meta.country (see country_aliases.py
+        # for why this is necessary: MusicBrainz enrichment writes
+        # full names, OpenAI-fallback enrichment historically wrote
+        # ISO codes, and some rows are city-level values).
+        from country_aliases import canonicalize_country, get_country_aliases
+        canonical = canonicalize_country(f["country"]) or f["country"]
+        aliases = get_country_aliases(canonical)
+        placeholders = ", ".join("?" for _ in aliases)
+        query += f" AND am.country IN ({placeholders})"
+        params.extend(aliases)
     if f.get("era"):
         query += " AND am.era = ?"
         params.append(f["era"])
