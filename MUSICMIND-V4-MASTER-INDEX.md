@@ -23,19 +23,24 @@ this is an index, not a new scoping pass.
 ### 1. Country filter — data normalization + dynamic dropdown
 *See `MUSICMIND-V4-SCOPE-COUNTRY-NORMALIZATION.md`*
 
-**Status:** Scoped 2026-08-27, not started. First v4 item — motivated
-the `v4-dev` branch. Found while investigating why India wasn't in the
-Country dropdown: three real bugs — a hardcoded (not data-driven)
-dropdown, a format mismatch between MusicBrainz enrichment (full
-country names) and OpenAI-fallback enrichment (2-letter ISO codes)
-that the filter query only handles one side of, and
-`area.get("name")` sometimes returning city-level values instead of
-countries. Confirmed against real production data (40 distinct
+**Status:** 🟢 SHIPPED to production 2026-08-27. First v4 item —
+motivated the `v4-dev` branch. Found while investigating why India
+wasn't in the Country dropdown: three real bugs — a hardcoded (not
+data-driven) dropdown, a format mismatch between MusicBrainz
+enrichment (full country names) and OpenAI-fallback enrichment
+(2-letter ISO codes) that the filter query only handled one side of,
+and `area.get("name")` sometimes returning city-level values instead
+of countries. Confirmed against real production data (40 distinct
 `country` values in `artist_meta`). India itself: 26 correctly
 enriched artists, never actually a data gap.
 
-**Not yet committed to git** — exists as a drafted file, needs to be
-added to the `v4-dev` branch.
+Delivered as: new `country_aliases.py` canonical alias map, a new
+`/countries` endpoint mirroring `/genres`, a dynamic dropdown
+replacing the hardcoded one, the `brain.py` filter query fixed to
+expand canonical → all raw aliases instead of a hardcoded UK/GB-only
+pair, and `enrich_artists.py`'s OpenAI prompt fixed to stop writing
+ISO codes going forward. Confirmed real-world impact on playlist
+results immediately after deploy.
 
 ### 2. MusicBrainz artist alias integration
 *See `MUSICMIND-V4-SCOPE-ARTIST-ALIASES.md`*
@@ -131,6 +136,34 @@ restful. Low BPM is a real signal but an incomplete proxy for
 "relaxing." Nothing built, no scope decided yet — a confirmed gap
 worth considering.
 
+### 11. Artist-name normalization for AcoustID vote counting
+*From the v3 punch list (July 25), carried forward as unfinished
+rather than closed.* `va_resolve.py` resolves Various Artists tracks
+via AcoustID fingerprinting by plurality vote across candidate
+matches, counted by exact artist-name string. If the same real artist
+appears under slightly different spellings across matches — "The 4
+Seasons" vs. "The Four Seasons," numerals vs. spelled-out, "&" vs.
+"and," multi-artist ordering — votes could theoretically split and
+weaken confidence. Deliberately left as-is in v3: stayed purely
+theoretical, the plurality logic worked correctly on every real run,
+including the full 4,254/5,033 production run. Explicit standing
+plan from that decision: revisit only if a real track actually
+resolves incorrectly because of a split vote, and fix that specific
+pattern with real evidence then — not build speculative fuzzy-
+matching now. Re-check whether that's still true before scoping this
+for real; if no real failure has surfaced since July, the original
+"leave as-is" reasoning still holds.
+
+### 12. Second-opinion re-check for already-flagged tracks
+*From the v3 punch list, noted as "genuinely good future direction,
+not abandoned."* A targeted re-analysis pass for tracks already
+flagged suspicious by three existing signals together: `bpm_reliable
+= 0`, VA-resolution **REVIEW** confidence (the ~15.5% that didn't
+resolve at the 84.5% HIGH-confidence rate), and thin tag coverage.
+Not a general second-opinion system — narrowly scoped to tracks
+multiple independent signals already agree are worth a second look.
+Nothing built, no scope doc yet.
+
 ---
 
 ## ⚪ Considered and declined
@@ -173,15 +206,17 @@ of a human over years of listening.
 Not a commitment, just a reasonable order given what's actually
 scoped and what depends on what:
 
-1. **Country normalization** (#1) — smallest, most self-contained,
-   already fully scoped, no dependencies on anything else.
+1. ~~**Country normalization** (#1)~~ — 🟢 shipped 2026-08-27.
 2. **Artist aliases** (#2) — foundational; tracklist import (#4)
-   depends on it.
+   depends on it. Next up.
 3. **Tracklist import** (#4) — once aliases land.
 4. **Thematic relevance** (#3) — independent of the above, can slot
-   in anywhere; the most complex of the four scoped items (LLM
+   in anywhere; the most complex of the remaining scoped items (LLM
    candidate-pool pass), worth its own dedicated stretch.
-5. Everything in the 🟡 section — pick up opportunistically, but each
-   deserves its own scope doc (matching the discipline already
-   applied to #1–#4) before implementation starts, not a shortcut
-   straight to code.
+5. Everything in the 🟡 section (#5–#12) — pick up opportunistically,
+   but each deserves its own scope doc (matching the discipline
+   already applied to #1–#4) before implementation starts, not a
+   shortcut straight to code. #11 in particular is worth a quick
+   "has this actually failed yet?" check before writing a scope doc
+   at all — the original July decision to leave it alone may still
+   be correct.
