@@ -506,7 +506,8 @@
 
                 document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
                 const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
-                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix;
+                const countrySuffix = payload.country ? `(${payload.country})` : '';
+                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix + countrySuffix;
                 document.getElementById('results').style.display = 'block';
             } catch (e) {
                 // Found real (July 2026): removing this safety net
