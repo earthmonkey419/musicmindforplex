@@ -1615,9 +1615,13 @@ def stats_data():
         "SELECT era, COUNT(*) as cnt FROM artist_meta WHERE era != 'unknown' AND era IS NOT NULL GROUP BY era ORDER BY era"
     ).fetchall()
 
-    by_country = conn.execute(
-        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT ?",
-        (country_limit,)
+    # Raw per-string counts first (no LIMIT here -- limiting before
+    # canonicalizing would let "US" and "United States" each occupy a
+    # separate top-N slot instead of being counted as the same real
+    # country). Canonicalization + LIMIT happens below, same pattern
+    # as the /countries endpoint.
+    by_country_raw = conn.execute(
+        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country"
     ).fetchall()
 
     by_gender = conn.execute(
@@ -1630,6 +1634,15 @@ def stats_data():
     total_instrumental = conn.execute("SELECT COUNT(*) FROM tracks WHERE is_instrumental = 1").fetchone()[0]
 
     conn.close()
+
+    from collections import Counter
+    from country_aliases import canonicalize_country
+    canonical_counts = Counter()
+    for raw_country, cnt in by_country_raw:
+        canonical = canonicalize_country(raw_country)
+        if canonical:
+            canonical_counts[canonical] += cnt
+    by_country = sorted(canonical_counts.items(), key=lambda kv: -kv[1])[:country_limit]
 
     return jsonify({
         'listening_by_year': [{'year': r[0], 'plays': r[1]} for r in listening_by_year],
