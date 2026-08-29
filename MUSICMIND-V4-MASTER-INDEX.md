@@ -196,13 +196,79 @@ Not a general second-opinion system — narrowly scoped to tracks
 multiple independent signals already agree are worth a second look.
 Nothing built, no scope doc yet.
 
-### 13. Chanting and chorales handling
-*Raised 2026-08-28, roadmap-level placeholder only.* Noted for the
-roadmap; details of the actual problem (mistagging, VI/instrumental
-detection false positives, missing genre coverage, something else)
-not yet described. Needs a real problem statement before this can
-move toward being scoped — captured here so it isn't lost, not
-because it's understood yet.
+### 13. Chant / Choral / Sacred genre bucket
+*Raised 2026-08-28, investigated same night with real data — no
+longer a bare placeholder.* Confirmed via direct query against
+`track_tags`: **12 distinct tags, 61 tagged instances** (`chant`,
+`chanting`, `mantra`, `spiritual chant`, `melodic chant`, `hymn`,
+`chorale`, `choral`, `sacred music`, `choral jazz`, `children's
+choir`, `chant reggae`), checked against all 12 existing bucket
+definitions in `brain.py` — **zero overlap with any of them.** Not a
+mis-bucketing problem; these tracks are completely invisible to
+Genre-focus filtering no matter which combination of checkboxes is
+selected, despite being accurately tagged.
+
+Real example that surfaced this: the Haidakhan devotional-chant
+tracks and Somei Satoh's "Stabat Mater" (tagged `contemporary
+classical`, `minimalist`) are both fully outside every bucket.
+Broadened diagnostic on that same album also surfaced `hindu
+devotional`, `ambient`, and `meditative` as related, currently-
+homeless tags worth folding into the same investigation — `ambient`
+and `meditative` in particular are likely much broader than just
+chant-adjacent content and may warrant checking their true scope
+before deciding where they belong.
+
+Proposed shape, following the same precedent already used for
+`country`/`country rock` (deliberately listed in two buckets each):
+a new "Chant / Choral / Sacred" bucket containing all confirmed tags,
+**plus** cross-listing genre-crossing ones in their stylistic home —
+`chant reggae` also in World, `choral jazz` also in Jazz. Not yet
+decided where `hindu devotional`/`ambient`/`meditative` should live;
+needs a wider real-data pass (full library counts, not just one
+album) before finalizing bucket membership. No scope doc written
+yet — this entry captures the investigation, not a final plan.
+
+### 14. Content genuinely absent from MusicBrainz/AcoustID
+*Surfaced investigating #13, same night.* Chasing why a specific
+album (Manjeera Ganguly's *Amazing Mantra Power Vol I*, 46 tracks
+per Plex) wasn't reachable led to a real, separate, and larger
+finding: of **10,211 tracks** currently sitting under literal
+`artist = 'Various Artists'`, **2,059 have no `real_artist`
+resolved at all** — every one of them was attempted by
+`va_resolve.py` (confirmed: 0 unattempted), so this isn't a "never
+ran resolution" gap.
+
+Breaking down why they failed, by `va_results.confidence`:
+- **~1,374 (67%) got zero fingerprint match whatsoever** —
+  `no_recordings` (688) + `no_results` (686). AcoustID's database
+  simply has no data for this audio. Confirmed directly for the
+  Manjeera Ganguly album via a manual MusicBrainz tag-lookup search
+  (artist + release title) — genuine "No results found," not a
+  search-tuning problem. This is a third-party database coverage
+  gap for niche/small-label content (Indian devotional/mantra
+  releases specifically, in the confirmed case), not a MusicMind
+  bug — no fingerprinting tool (beets, Picard, or otherwise) can
+  match audio that was never cataloged anywhere in the first place.
+- **~646 got candidates, just not confident ones** — 529 landed
+  REVIEW, ~117 more landed just under the low-score cutoff
+  (0.56–0.90). This portion genuinely is MusicMind's problem space
+  — overlaps directly with **#12** (second-opinion re-check for
+  REVIEW-confidence tracks), now with a concrete real-world source
+  feeding into it.
+
+Separately, **1,073 tracks** show `album = '[Unknown Album]'` — a
+different, only partially-overlapping population (missing album
+metadata isn't always paired with unresolved artist, and vice
+versa).
+
+**Not a fix MusicMind can make on its own for the true no-match
+portion.** The realistic path for that ~1,374 is manual
+identification via a tool like Picard or beets (human-confirmed
+matching, not automated fingerprinting) followed by fixing the
+source file's embedded tags, then a re-ingest so the corrected
+artist/album metadata flows back into `musicmind.db` normally. No
+scope doc yet — this is a real, evidenced problem statement, not
+yet a proposed implementation.
 
 ---
 
