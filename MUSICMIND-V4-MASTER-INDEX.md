@@ -42,6 +42,30 @@ pair, and `enrich_artists.py`'s OpenAI prompt fixed to stop writing
 ISO codes going forward. Confirmed real-world impact on playlist
 results immediately after deploy.
 
+**Follow-up fixes, same evening (undocumented tweaks, not separately
+scoped):**
+- **Auto-generated playlist name now includes the selected country**
+  — e.g. `My Playlist (World / Reggae / Latin / Afro)(India)`.
+  Previously the bucket suffix showed but the country choice was
+  silently dropped from the name.
+- **Stats page "Library by Country" chart was a separate, un-fixed
+  code path** — its own raw `artist_meta.country` query inside the
+  main `/stats` route, never touched by the `/countries` endpoint
+  fix. Confirmed via screenshot: city-level values (Virginia,
+  Memphis, Baltimore) and split country spellings showing side by
+  side in the same "Top 100" chart. Fixed with the same
+  `country_aliases.canonicalize_country()` approach, canonicalizing
+  and summing *before* applying the `country_limit`, not after —
+  the naive order would have let "US"/"United States" each occupy a
+  separate top-N slot.
+- **Chart hiding every other country label** — unrelated to the data
+  fix itself, a pre-existing Chart.js default (`autoSkip: true` on
+  category axes silently drops alternating tick labels when
+  vertical space is tight, even though every bar still renders). The
+  page already had a working precedent for this exact fix on another
+  chart; the country chart just never got the same
+  `autoSkip: false` treatment. One-line fix.
+
 ### 2. MusicBrainz artist alias integration
 *See `MUSICMIND-V4-SCOPE-ARTIST-ALIASES.md`*
 
@@ -171,6 +195,14 @@ resolve at the 84.5% HIGH-confidence rate), and thin tag coverage.
 Not a general second-opinion system — narrowly scoped to tracks
 multiple independent signals already agree are worth a second look.
 Nothing built, no scope doc yet.
+
+### 13. Chanting and chorales handling
+*Raised 2026-08-28, roadmap-level placeholder only.* Noted for the
+roadmap; details of the actual problem (mistagging, VI/instrumental
+detection false positives, missing genre coverage, something else)
+not yet described. Needs a real problem statement before this can
+move toward being scoped — captured here so it isn't lost, not
+because it's understood yet.
 
 ---
 
