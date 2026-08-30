@@ -189,7 +189,15 @@ def preview():
 
         filters = {
             'unplayed':       data.get('unplayed', False),
-            'genre':          data.get('genre') or None,
+            # Fallback to the AI-detected genre (classify_prompt's
+            # own GENRE field) when the manual dropdown wasn't used.
+            # Confirmed real bug (query_log ids 122/127/129/197):
+            # genre-only prompts like "samba rock" got mood: null
+            # (correctly -- it's not a mood), which skipped
+            # expand_prompt() entirely, AND the AI's correctly-
+            # detected genre was being silently discarded here.
+            # Manual dropdown still wins if the user explicitly set one.
+            'genre':          data.get('genre') or classification.get('genre') or None,
             'min_year':       int(data['min_year']) if data.get('min_year') else None,
             'max_year':       int(data['max_year']) if data.get('max_year') else None,
             'min_plays':      int(data['min_plays']) if data.get('min_plays') else detected_filters.get('min_plays'),
