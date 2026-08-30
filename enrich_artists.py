@@ -42,7 +42,13 @@ def get_unenriched_artists(conn):
     """
     Returns list of (artist, mbid) tuples needing OpenAI enrichment.
     Includes brand-new artists (mbid=None) and MusicBrainz-matched
-    artists still missing an era value (mbid populated).
+    artists still missing an era or country value (mbid populated).
+    The country condition covers a real, confirmed gap (2026-08-29):
+    MusicBrainz can confidently match an artist (mbid set) while
+    having no area/country data on its own side for that entity --
+    without this, those artists were silently invisible to this
+    fallback pipeline despite its whole purpose being exactly this
+    kind of gap-filling.
     """
     return [(row[0], row[1]) for row in conn.execute("""
         SELECT DISTINCT COALESCE(t.real_artist, t.artist) as effective_artist, am.mbid
@@ -50,7 +56,7 @@ def get_unenriched_artists(conn):
         LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
         WHERE COALESCE(t.real_artist, t.artist) IS NOT NULL
           AND COALESCE(t.real_artist, t.artist) != ''
-          AND (am.artist IS NULL OR am.era IS NULL)
+          AND (am.artist IS NULL OR am.era IS NULL OR am.country IS NULL)
         ORDER BY effective_artist
     """).fetchall()]
 
