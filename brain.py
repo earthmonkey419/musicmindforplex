@@ -312,6 +312,7 @@ BUCKETS = [
         'big band',
         'blues jazz',
         'brazilian jazz',
+        'choral jazz',
         'classic jazz',
         'contemporary jazz',
         'cool jazz',
@@ -351,6 +352,7 @@ BUCKETS = [
         'brazilian funk',
         'brazilian pop',
         'brazilian rock',
+        'chant reggae',
         'classic reggae',
         'conscious reggae',
         'dancehall',
@@ -552,6 +554,32 @@ BUCKETS = [
         'progressive house',
         'techno',
         'trip-hop',
+    ]),
+    # Found real (2026-08-29): no dedicated Chant / Choral / Sacred
+    # bucket existed at all. Confirmed via real library data: 13
+    # distinct tags, ~72 tagged instances, zero overlap with any
+    # existing bucket -- tracks with these tags were completely
+    # invisible to Genre-focus filtering despite being accurately
+    # tagged (e.g. Haidakhan devotional chant, Somei Satoh's "Stabat
+    # Mater"). 'ambient'/'meditative'/'spiritual' deliberately
+    # excluded -- confirmed too broad/cross-genre (1,113/225/264
+    # tagged instances respectively) to belong in a bucket this
+    # narrow; a separate "Ambient / Meditative" bucket is a real
+    # future candidate for those, not folded in here.
+    ("Chant / Choral / Sacred", [
+        'chant',
+        'chant reggae',
+        'chanting',
+        "children's choir",
+        'choral',
+        'choral jazz',
+        'chorale',
+        'hindu devotional',
+        'hymn',
+        'mantra',
+        'melodic chant',
+        'sacred music',
+        'spiritual chant',
     ]),
 ]
 
