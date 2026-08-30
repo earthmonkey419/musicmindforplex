@@ -56,8 +56,10 @@ def onthisday():
 
     tracks = search_tracks([], filters)
 
-    if data.get('dj_ify'):
-        tracks = sequence_for_flow(tracks)
+    # DJ-ify sequencing now runs unconditionally on every playlist
+    # -- no longer a user-facing toggle, this is just what building
+    # a playlist means now.
+    tracks = sequence_for_flow(tracks)
 
     return jsonify({
         'tracks': tracks,
@@ -240,10 +242,11 @@ def preview():
         tracks = search_tracks(tags, filters)
         update_query_log_result_count(query_log_id, len(tracks), filters)
 
-        if data.get('dj_ify'):
-            tracks = sequence_for_flow(tracks)
+        # DJ-ify sequencing now runs unconditionally on every
+        # playlist -- no longer a user-facing toggle.
+        tracks = sequence_for_flow(tracks)
 
-        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': bool(data.get('dj_ify'))}
+        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': True}
 
         # Found via July 2026 fresh-install sanity check: checking
         # "Instrumental only" on an install with no VI data at all
