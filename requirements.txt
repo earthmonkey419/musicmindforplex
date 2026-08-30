@@ -11,3 +11,4 @@ plexapi
 openai
 mutagen
 requests
+pycountry
