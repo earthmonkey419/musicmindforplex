@@ -49,6 +49,11 @@ def get_unenriched_artists(conn):
     without this, those artists were silently invisible to this
     fallback pipeline despite its whole purpose being exactly this
     kind of gap-filling.
+
+    Also excludes known Plex/MusicMind placeholder artist strings
+    (e.g. "Various Artists", "Unknown Artist") -- these aren't real
+    artists and enriching them wastes an OpenAI call while writing
+    a meaningless all-"unknown" row (confirmed real case, 2026-08-30).
     """
     return [(row[0], row[1]) for row in conn.execute("""
         SELECT DISTINCT COALESCE(t.real_artist, t.artist) as effective_artist, am.mbid
@@ -56,6 +61,7 @@ def get_unenriched_artists(conn):
         LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
         WHERE COALESCE(t.real_artist, t.artist) IS NOT NULL
           AND COALESCE(t.real_artist, t.artist) != ''
+          AND COALESCE(t.real_artist, t.artist) NOT IN ('Various Artists', 'Unknown Artist')
           AND (am.artist IS NULL OR am.era IS NULL OR am.country IS NULL)
         ORDER BY effective_artist
     """).fetchall()]
