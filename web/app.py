@@ -1050,6 +1050,7 @@ def _run_fullsync_pipeline():
             ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
             ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
             ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
+            ('🏷️ Enriching compilations (ID3 fallback)...', os.path.join(BASE_DIR, 'enrich_compilations.py')),
             ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
             ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
             ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
