@@ -34,6 +34,21 @@
             <div class="log-box" id="log-fullsync" style="height:200px;"></div>
         </div>
 
+        <div class="admin-card" style="margin-bottom:1.5rem;">
+            <h3>🎯 Resync Item from Plex</h3>
+            <p>Instantly re-pull one artist/album's metadata from Plex without a full sync. Use right after correcting metadata (e.g. an artist or album name) directly in Plex.</p>
+            <div style="margin-bottom:0.5rem;">
+                <input type="text" id="resync-artist" placeholder="Artist name" style="margin-right:0.5rem;">
+                <input type="text" id="resync-album" placeholder="Album name" style="margin-right:0.5rem;">
+            </div>
+            <label style="font-size:0.85rem; display:block; margin-bottom:0.5rem;">
+                <input type="checkbox" id="resync-apply"> Apply changes (unchecked = preview only, no writes)
+            </label>
+            <button id="btn-resync" onclick="runResync(this)">Resync</button>
+            <div class="status" id="status-resync"></div>
+            <div class="log-box" id="log-resync"></div>
+        </div>
+
         <div class="admin-grid">
             <div class="admin-card">
                 <h3>🔍 Scan Plex Library</h3>
@@ -215,6 +230,55 @@
                     status.textContent = '❌ Connection error';
                     status.className = 'status error';
                 }
+            };
+        }
+
+        function runResync(btn) {
+            const artist = document.getElementById('resync-artist').value.trim();
+            const album  = document.getElementById('resync-album').value.trim();
+            const apply  = document.getElementById('resync-apply').checked;
+            const log    = document.getElementById('log-resync');
+            const status = document.getElementById('status-resync');
+
+            if (!artist || !album) {
+                status.textContent = '❌ Artist and album are required';
+                status.className = 'status error';
+                return;
+            }
+
+            btn.disabled = true;
+            log.textContent = '';
+            log.classList.add('active');
+            status.textContent = '⏳ Running...';
+            status.className = 'status running';
+
+            const url = '/run/resync?artist=' + encodeURIComponent(artist) +
+                        '&album=' + encodeURIComponent(album) +
+                        '&apply=' + (apply ? '1' : '0');
+            const es = new EventSource(url);
+
+            es.onmessage = function(e) {
+                if (e.data === '__DONE__') {
+                    es.close();
+                    btn.disabled = false;
+                    return;
+                }
+                if (e.data.startsWith('✅')) {
+                    status.textContent = e.data;
+                    status.className = 'status done';
+                } else if (e.data.startsWith('❌')) {
+                    status.textContent = e.data;
+                    status.className = 'status error';
+                }
+                log.textContent += e.data + '\n';
+                log.scrollTop = log.scrollHeight;
+            };
+
+            es.onerror = function() {
+                es.close();
+                btn.disabled = false;
+                status.textContent = '❌ Connection error';
+                status.className = 'status error';
             };
         }
 

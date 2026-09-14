@@ -587,6 +587,54 @@ def run_script(script):
     return app.response_class(generate(), mimetype='text/event-stream')
 
 
+@app.route('/run/resync')
+def run_resync():
+    """
+    Runs resync_item.py for a single artist/album pulled from the admin
+    UI's Resync form. Separate from /run/<script>'s fixed no-args
+    dispatcher since this one takes real arguments from user input.
+    Defaults to a dry run (no --run flag) unless apply=1 is passed.
+    """
+    artist = request.args.get('artist', '').strip()
+    album = request.args.get('album', '').strip()
+    apply_changes = request.args.get('apply') == '1'
+
+    if not artist or not album:
+        return jsonify({'error': 'artist and album are required'}), 400
+    if running.get('resync'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['resync'] = True
+        try:
+            cmd = ['python3.12', '-u', os.path.join(BASE_DIR, 'resync_item.py'),
+                   '--artist', artist, '--album', album]
+            if apply_changes:
+                cmd.append('--run')
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True,
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Done.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['resync'] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
 @app.route('/run/test/<test_id>')
 def run_test(test_id):
     """
