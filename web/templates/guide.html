@@ -66,8 +66,11 @@
                 <div class="guide-step">
                     <div class="guide-step-num">2</div>
                     <div class="guide-step-text">
-                        Get your Plex token — play any item in Plex, click <strong>...</strong> → <strong>Get Info</strong> → <strong>View XML</strong>,
-                        and copy the <code>X-Plex-Token</code> value from the URL.
+                        Get your Plex token — from the MusicMind folder run <code>python3.12 make_plex_token.py</code>,
+                        open the link it prints, and approve in Plex. It registers MusicMind as its own device, so the token
+                        keeps working even if you sign out of Plex in your browser. (Manual alternative: play any item in Plex,
+                        click <strong>...</strong> → <strong>Get Info</strong> → <strong>View XML</strong>, and copy the
+                        <code>X-Plex-Token</code> value from the URL — but that token dies when you sign that browser out.)
                     </div>
                 </div>
                 <div class="guide-step">

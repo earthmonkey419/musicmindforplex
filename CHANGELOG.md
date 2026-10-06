@@ -2,6 +2,19 @@
 
 All notable changes to MusicMind for Plex are documented here.
 
+## [Unreleased]
+
+### Added
+- `make_plex_token.py` -- creates a dedicated Plex token for MusicMind
+  (registered as its own device in Plex's Authorized Devices) instead of
+  copying one out of Plex Web, whose token dies when that browser signs
+  out. `--write` updates `config.py` with a timestamped backup.
+
+### Changed
+- Docs (README, USER-MANUAL, DOCKER, in-app guide) now point to
+  `make_plex_token.py` for getting a token.
+- `.gitignore` and `.dockerignore` now cover `*.bak-*` backups.
+
 ## [3.0.0] — 2026-08-16
 
 ### ⚠️ Breaking change — database filename

@@ -70,9 +70,21 @@ http://YOUR_NAS_IP:8787
 
 ### Getting Your Plex Token
 
-1. Open Plex in your browser and play any item
-2. Click **...** → **Get Info** → **View XML**
-3. Copy the `X-Plex-Token` value from the URL
+Give MusicMind its own token rather than copying one out of Plex Web --
+a browser-session token stops working the moment you sign that browser
+out of Plex.
+
+1. From the MusicMind folder, run `python3.12 make_plex_token.py`
+2. Open the link it prints, sign in to Plex, and approve
+3. Put the printed token in `config.py` as `PLEX_TOKEN`, or re-run with
+   `--write` to have it update `config.py` for you (the old file is kept
+   as `config.py.bak-<timestamp>`)
+4. Restart: `sudo pm2 restart musicmind`
+
+It appears in Plex under Authorized Devices as "MusicMind" -- don't
+remove that entry. Manual alternative: play any item in Plex, click
+**...** → **Get Info** → **View XML**, and copy the `X-Plex-Token`
+value from the URL.
 
 ### Getting a Last.fm API Key
 

@@ -1,5 +1,6 @@
 # Never bake real credentials or personal data into the image
 config.py
+*.bak-*
 *.db
 *.db-wal
 *.db-shm
