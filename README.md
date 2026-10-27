@@ -177,6 +177,24 @@ for existing installs upgrading in place.
 
 ---
 
+## Works with the rest of the family
+
+MusicMind is the local music-intelligence database behind the rest of the
+Verbena Projects Plex tools. Each of them works fine without it, and each
+only ever opens `musicmind.db` read-only. Point its `MUSICMIND_DB_PATH`
+setting at your database and they get faster, more complete search, mood
+and genre data, and better radio:
+
+- **[MusicLounge Player for Plex](https://github.com/earthmonkey419/musicloungeplayerforplex)**
+  (the recommended MusicLounge app): search, mood and genre browsing, and
+  radio stations
+- **[MusicLounge Jukebox (Lite) for Plex](https://github.com/earthmonkey419/musiclounge)**:
+  search and mood buckets
+- **[RiderMusic Jukebox for Plex](https://github.com/earthmonkey419/ridermusic)**:
+  search, mood buckets, and radio auto-fill
+
+---
+
 ## Getting your Plex token
 
 1. Open Plex in your browser and play any item
