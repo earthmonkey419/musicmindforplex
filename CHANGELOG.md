@@ -4,16 +4,60 @@ All notable changes to MusicMind for Plex are documented here.
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-11-09
+
+### ⚠️ Upgrade notes
+
+- **New dependency: `pycountry`.** Run `pip install -r requirements.txt`.
+  Docker users must rebuild the image.
+- **DJ-ify is now always on.** The UI toggle is gone; every generated
+  playlist gets tempo-arc sequencing.
+
 ### Added
+- **Chant / Choral / Sacred genre bucket**, so chant, choral and sacred
+  tracks are no longer invisible to Genre-focus filtering.
+- **Country filter normalization.** The Country dropdown is now built
+  from your data, and a canonical alias map (backed by `pycountry`)
+  reconciles full country names, ISO codes and city-level values, so
+  e.g. India and "US"/"United States" each show up once and filter
+  correctly. The selected country is also included in auto-generated
+  playlist names.
+- **Resync Item** admin tool and `resync_item.py`, to refresh a single
+  item's metadata without a full re-ingest.
 - `make_plex_token.py` -- creates a dedicated Plex token for MusicMind
   (registered as its own device in Plex's Authorized Devices) instead of
   copying one out of Plex Web, whose token dies when that browser signs
   out. `--write` updates `config.py` with a timestamped backup.
+- `restore_real_artist_from_va_results.py` -- recovers `real_artist`
+  values from the `va_results` audit table.
+- Mobile/PWA icons and manifest, plus Open Graph / Twitter Card tags on
+  all app pages.
 
 ### Changed
+- The stats page "Library by Country" chart uses the canonical country
+  map and no longer hides every other label.
+- Admin pages: unified navigation order and "Back to the Stacks" links.
 - Docs (README, USER-MANUAL, DOCKER, in-app guide) now point to
   `make_plex_token.py` for getting a token.
+- License holder is now Verbena Projects LLC.
 - `.gitignore` and `.dockerignore` now cover `*.bak-*` backups.
+
+### Fixed
+- **Full Sync no longer wipes `is_instrumental`, `real_artist` or
+  `genres_written`.** The ingest upsert now preserves analysis results.
+  The old unsafe `INSERT OR REPLACE` ingest script is deprecated and
+  renamed `plex_music_brain_ingest.py.DEPRECATED-unsafe-upsert`.
+- Incremental ingest, Various Artists resolution fallback and
+  MusicBrainz retry gaps in metadata sync.
+- "Various Artists" / "Unknown Artist" placeholders are excluded from
+  artist enrichment.
+- The OpenAI fallback no longer skips artists that have an MBID but a
+  NULL country.
+- Genre-only prompts (e.g. "samba rock") no longer fall through to
+  unfiltered results.
+- OpenAI rate limits (HTTP 429) and other upstream errors on `/preview`
+  now return a clear message and the right status code instead of a
+  generic HTTP 500.
 
 ## [3.0.0] — 2026-08-16
 
