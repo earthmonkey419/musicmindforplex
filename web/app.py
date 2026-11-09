@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
+import openai
 from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, get_missing_scrobbles_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 from config_check import check_config
@@ -56,8 +57,10 @@ def onthisday():
 
     tracks = search_tracks([], filters)
 
-    if data.get('dj_ify'):
-        tracks = sequence_for_flow(tracks)
+    # DJ-ify sequencing now runs unconditionally on every playlist
+    # -- no longer a user-facing toggle, this is just what building
+    # a playlist means now.
+    tracks = sequence_for_flow(tracks)
 
     return jsonify({
         'tracks': tracks,
@@ -135,6 +138,51 @@ def based_on():
         return jsonify({'error': str(e)}), 500
 
 
+def _openai_error_response(e):
+    """Translate an OpenAI SDK exception into an honest HTTP response.
+
+    The SDK already retried a 429 twice before raising, so by the time
+    we're here the limit is real. Return 429 (not 500) with a readable
+    message so the UI and any API client can tell "slow down / check
+    billing" apart from a genuine server bug.
+    """
+    code = getattr(e, 'code', None)
+    if isinstance(e, openai.RateLimitError):
+        status = 429
+        if code == 'insufficient_quota':
+            # Also a 429, but retrying won't help -- billing/quota issue.
+            msg = "OpenAI quota exhausted. Check your OpenAI plan and billing."
+        else:
+            msg = "OpenAI is rate limiting requests. Wait a moment and try again."
+            code = code or 'rate_limited'
+    elif isinstance(e, openai.AuthenticationError):
+        status, code = 502, 'openai_auth'
+        msg = "OpenAI rejected the API key. Check OPENAI_KEY in config.py."
+    elif isinstance(e, (openai.APIConnectionError, openai.APITimeoutError)):
+        status, code = 504, 'openai_unreachable'
+        msg = "Could not reach OpenAI. Check the server's internet connection."
+    else:
+        status, code = 502, 'openai_error'
+        msg = f"OpenAI returned an error: {e}"
+
+    resp = jsonify({'error': msg, 'code': code})
+    resp.status_code = status
+    retry_after = None
+    try:
+        retry_after = e.response.headers.get('retry-after')
+    except Exception:
+        pass
+    if status == 429 and retry_after:
+        resp.headers['Retry-After'] = retry_after
+    return resp
+
+
+@app.errorhandler(openai.OpenAIError)
+def handle_openai_error(e):
+    # Safety net for any route that lets an OpenAI error escape.
+    return _openai_error_response(e)
+
+
 @app.route('/preview', methods=['POST'])
 def preview():
     data = request.json
@@ -189,7 +237,15 @@ def preview():
 
         filters = {
             'unplayed':       data.get('unplayed', False),
-            'genre':          data.get('genre') or None,
+            # Fallback to the AI-detected genre (classify_prompt's
+            # own GENRE field) when the manual dropdown wasn't used.
+            # Confirmed real bug (query_log ids 122/127/129/197):
+            # genre-only prompts like "samba rock" got mood: null
+            # (correctly -- it's not a mood), which skipped
+            # expand_prompt() entirely, AND the AI's correctly-
+            # detected genre was being silently discarded here.
+            # Manual dropdown still wins if the user explicitly set one.
+            'genre':          data.get('genre') or classification.get('genre') or None,
             'min_year':       int(data['min_year']) if data.get('min_year') else None,
             'max_year':       int(data['max_year']) if data.get('max_year') else None,
             'min_plays':      int(data['min_plays']) if data.get('min_plays') else detected_filters.get('min_plays'),
@@ -232,10 +288,11 @@ def preview():
         tracks = search_tracks(tags, filters)
         update_query_log_result_count(query_log_id, len(tracks), filters)
 
-        if data.get('dj_ify'):
-            tracks = sequence_for_flow(tracks)
+        # DJ-ify sequencing now runs unconditionally on every
+        # playlist -- no longer a user-facing toggle.
+        tracks = sequence_for_flow(tracks)
 
-        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': bool(data.get('dj_ify'))}
+        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': True}
 
         # Found via July 2026 fresh-install sanity check: checking
         # "Instrumental only" on an install with no VI data at all
@@ -250,6 +307,8 @@ def preview():
 
         return jsonify(response)
 
+    except openai.OpenAIError as e:
+        return _openai_error_response(e)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -571,6 +630,54 @@ def run_script(script):
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
             running[script] = False
+        yield "data: __DONE__\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
+
+
+@app.route('/run/resync')
+def run_resync():
+    """
+    Runs resync_item.py for a single artist/album pulled from the admin
+    UI's Resync form. Separate from /run/<script>'s fixed no-args
+    dispatcher since this one takes real arguments from user input.
+    Defaults to a dry run (no --run flag) unless apply=1 is passed.
+    """
+    artist = request.args.get('artist', '').strip()
+    album = request.args.get('album', '').strip()
+    apply_changes = request.args.get('apply') == '1'
+
+    if not artist or not album:
+        return jsonify({'error': 'artist and album are required'}), 400
+    if running.get('resync'):
+        return jsonify({'error': 'Already running'}), 400
+
+    def generate():
+        running['resync'] = True
+        try:
+            cmd = ['python3.12', '-u', os.path.join(BASE_DIR, 'resync_item.py'),
+                   '--artist', artist, '--album', album]
+            if apply_changes:
+                cmd.append('--run')
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True,
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: ✅ Done.\n\n"
+            else:
+                yield f"data: ❌ Error (exit code {proc.returncode})\n\n"
+        except Exception as e:
+            yield f"data: ❌ Exception: {e}\n\n"
+        finally:
+            running['resync'] = False
         yield "data: __DONE__\n\n"
 
     return app.response_class(generate(), mimetype='text/event-stream')
@@ -1039,6 +1146,7 @@ def _run_fullsync_pipeline():
             ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
             ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
             ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
+            ('🏷️ Enriching compilations (ID3 fallback)...', os.path.join(BASE_DIR, 'enrich_compilations.py')),
             ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
             ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
             ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
@@ -1247,6 +1355,38 @@ def genres():
     ''').fetchall()
     conn.close()
     return jsonify([{'tag': r[0], 'count': r[1]} for r in rows])
+
+@app.route('/countries')
+def countries():
+    import sqlite3
+    from collections import Counter
+    from country_aliases import canonicalize_country
+
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
+    rows = conn.execute('''
+        SELECT country, COUNT(*) as cnt
+        FROM artist_meta
+        WHERE country IS NOT NULL AND country != 'unknown'
+        GROUP BY country
+    ''').fetchall()
+    conn.close()
+
+    # Fold raw variants (e.g. "United States" / "US" / "New York")
+    # into one canonical entry per real country. Raw values not yet
+    # in the alias map (canonicalize_country returns None) are
+    # skipped, not surfaced as their own confusing entries.
+    canonical_counts = Counter()
+    for raw_country, cnt in rows:
+        canonical = canonicalize_country(raw_country)
+        if canonical:
+            canonical_counts[canonical] += cnt
+
+    result = [
+        {'country': name, 'count': cnt}
+        for name, cnt in canonical_counts.items()
+    ]
+    return jsonify(result)
 
 @app.route('/update')
 def update():
@@ -1583,9 +1723,13 @@ def stats_data():
         "SELECT era, COUNT(*) as cnt FROM artist_meta WHERE era != 'unknown' AND era IS NOT NULL GROUP BY era ORDER BY era"
     ).fetchall()
 
-    by_country = conn.execute(
-        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT ?",
-        (country_limit,)
+    # Raw per-string counts first (no LIMIT here -- limiting before
+    # canonicalizing would let "US" and "United States" each occupy a
+    # separate top-N slot instead of being counted as the same real
+    # country). Canonicalization + LIMIT happens below, same pattern
+    # as the /countries endpoint.
+    by_country_raw = conn.execute(
+        "SELECT country, COUNT(*) as cnt FROM artist_meta WHERE country != 'unknown' AND country IS NOT NULL GROUP BY country"
     ).fetchall()
 
     by_gender = conn.execute(
@@ -1598,6 +1742,15 @@ def stats_data():
     total_instrumental = conn.execute("SELECT COUNT(*) FROM tracks WHERE is_instrumental = 1").fetchone()[0]
 
     conn.close()
+
+    from collections import Counter
+    from country_aliases import canonicalize_country
+    canonical_counts = Counter()
+    for raw_country, cnt in by_country_raw:
+        canonical = canonicalize_country(raw_country)
+        if canonical:
+            canonical_counts[canonical] += cnt
+    by_country = sorted(canonical_counts.items(), key=lambda kv: -kv[1])[:country_limit]
 
     return jsonify({
         'listening_by_year': [{'year': r[0], 'plays': r[1]} for r in listening_by_year],

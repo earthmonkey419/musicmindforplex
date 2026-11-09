@@ -42,7 +42,18 @@ def get_unenriched_artists(conn):
     """
     Returns list of (artist, mbid) tuples needing OpenAI enrichment.
     Includes brand-new artists (mbid=None) and MusicBrainz-matched
-    artists still missing an era value (mbid populated).
+    artists still missing an era or country value (mbid populated).
+    The country condition covers a real, confirmed gap (2026-08-29):
+    MusicBrainz can confidently match an artist (mbid set) while
+    having no area/country data on its own side for that entity --
+    without this, those artists were silently invisible to this
+    fallback pipeline despite its whole purpose being exactly this
+    kind of gap-filling.
+
+    Also excludes known Plex/MusicMind placeholder artist strings
+    (e.g. "Various Artists", "Unknown Artist") -- these aren't real
+    artists and enriching them wastes an OpenAI call while writing
+    a meaningless all-"unknown" row (confirmed real case, 2026-08-30).
     """
     return [(row[0], row[1]) for row in conn.execute("""
         SELECT DISTINCT COALESCE(t.real_artist, t.artist) as effective_artist, am.mbid
@@ -50,7 +61,8 @@ def get_unenriched_artists(conn):
         LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
         WHERE COALESCE(t.real_artist, t.artist) IS NOT NULL
           AND COALESCE(t.real_artist, t.artist) != ''
-          AND (am.artist IS NULL OR am.era IS NULL)
+          AND COALESCE(t.real_artist, t.artist) NOT IN ('Various Artists', 'Unknown Artist')
+          AND (am.artist IS NULL OR am.era IS NULL OR am.country IS NULL)
         ORDER BY effective_artist
     """).fetchall()]
 
@@ -75,7 +87,7 @@ artist still needs a full response regardless.
 
 Fields:
 - gender: "female", "male", "mixed" (band with multiple genders), "unknown"
-- country: 2-letter ISO country code (e.g. "US", "UK", "BR", "FR") or "unknown"
+- country: full country name matching MusicBrainz's own convention (e.g. "United States", "United Kingdom", "Brazil", "France") or "unknown"
 - era: primary decade of activity — "50s", "60s", "70s", "80s", "90s", "00s", "10s", "20s", or "unknown"
 - group_type: "solo", "duo", "band", "orchestra", "dj", "unknown"
 - active_since: year as integer, or null if unknown
@@ -227,19 +239,30 @@ def main():
     print(f"\nDone. Enriched {done} artists.")
 
     # Quick summary
+    from country_aliases import get_country_aliases
     print("\n=== Summary ===")
     for label, field, val in [
         ("Female artists",  "gender",     "female"),
         ("Male artists",    "gender",     "male"),
         ("Mixed bands",     "gender",     "mixed"),
-        ("US artists",      "country",    "US"),
-        ("UK artists",      "country",    "UK"),
+        ("US artists",      "country",    "United States"),
+        ("UK artists",      "country",    "United Kingdom"),
         ("Solo artists",    "group_type", "solo"),
         ("Bands",           "group_type", "band"),
     ]:
-        count = conn.execute(
-            f"SELECT COUNT(*) FROM artist_meta WHERE {field} = ?", (val,)
-        ).fetchone()[0]
+        if field == "country":
+            # Count every known raw variant (e.g. "United States" and
+            # legacy "US" rows both), not just the canonical spelling.
+            aliases = get_country_aliases(val)
+            placeholders = ", ".join("?" for _ in aliases)
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} IN ({placeholders})",
+                aliases
+            ).fetchone()[0]
+        else:
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} = ?", (val,)
+            ).fetchone()[0]
         print(f"  {label:20s}  {count}")
 
     conn.close()

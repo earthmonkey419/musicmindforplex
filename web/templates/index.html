@@ -39,8 +39,8 @@
             <div class="tagline">Dig into your stacks.</div>
         </div>
         <div class="nav">
-            {% if lastfm_enabled %}<a href="/gaps">📋 Missing From Your Collection</a>{% endif %}
             <a href="/stats">📊 The Collection</a>
+            {% if lastfm_enabled %}<a href="/gaps">📋 Missing From Your Collection</a>{% endif %}
             <a href="/admin">⚙️ Admin</a>
             <a href="/guide">📖 Guide</a>
         </div>
@@ -63,6 +63,7 @@
                 <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Folk / Singer-Songwriter / Acoustic / Blues" id="bucket-folk"> Folk / Singer-Songwriter / Acoustic / Blues</label>
                 <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Country / Americana / Bluegrass" id="bucket-country"> Country / Americana / Bluegrass</label>
                 <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Electronic / House / Techno / Downtempo" id="bucket-electronic"> Electronic / House / Techno / Downtempo</label>
+                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Chant / Choral / Sacred" id="bucket-chant-choral"> Chant / Choral / Sacred</label>
         </div>
 
         <div class="filters">
@@ -79,7 +80,6 @@
                 <input type="range" id="vocal_tolerance" min="0.1" max="0.9" value="0.55" step="0.05" style="width:100px; vertical-align:middle;" oninput="document.getElementById('vocal_tolerance_label').textContent = this.value">
                 <span id="vocal_tolerance_label" style="font-size:0.85rem; color:#999;">0.55</span>
             </span>
-            <label><input type="checkbox" id="dj_ify"> 🎧 DJ-ify (sequence for flow)</label>
             <label>Genre
                 <select id="genre">
                     <option value="">Any</option>
@@ -127,16 +127,6 @@
             <label>Country
                 <select id="country">
                     <option value="">Any</option>
-                    <option value="US">US</option>
-                    <option value="UK">UK</option>
-                    <option value="BR">Brazil</option>
-                    <option value="FR">France</option>
-                    <option value="JP">Japan</option>
-                    <option value="AU">Australia</option>
-                    <option value="IE">Ireland</option>
-                    <option value="CA">Canada</option>
-                    <option value="SE">Sweden</option>
-                    <option value="DE">Germany</option>
                 </select>
             </label>
             <label>Era
@@ -231,6 +221,17 @@
             }
 
             if (!res.ok) {
+                // Upstream (OpenAI) failures come back as 429/502/504 with a
+                // JSON {error, code} body written for humans -- show it
+                // instead of a generic status message.
+                if ([429, 502, 504].includes(res.status)) {
+                    try {
+                        const body = await res.json();
+                        if (body && body.error) {
+                            return { ok: false, message: '⚠️ ' + body.error };
+                        }
+                    } catch (e) { /* not JSON -- fall through to generic message */ }
+                }
                 if (res.status === 500) {
                     return { ok: false, message: '⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.' };
                 }
@@ -363,7 +364,6 @@
                         date: dateVal,
                         limit: document.getElementById('limit').value,
                         max_per_artist: document.getElementById('max_per_artist').value,
-                        dj_ify: getChecked('dj_ify'),
                     })
                 });
 
@@ -450,7 +450,6 @@
                     limit:          document.getElementById('limit').value,
                     max_per_artist: document.getElementById('max_per_artist').value,
                     min_rating:     document.getElementById('min_rating').value || null,
-                    dj_ify:         getChecked('dj_ify'),
                     bpm_min:        document.getElementById('bpm_min').value || null,
                     bpm_max:        document.getElementById('bpm_max').value || null,
                     danceability:   document.getElementById('danceability').value || null,
@@ -526,7 +525,8 @@
 
                 document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
                 const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
-                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix;
+                const countrySuffix = payload.country ? `(${payload.country})` : '';
+                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix + countrySuffix;
                 document.getElementById('results').style.display = 'block';
             } catch (e) {
                 // Found real (July 2026): removing this safety net
@@ -597,9 +597,31 @@
             });
         }
 
+        // Load real country data on page load -- same pattern as
+        // loadGenres() above. Values are canonical country names
+        // (e.g. "United Kingdom"), not 2-letter codes, matching what
+        // the /countries endpoint returns.
+        async function loadCountries() {
+            const result = await friendlyFetchJSON('/countries');
+            if (!result.ok) {
+                console.warn('Could not load country list:', result.message);
+                return;
+            }
+            const data = result.data;
+            data.sort((a, b) => a.country.localeCompare(b.country));
+            const select = document.getElementById('country');
+            data.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.country;
+                opt.textContent = c.country + ' (' + c.count + ')';
+                select.appendChild(opt);
+            });
+        }
+
         // Enter key triggers preview
         document.addEventListener('DOMContentLoaded', () => {
             loadGenres();
+            loadCountries();
             document.getElementById('prompt').addEventListener('keydown', e => {
                 if (e.key === 'Enter') preview();
             });

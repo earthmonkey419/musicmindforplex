@@ -83,13 +83,33 @@ def get_unenriched_artists(conn):
     """, PLACEHOLDER_ARTISTS).fetchall()]
 
 
+class MBRequestError(Exception):
+    """Raised when a MusicBrainz request fails after all retries -- this
+    means the request itself broke (network/503/timeout), NOT that
+    MusicBrainz has no match. Callers must not treat this the same as a
+    genuine no-match result (see enrich())."""
+    pass
+
+
+MAX_RETRIES = 3
+RETRY_BACKOFF = 3  # seconds, multiplied by attempt number
+
+
 def mb_request(url):
-    req = urllib.request.Request(url, headers={
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json",
-    })
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        req = urllib.request.Request(url, headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BACKOFF * attempt)
+    raise MBRequestError(str(last_error))
 
 
 # MusicBrainz's own "Various Artists" catch-all entity — a stable, permanent
@@ -100,14 +120,12 @@ MB_VARIOUS_ARTISTS_ID = "89ad4ac3-39f7-470e-963a-56509c546377"
 
 
 def search_artist(name):
-    """Search MusicBrainz for an artist name. Returns best match dict or None."""
+    """Search MusicBrainz for an artist name. Returns best match dict or None.
+    Raises MBRequestError if the request failed after retries -- this must
+    NOT be treated as "no match found" by the caller."""
     query = urllib.parse.quote(name)
     url = f"{MB_BASE}/artist?query={query}&fmt=json&limit=5"
-    try:
-        data = mb_request(url)
-    except Exception as e:
-        print(f"  ⚠️ Search error for '{name}': {e}")
-        return None
+    data = mb_request(url)
 
     artists = data.get("artists", [])
     # Exclude MusicBrainz's "Various Artists" catch-all — never a real match
@@ -120,13 +138,10 @@ def search_artist(name):
 
 
 def lookup_artist(mbid):
-    """Fetch full artist details by MBID. Returns dict."""
+    """Fetch full artist details by MBID. Returns dict.
+    Raises MBRequestError if the request failed after retries."""
     url = f"{MB_BASE}/artist/{mbid}?fmt=json"
-    try:
-        return mb_request(url)
-    except Exception as e:
-        print(f"  ⚠️ Lookup error for {mbid}: {e}")
-        return None
+    return mb_request(url)
 
 
 def year_to_era(year):
@@ -163,9 +178,16 @@ def enrich(conn, test_mode=False, limit=None):
 
     matched = 0
     unmatched = 0
+    failed = 0
 
     for i, artist in enumerate(artists, 1):
-        result = search_artist(artist)
+        try:
+            result = search_artist(artist)
+        except MBRequestError as e:
+            failed += 1
+            print(f"  \u26a0\ufe0f Search request failed for '{artist}' after retries ({e}) -- will retry next run, not marked unmatched")
+            time.sleep(REQUEST_DELAY)
+            continue
         time.sleep(REQUEST_DELAY)
 
         score = result.get("score", 0) if result else 0
@@ -184,7 +206,13 @@ def enrich(conn, test_mode=False, limit=None):
             continue
 
         mbid = result.get("id")
-        details = lookup_artist(mbid)
+        try:
+            details = lookup_artist(mbid)
+        except MBRequestError as e:
+            failed += 1
+            print(f"  \u26a0\ufe0f Lookup request failed for {mbid} after retries ({e}) -- will retry next run, not marked unmatched")
+            time.sleep(REQUEST_DELAY)
+            continue
         time.sleep(REQUEST_DELAY)
 
         if not details:

@@ -19,3 +19,7 @@ __pycache__/
 
 # Licensed model files — CC BY-NC-SA, link don't bundle
 models/
+
+# Timestamped backups made by make_plex_token.py (they contain tokens)
+*.bak-*
+*.bak*

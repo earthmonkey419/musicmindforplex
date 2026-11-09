@@ -236,11 +236,24 @@ def ingest(conn, plex):
                     added_at = track.addedAt.isoformat()
 
                 conn.execute("""
-                    INSERT OR REPLACE INTO tracks
+                    INSERT INTO tracks
                         (rating_key, title, artist, album, genre, year,
                          duration_ms, play_count, last_played, user_rating,
                          added_at, updated_at, rating_count)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(rating_key) DO UPDATE SET
+                        title=excluded.title,
+                        artist=excluded.artist,
+                        album=excluded.album,
+                        genre=excluded.genre,
+                        year=excluded.year,
+                        duration_ms=excluded.duration_ms,
+                        play_count=excluded.play_count,
+                        last_played=excluded.last_played,
+                        user_rating=excluded.user_rating,
+                        added_at=excluded.added_at,
+                        updated_at=excluded.updated_at,
+                        rating_count=excluded.rating_count
                 """, (
                     str(track.ratingKey),
                     track.title,

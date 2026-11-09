@@ -12,7 +12,7 @@ DB_PATH = os.path.join(BASE_DIR, "musicmind.db")
 
 # Plex
 PLEX_URL   = "http://YOUR_NAS_IP:32400"   # e.g. http://10.0.0.251:32400
-PLEX_TOKEN = "YOUR_PLEX_TOKEN"             # see README for how to get this
+PLEX_TOKEN = "YOUR_PLEX_TOKEN"             # run: python3.12 make_plex_token.py --write
 MUSIC_LIB  = "Music"                       # your Plex music library name
 
 # OpenAI
