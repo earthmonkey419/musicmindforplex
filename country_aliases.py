@@ -60,7 +60,26 @@ geographic origin -- deliberately excluded, not a real country.
 cathedral city, not a country; likely area.get("name") returning a
 city-level value for some artist. Excluded rather than guessed at.
 """
-import pycountry
+import sys
+
+try:
+    import pycountry
+except ImportError:
+    # Added in 3.1.1. 3.1.0 made pycountry a hard import, so anyone
+    # who upgraded with "git pull" / Update Now but didn't run
+    # "pip install -r requirements.txt" got an import error on the
+    # Stats page, the Country dropdown and the country filter.
+    # Degrade instead of crashing: the manual alias map below still
+    # works, ISO codes (e.g. "IN") just stay unresolved until the
+    # package is installed.
+    pycountry = None
+    print(
+        "country_aliases: the 'pycountry' package is not installed, so "
+        "country codes will not be converted to names. Fix: "
+        "python3.12 -m pip install pycountry (or "
+        "pip install -r requirements.txt), then restart MusicMind.",
+        file=sys.stderr,
+    )
 
 # Cases pycountry genuinely cannot resolve on its own -- not ISO
 # codes at all (colloquial "UK"), or city-level values MusicBrainz's
@@ -125,7 +144,7 @@ def canonicalize_country(raw_value):
     # Real ISO 3166-1 alpha-2/alpha-3 codes -- the systemic fix.
     # Resolves ANY valid code, not just ones this module has
     # previously been told about.
-    if 2 <= len(raw_value) <= 3 and raw_value.isalpha():
+    if pycountry is not None and 2 <= len(raw_value) <= 3 and raw_value.isalpha():
         country = pycountry.countries.get(alpha_2=raw_value.upper())
         if not country:
             country = pycountry.countries.get(alpha_3=raw_value.upper())
@@ -158,16 +177,17 @@ def get_country_aliases(canonical_name):
             lookup_name = official
             break
 
-    try:
-        country = pycountry.countries.get(name=lookup_name)
-        if not country:
-            results = pycountry.countries.search_fuzzy(lookup_name)
-            country = results[0] if results else None
-        if country:
-            aliases.add(country.alpha_2)
-            aliases.add(country.alpha_3)
-            aliases.add(country.name)
-    except LookupError:
-        pass
+    if pycountry is not None:
+        try:
+            country = pycountry.countries.get(name=lookup_name)
+            if not country:
+                results = pycountry.countries.search_fuzzy(lookup_name)
+                country = results[0] if results else None
+            if country:
+                aliases.add(country.alpha_2)
+                aliases.add(country.alpha_3)
+                aliases.add(country.name)
+        except LookupError:
+            pass
 
     return list(aliases)
