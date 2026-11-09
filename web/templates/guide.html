@@ -59,7 +59,7 @@
                     <div class="guide-step-num">1</div>
                     <div class="guide-step-text">
                         Install dependencies:
-                        <code>sudo python3.12 -m pip install plexapi openai flask mutagen essentia numpy --break-system-packages</code>
+                        <code>sudo python3.12 -m pip install plexapi openai flask mutagen pycountry essentia numpy --break-system-packages</code>
                         (<code>essentia</code> powers Synapse and voice/instrumental analysis — heavier to install, but required)
                     </div>
                 </div>
@@ -135,8 +135,8 @@
 
             <h3>Genre focus</h3>
             <p>
-                11 genre checkboxes above the prompt box (Jazz, Hip-Hop/Rap, Classic/Garage/Alt/Punk Rock, and
-                so on) narrow the AI to that genre's own tag vocabulary — leave all unchecked to search your
+                The genre checkboxes above the prompt box (Jazz, Hip-Hop/Rap, Classic/Garage/Alt/Punk Rock,
+                Chant/Choral/Sacred, and so on) narrow the AI to that genre's own tag vocabulary — leave all unchecked to search your
                 full tag library. Checking one or more automatically switches to <strong>strict mode</strong>:
                 the AI still reads and interprets your whole prompt, but only ever picks tags from the genres
                 you selected, so "something for a rainy day" + Jazz genuinely returns jazz, not just "rainy day"
@@ -153,7 +153,7 @@
                 <li><strong>Min BPM / Max BPM</strong> — restrict by real, measured tempo (requires Synapse analysis — see below)</li>
                 <li><strong>Danceability</strong> — restrict by Synapse's measured danceability score</li>
                 <li><strong>Min rating</strong> — restrict by your Plex star rating</li>
-                <li><strong>Gender / Country / Era</strong> — filter by artist metadata</li>
+                <li><strong>Gender / Country / Era</strong> — filter by artist metadata. The Country list is built from your own library's data, with country codes and spelling variants (e.g. "US" and "United States") combined into one entry per country</li>
             </ul>
 
             <h3>Search hints</h3>
@@ -248,8 +248,9 @@
             <h2>⚙️ Back Office</h2>
             <p>One-click maintenance jobs. Each streams live output so you can watch progress — and the Full Sync card shows a live status of anything else currently running, so you can see at a glance whether it's safe to start.</p>
             <ul>
-                <li><strong>Full Sync</strong> — the complete pipeline, in order: scan Plex → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse)</li>
+                <li><strong>Full Sync</strong> — the complete pipeline, in order: scan Plex → ingest → fingerprint → check duplicates → resolve Various Artists tracks → enrich compilations from ID3 tags (fallback) → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse)</li>
                 <li><strong>Scan / Sync Plex Library</strong> — pull new or changed tracks</li>
+                <li><strong>Resync Item from Plex</strong> — instantly re-pull one artist/album's metadata after you correct it in Plex, without waiting for a full sync. Leave "Apply changes" unchecked first to preview what would change; nothing is written until you check it</li>
                 <li><strong>Sync Last.fm</strong> — update scrobbles, play counts, loved tracks</li>
                 <li><strong>Resolve Various Artists</strong> — identifies real performers for compilation tracks via acoustic fingerprinting + AcoustID, instead of unreliable text matching</li>
                 <li><strong>Resolve Recording IDs</strong> — identifies the specific MusicBrainz recording (not just the artist) for every fingerprinted track</li>
@@ -422,6 +423,11 @@
                 Shows your current installation's version and update tools. If installed via <code>git clone</code>,
                 you can check for updates and pull the latest version with one click. Manual installs get step-by-step
                 update instructions instead.
+            </p>
+            <p>
+                <strong>New dependencies:</strong> updating pulls new code but does not install Python packages.
+                Check the release notes in <code>CHANGELOG.md</code> — if a release lists a new dependency, run
+                <code>python3.12 -m pip install -r requirements.txt</code> before restarting.
             </p>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
