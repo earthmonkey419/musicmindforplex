@@ -4,6 +4,25 @@ All notable changes to MusicMind for Plex are documented here.
 
 ## [Unreleased]
 
+## [3.1.1] — 2026-11-09
+
+### Fixed
+- **Upgrading from 3.0 with "Update Now" or `git pull` no longer breaks
+  country features.** 3.1.0 made `pycountry` a hard import, but Update
+  Now only pulls code and never installs packages, so the Stats page,
+  the Country dropdown and the country filter errored until you ran
+  `pip install -r requirements.txt`. They now keep working without it
+  (country *codes* like "IN" stay unconverted and a warning is logged)
+  and become fully correct once `pycountry` is installed.
+
+### Changed
+- In-app guide: Quick Start now installs `pycountry`; added Resync Item
+  and the ID3 compilation step to Back Office; the Country filter and
+  genre-bucket descriptions are current; the Update section now says to
+  check the changelog for new dependencies.
+- Docs: Resync Item is described correctly as re-pulling one
+  artist/album's metadata.
+
 ## [3.1.0] — 2026-11-09
 
 ### ⚠️ Upgrade notes
@@ -22,8 +41,8 @@ All notable changes to MusicMind for Plex are documented here.
   e.g. India and "US"/"United States" each show up once and filter
   correctly. The selected country is also included in auto-generated
   playlist names.
-- **Resync Item** admin tool and `resync_item.py`, to refresh a single
-  item's metadata without a full re-ingest.
+- **Resync Item** admin tool and `resync_item.py`, to re-pull one
+  artist/album's metadata from Plex without a full re-ingest.
 - `make_plex_token.py` -- creates a dedicated Plex token for MusicMind
   (registered as its own device in Plex's Authorized Devices) instead of
   copying one out of Plex Web, whose token dies when that browser signs

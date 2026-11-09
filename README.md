@@ -33,7 +33,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 - Compilation enrichment — recovers real artist names from ID3 tags for "Various Artists" tracks. 30% of most libraries are compilations; now they are first-class citizens.
 - Metadata filters — filter by gender, country, era, genre, year, play count, rating, instrumental-only. "Female artists from Brazil in the 70s" is a valid query. The Country dropdown is built from your own data, with ISO codes and spelling variants folded into one entry per country.
 - Genre buckets — narrow a playlist to a family of genres (Jazz, Soul / Funk / R&B, World / Reggae / Latin / Afro, Electronic, Classical, and more, including the new Chant / Choral / Sacred).
-- Admin panel — one-click Full Sync pipeline: Plex scan, ingest, Last.fm, AI tag new tracks, plus Synapse analysis controls and a Resync Item tool for refreshing a single track's metadata. Live streaming output.
+- Admin panel — one-click Full Sync pipeline: Plex scan, ingest, Last.fm, AI tag new tracks, plus Synapse analysis controls and a Resync Item tool for re-pulling one artist/album's metadata after you fix it in Plex. Live streaming output.
 - DB query console — run any SELECT query against your music database directly from the browser.
 
 ---
@@ -264,7 +264,7 @@ musicmind/
     write_genres_to_plex.py      Writes AI genres back to Plex
     country_aliases.py           Canonical country names (pycountry-based)
     make_plex_token.py           Creates a dedicated Plex token for MusicMind
-    resync_item.py               Refreshes one item's metadata without a full re-ingest
+    resync_item.py               Re-pulls one artist/album's metadata without a full re-ingest
     plex_playlist.py             CLI playlist generator
     web/
         app.py                   Flask web app (port 8787)
