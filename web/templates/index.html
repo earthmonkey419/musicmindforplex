@@ -221,6 +221,17 @@
             }
 
             if (!res.ok) {
+                // Upstream (OpenAI) failures come back as 429/502/504 with a
+                // JSON {error, code} body written for humans -- show it
+                // instead of a generic status message.
+                if ([429, 502, 504].includes(res.status)) {
+                    try {
+                        const body = await res.json();
+                        if (body && body.error) {
+                            return { ok: false, message: '⚠️ ' + body.error };
+                        }
+                    } catch (e) { /* not JSON -- fall through to generic message */ }
+                }
                 if (res.status === 500) {
                     return { ok: false, message: '⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.' };
                 }
