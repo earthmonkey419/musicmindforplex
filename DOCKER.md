@@ -175,7 +175,7 @@ web app, or Plex's own support article on the subject).
 | Variable | Required | Notes |
 |---|---|---|
 | `PLEX_URL` | Yes | e.g. `http://10.0.0.251:32400` |
-| `PLEX_TOKEN` | Yes | |
+| `PLEX_TOKEN` | Yes | Create a dedicated one with `make_plex_token.py` (run it on any machine with Python + plexapi; see README, "Getting your Plex token"). After changing it, **recreate** the container -- a plain restart keeps the old generated `config.py` |
 | `OPENAI_KEY` | Yes | `sk-proj-...` |
 | `MUSIC_PATH` | Yes | The real folder on this host where your music lives — see the mount note in the compose file for the one detail that actually matters (needs to match Plex's own reported path) |
 | `MUSICMIND_PORT` | No | Defaults to `8787`. Only set this if something else on this host already uses that port (e.g. an existing native install) |
