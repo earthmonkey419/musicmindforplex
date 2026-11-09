@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
+import openai
 from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, get_missing_scrobbles_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
 from config import DB_PATH, BASE_DIR, LASTFM_KEY
 from config_check import check_config
@@ -137,6 +138,51 @@ def based_on():
         return jsonify({'error': str(e)}), 500
 
 
+def _openai_error_response(e):
+    """Translate an OpenAI SDK exception into an honest HTTP response.
+
+    The SDK already retried a 429 twice before raising, so by the time
+    we're here the limit is real. Return 429 (not 500) with a readable
+    message so the UI and any API client can tell "slow down / check
+    billing" apart from a genuine server bug.
+    """
+    code = getattr(e, 'code', None)
+    if isinstance(e, openai.RateLimitError):
+        status = 429
+        if code == 'insufficient_quota':
+            # Also a 429, but retrying won't help -- billing/quota issue.
+            msg = "OpenAI quota exhausted. Check your OpenAI plan and billing."
+        else:
+            msg = "OpenAI is rate limiting requests. Wait a moment and try again."
+            code = code or 'rate_limited'
+    elif isinstance(e, openai.AuthenticationError):
+        status, code = 502, 'openai_auth'
+        msg = "OpenAI rejected the API key. Check OPENAI_KEY in config.py."
+    elif isinstance(e, (openai.APIConnectionError, openai.APITimeoutError)):
+        status, code = 504, 'openai_unreachable'
+        msg = "Could not reach OpenAI. Check the server's internet connection."
+    else:
+        status, code = 502, 'openai_error'
+        msg = f"OpenAI returned an error: {e}"
+
+    resp = jsonify({'error': msg, 'code': code})
+    resp.status_code = status
+    retry_after = None
+    try:
+        retry_after = e.response.headers.get('retry-after')
+    except Exception:
+        pass
+    if status == 429 and retry_after:
+        resp.headers['Retry-After'] = retry_after
+    return resp
+
+
+@app.errorhandler(openai.OpenAIError)
+def handle_openai_error(e):
+    # Safety net for any route that lets an OpenAI error escape.
+    return _openai_error_response(e)
+
+
 @app.route('/preview', methods=['POST'])
 def preview():
     data = request.json
@@ -261,6 +307,8 @@ def preview():
 
         return jsonify(response)
 
+    except openai.OpenAIError as e:
+        return _openai_error_response(e)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
