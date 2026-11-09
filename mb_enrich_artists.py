@@ -45,6 +45,12 @@ def init_tables(conn):
         conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
     except Exception:
         pass  # column already exists (or table just created with it)
+    try:
+        # Stamped when a MusicBrainz lookup has confirmed whether the artist
+        # has a country; used by the "every mbid has country" integrity check.
+        conn.execute("ALTER TABLE artist_meta ADD COLUMN mb_country_checked_at TEXT")
+    except Exception:
+        pass  # column already exists
     conn.execute("""
         CREATE TABLE IF NOT EXISTS mb_unmatched_artists (
             artist        TEXT PRIMARY KEY,
@@ -255,11 +261,12 @@ def enrich(conn, test_mode=False, limit=None):
             print(f"       country: {country}")
             print(f"       gender:  {gender}")
         else:
+            now = datetime.now().isoformat()
             conn.execute("""
                 INSERT OR REPLACE INTO artist_meta
-                    (artist, gender, country, mbid, enriched_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (artist, gender, country, mbid, datetime.now().isoformat()))
+                    (artist, gender, country, mbid, enriched_at, mb_country_checked_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (artist, gender, country, mbid, now, now))
             conn.commit()
 
             if i % 25 == 0:

@@ -733,26 +733,167 @@ def run_test(test_id):
 @app.route('/run/assertion/<assertion_id>')
 def run_assertion(assertion_id):
     """
-    Runs a predefined SQL-based assertion and returns instant pass/fail.
-    Unlike test scripts, these check data invariants directly rather
-    than executing a script.
+    Runs a predefined SQL-based assertion and returns instant pass/fail,
+    plus (on FAIL) a breakdown, a sample of offending rows and repair
+    guidance. The connection is read-only (PRAGMA query_only), and the
+    'fix' text is display-only -- the page never executes it.
     """
     import sqlite3
 
-    assertions = {
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA query_only = ON")
+        has_marker = _table_has_column(conn, 'artist_meta', 'mb_country_checked_at')
+        assertions = _integrity_assertions(has_marker)
+
+        if assertion_id not in assertions:
+            return jsonify({'error': 'Unknown assertion'}), 400
+
+        a = assertions[assertion_id]
+        result = conn.execute(a['query']).fetchone()[0]
+        passed = (result == 0) if a['expect_zero'] else (result > 0)
+
+        payload = {
+            'label': a['label'],
+            'pass': passed,
+            'count': result,
+            'why': a.get('why', ''),
+        }
+        if not passed:
+            payload['fix'] = a.get('fix', '')
+            if a.get('breakdown'):
+                payload['breakdown'] = [
+                    {'label': str(r[0]), 'n': r[1]}
+                    for r in conn.execute(a['breakdown']).fetchall()
+                ]
+            if a.get('sample'):
+                cur = conn.execute(a['sample'])
+                payload['sample'] = {
+                    'columns': [d[0] for d in cur.description],
+                    'rows': [['' if v is None else str(v) for v in row]
+                             for row in cur.fetchall()],
+                }
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({'label': assertion_id, 'pass': False, 'error': str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _table_has_column(conn, table, column):
+    return column in [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+
+
+def _integrity_assertions(has_marker):
+    """
+    Data Integrity Checks for the /tests page. Every entry is read-only SQL.
+      query      COUNT(*) of failing rows; 0 means PASS
+      why        what the invariant protects
+      breakdown  optional SQL returning (bucket, n); shown on FAIL
+      sample     optional SQL returning up to 25 offending rows; shown on FAIL
+      fix        how to repair. Display only.
+    has_marker: whether artist_meta.mb_country_checked_at exists yet. Until
+    it does, check 1 runs in its original form.
+    """
+    if has_marker:
+        c1_where = "mbid IS NOT NULL AND country IS NULL AND mb_country_checked_at IS NULL"
+        c1_fix = (
+            "Back up first:\n"
+            "  cp musicmind.db musicmind.pre-country-fill.db\n\n"
+            "Preview a few lookups (no writes):\n"
+            "  python3.12 mb_fill_country.py --test --limit 5\n\n"
+            "Then run it for real (about 1.1 seconds per MBID):\n"
+            "  python3.12 mb_fill_country.py\n\n"
+            "It writes a country only where MusicBrainz records one, and stamps every\n"
+            "MBID it successfully looks up. Artists MusicBrainz has no area for stop\n"
+            "failing this check. Rows that still fail afterwards had a failed request;\n"
+            "run the script again to retry them."
+        )
+    else:
+        c1_where = "mbid IS NOT NULL AND country IS NULL"
+        c1_fix = (
+            "This check is still in its original form because the column\n"
+            "artist_meta.mb_country_checked_at does not exist yet.\n\n"
+            "Back up first:\n"
+            "  cp musicmind.db musicmind.pre-country-fill.db\n\n"
+            "Preview a few lookups (no writes):\n"
+            "  python3.12 mb_fill_country.py --test --limit 5\n\n"
+            "The first real run adds the column, fills countries where MusicBrainz\n"
+            "has one, and stamps the rest as checked:\n"
+            "  python3.12 mb_fill_country.py"
+        )
+
+    return {
         'mbid_has_country': {
             'label': 'Every artist with an mbid also has country set',
-            'query': """
-                SELECT COUNT(*) FROM artist_meta
-                WHERE mbid IS NOT NULL
-                  AND country IS NULL
-            """,
+            'query': f"SELECT COUNT(*) FROM artist_meta WHERE {c1_where}",
             'expect_zero': True,
+            'why': (
+                "Country filters and the country charts skip artists with a blank "
+                "country. An artist with an MBID should either have a country or "
+                "have been checked against MusicBrainz and confirmed to have none "
+                "recorded (many small or obscure artists have no area on MusicBrainz)."
+            ),
+            'breakdown': f"""
+                SELECT CASE
+                         WHEN mbid IN (SELECT mbid FROM artist_meta
+                                       WHERE mbid IS NOT NULL
+                                       GROUP BY mbid HAVING COUNT(*) > 1)
+                           THEN 'MBID shared with other rows (collab credits / name variants)'
+                         ELSE 'Own MBID'
+                       END AS bucket,
+                       COUNT(*) AS n
+                FROM artist_meta
+                WHERE {c1_where}
+                GROUP BY bucket
+                ORDER BY n DESC
+            """,
+            'sample': f"""
+                SELECT artist, mbid, group_type, enriched_at
+                FROM artist_meta
+                WHERE {c1_where}
+                ORDER BY artist
+                LIMIT 25
+            """,
+            'fix': c1_fix,
         },
         'no_null_era': {
             'label': 'No artist has a NULL era value',
             'query': "SELECT COUNT(*) FROM artist_meta WHERE era IS NULL",
             'expect_zero': True,
+            'why': (
+                "Decade filters and era charts exclude artists with no era. "
+                "MusicBrainz cannot supply an era, so the AI enrichment step fills "
+                "it for every artist, including ones MusicBrainz already matched."
+            ),
+            'breakdown': """
+                SELECT CASE WHEN mbid IS NULL
+                            THEN 'No MBID (not yet enriched at all)'
+                            ELSE 'Has MBID (matched by MusicBrainz, AI era pass pending)'
+                       END AS bucket,
+                       COUNT(*) AS n
+                FROM artist_meta
+                WHERE era IS NULL
+                GROUP BY bucket
+                ORDER BY n DESC
+            """,
+            'sample': """
+                SELECT artist, mbid, group_type, enriched_at
+                FROM artist_meta
+                WHERE era IS NULL
+                ORDER BY artist
+                LIMIT 25
+            """,
+            'fix': (
+                "Run the AI enrichment step; it picks up every artist whose era is NULL.\n"
+                "Small trial first:\n"
+                "  python3.12 enrich_artists.py --limit 5\n\n"
+                "Then the full run (or use the AI enrich step in Back Office):\n"
+                "  python3.12 enrich_artists.py"
+            ),
         },
         'unmatched_artists_not_in_meta': {
             'label': 'No artist appears in both artist_meta and mb_unmatched_artists',
@@ -762,26 +903,44 @@ def run_assertion(assertion_id):
                 WHERE m.mbid IS NOT NULL
             """,
             'expect_zero': True,
+            'why': (
+                "mb_unmatched_artists is the list of artists MusicBrainz enrichment "
+                "skips. An artist that is on it but also has an MBID means the log is "
+                "stale: it was matched some other way after being logged. Lookups are "
+                "unaffected, but the two tables disagree about what is matched."
+            ),
+            'breakdown': """
+                SELECT CASE
+                         WHEN u.best_score IS NULL THEN 'Logged by hand (no score)'
+                         WHEN u.best_score = 0     THEN 'Score 0 (failed search or no result)'
+                         WHEN u.best_score >= 85   THEN 'Score 85+ (should have matched)'
+                         ELSE 'Score below 85'
+                       END AS bucket,
+                       COUNT(*) AS n
+                FROM mb_unmatched_artists u
+                JOIN artist_meta m ON m.artist = u.artist
+                WHERE m.mbid IS NOT NULL
+                GROUP BY bucket
+                ORDER BY n DESC
+            """,
+            'sample': """
+                SELECT m.artist, m.mbid, u.best_score, u.checked_at
+                FROM mb_unmatched_artists u
+                JOIN artist_meta m ON m.artist = u.artist
+                WHERE m.mbid IS NOT NULL
+                ORDER BY u.checked_at
+                LIMIT 25
+            """,
+            'fix': (
+                "The unmatched log is only a skip list, so entries for artists that now\n"
+                "have an MBID can be removed. Back up first:\n"
+                "  cp musicmind.db musicmind.pre-unmatched-cleanup.db\n\n"
+                "Then:\n"
+                "  sqlite3 musicmind.db \"DELETE FROM mb_unmatched_artists\n"
+                "    WHERE artist IN (SELECT artist FROM artist_meta WHERE mbid IS NOT NULL);\""
+            ),
         },
     }
-
-    if assertion_id not in assertions:
-        return jsonify({'error': 'Unknown assertion'}), 400
-
-    a = assertions[assertion_id]
-    try:
-        conn = sqlite3.connect(DB_PATH, timeout=30)
-        conn.execute("PRAGMA busy_timeout=30000")
-        result = conn.execute(a['query']).fetchone()[0]
-        conn.close()
-        passed = (result == 0) if a['expect_zero'] else (result > 0)
-        return jsonify({
-            'label': a['label'],
-            'pass': passed,
-            'count': result,
-        })
-    except Exception as e:
-        return jsonify({'label': a['label'], 'pass': False, 'error': str(e)}), 500
 
 
 @app.route('/run/synapse-count')
