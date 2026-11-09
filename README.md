@@ -5,6 +5,8 @@
 
 > **⚠️ Upgrading from v2? You must run a migration script before starting v3, or the app will refuse to start against your existing database rather than risk creating an empty one by mistake. See [Upgrading from v2](#upgrading-from-v2) below.**
 
+> **Latest release: 3.1.0** — country filter fixes, a new Chant / Choral / Sacred genre bucket, a Full Sync data-loss fix, and clearer OpenAI errors. Already on 3.0? See [Upgrading to 3.1](#upgrading-to-31) (one new dependency). Full details in [CHANGELOG.md](CHANGELOG.md).
+
 > The AI-enhanced music companion Plex should have built.
 
 [![Support MusicMind](https://img.shields.io/badge/%E2%9D%A4%EF%B8%8F_Support-MusicMind-c56fa4?style=for-the-badge)](https://www.paypal.com/ncp/payment/THHJJDVQRH366)
@@ -20,7 +22,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 - Natural language playlists — "quiet and watery", "garagy grungy rock", "sunny day driving with the windows down". OpenAI expands your prompt into specific music tags and scores your library against them.
 - **Synapse — real audio analysis.** Measures tempo (BPM), musical key, and danceability from the actual audio of every track using Essentia, the open-source audio analysis library from the Music Technology Group at Universitat Pompeu Fabra. Deterministic signal processing on your own hardware — no cloud, no guessing. Resumable background runs with time estimates measured on your machine.
 - **BPM and Danceability filters** on the playlist generator — powered by Synapse's measured data.
-- **DJ-ify** — optional deterministic tempo-arc sequencing that reorders a playlist for flow using measured BPM and key.
+- **DJ-ify** — deterministic tempo-arc sequencing that reorders every generated playlist for flow using measured BPM and key.
 - **Last.fm date search** — `lastfm:` prompts plus an **On This Day** picker that rebuilds what you were listening to on any date in your scrobble history.
 - **The Collection** — a stats dashboard for your library and listening history: by era, by country, top artists, top genres, listening history by year.
 - AI genre enrichment — your entire library gets tagged with specific subgenres (shoegaze, dance-punk, balearic, cosmic disco, etc). Tags are stored in the MusicMind database and power the playlist generator. **Plex is not touched.** Optionally, you can write these tags back into Plex to enrich the Plexamp genre browser — entirely optional and fully revertable.
@@ -29,8 +31,9 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 - Listening context playlists — "Your Afternoon" (what you actually play 1-5pm), "Weekend Flow", and "Often Together" (tracks that appear in the same listening session, cross-artist, album pairs excluded).
 - Library gap analysis — artists you have scrobbled 50+ times that are not in your library, categorized into Worth Acquiring, Classical, Ambient/Meditation, and Unknown.
 - Compilation enrichment — recovers real artist names from ID3 tags for "Various Artists" tracks. 30% of most libraries are compilations; now they are first-class citizens.
-- Metadata filters — filter by gender, country, era, genre, year, play count, rating, instrumental-only. "Female artists from Brazil in the 70s" is a valid query.
-- Admin panel — one-click Full Sync pipeline: Plex scan, ingest, Last.fm, AI tag new tracks, plus Synapse analysis controls. Live streaming output.
+- Metadata filters — filter by gender, country, era, genre, year, play count, rating, instrumental-only. "Female artists from Brazil in the 70s" is a valid query. The Country dropdown is built from your own data, with ISO codes and spelling variants folded into one entry per country.
+- Genre buckets — narrow a playlist to a family of genres (Jazz, Soul / Funk / R&B, World / Reggae / Latin / Afro, Electronic, Classical, and more, including the new Chant / Choral / Sacred).
+- Admin panel — one-click Full Sync pipeline: Plex scan, ingest, Last.fm, AI tag new tracks, plus Synapse analysis controls and a Resync Item tool for refreshing a single track's metadata. Live streaming output.
 - DB query console — run any SELECT query against your music database directly from the browser.
 
 ---
@@ -61,7 +64,7 @@ Start below is for a direct, native install instead.
 1. Install dependencies
 
     ```bash
-    sudo python3.12 -m pip install plexapi openai flask mutagen essentia --break-system-packages
+    sudo python3.12 -m pip install plexapi openai flask mutagen pycountry essentia --break-system-packages
     ```
 
 2. Configure
@@ -177,6 +180,25 @@ for existing installs upgrading in place.
 
 ---
 
+## Upgrading to 3.1
+
+Already running 3.0? If you installed with `git clone`, from your
+MusicMind folder:
+
+```bash
+git pull
+python3.12 -m pip install pycountry
+pm2 restart musicmind
+```
+
+(Or use **Update Now** on the app's Update page, then install
+`pycountry` and restart.) 3.1 adds one new dependency, `pycountry`,
+used for the country filter. Docker users: rebuild the image instead.
+There is no database migration — your data is untouched. Note that
+DJ-ify is now always on; the on/off toggle is gone.
+
+---
+
 ## Works with the rest of the family
 
 MusicMind is the local music-intelligence database behind the rest of the
@@ -240,6 +262,9 @@ musicmind/
     lastfm_gaps.py               Gap analysis
     listening_context.py         Context-aware playlists
     write_genres_to_plex.py      Writes AI genres back to Plex
+    country_aliases.py           Canonical country names (pycountry-based)
+    make_plex_token.py           Creates a dedicated Plex token for MusicMind
+    resync_item.py               Refreshes one item's metadata without a full re-ingest
     plex_playlist.py             CLI playlist generator
     web/
         app.py                   Flask web app (port 8787)
@@ -256,8 +281,19 @@ See USER-MANUAL.md for complete documentation including all script flags, databa
 
 ## Roadmap
 
+Planned for v4, roughly in this order (nothing here is promised
+for a date):
+
+- Pipeline controls — a clean Stop button for running admin jobs, and a lock so a restart can't interrupt a Full Sync mid-run
+- Date-range playlists — "what I added in the summer of 2019", combinable with mood and genre filters
+- MusicBrainz artist aliases — so Mos Def and Yasiin Bey count as the same artist in gap analysis
+- Thematic relevance — an AI pass so "breakup songs" returns songs *about* breakups, not just songs that sound sad
+- Tracklist import — paste in an `Artist - Title` list and match it against your library
+- Ollama support for local AI tagging (no OpenAI cost), as an opt-in beta
+
+Further out:
+
 - Duplicate detection — a report grouping tracks by acoustic fingerprint (fingerprinting itself and "Various Artists" artist resolution are already shipped; this specific report is the remaining piece)
-- Ollama support for local AI tagging (no OpenAI cost)
 - Rediscovery playlist — tracks you loved but have not played in 2+ years
 - Mobile-optimized UI
 
