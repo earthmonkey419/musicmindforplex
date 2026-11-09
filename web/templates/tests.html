@@ -119,6 +119,49 @@
             };
         }
 
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, function(c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+            });
+        }
+
+        function renderAssertionDetail(card, id, data) {
+            let panel = document.getElementById('detail-' + id);
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'detail-' + id;
+                panel.className = 'assertion-detail';
+                card.insertAdjacentElement('afterend', panel);
+            }
+            let html = '';
+            if (data.why) {
+                html += '<p class="ad-why"><strong>Why it matters:</strong> ' + escapeHtml(data.why) + '</p>';
+            }
+            if (data.breakdown && data.breakdown.length) {
+                html += '<p class="ad-label">Breakdown of the failures</p><table>';
+                data.breakdown.forEach(function(b) {
+                    html += '<tr><td>' + escapeHtml(b.label) + '</td><td>' + escapeHtml(b.n) + '</td></tr>';
+                });
+                html += '</table>';
+            }
+            if (data.sample && data.sample.rows.length) {
+                html += '<p class="ad-label">First ' + data.sample.rows.length + ' offending rows</p>';
+                html += '<div class="ad-scroll"><table><tr>';
+                data.sample.columns.forEach(function(c) { html += '<th>' + escapeHtml(c) + '</th>'; });
+                html += '</tr>';
+                data.sample.rows.forEach(function(r) {
+                    html += '<tr>' + r.map(function(v) { return '<td>' + escapeHtml(v) + '</td>'; }).join('') + '</tr>';
+                });
+                html += '</table></div>';
+            }
+            if (data.fix) {
+                html += '<p class="ad-label">How to fix (run these yourself; this page changes nothing)</p>';
+                html += '<pre class="ad-fix">' + escapeHtml(data.fix) + '</pre>';
+            }
+            panel.innerHTML = html;
+            panel.style.display = html ? 'block' : 'none';
+        }
+
         async function runAssertion(id, btn) {
             const card = document.getElementById('assertion-' + id);
             const result = card.querySelector('.assertion-result');
@@ -139,6 +182,7 @@
                     result.textContent = `❌ FAIL (${data.count})`;
                     result.className = 'assertion-result fail';
                 }
+                renderAssertionDetail(card, id, data);
             } catch(e) {
                 result.textContent = '❌ Request failed';
                 result.className = 'assertion-result fail';
