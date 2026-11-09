@@ -274,7 +274,7 @@ BUCKETS = [
         'funk-infused',
         'funky',
         'girl group',
-        'gospel',
+        'gospel-influenced r&b',
         'groove rock',
         'hi-nrg',
         'jazz-influenced r&b',
@@ -566,6 +566,24 @@ BUCKETS = [
     # tagged instances respectively) to belong in a bucket this
     # narrow; a separate "Ambient / Meditative" bucket is a real
     # future candidate for those, not folded in here.
+    # Gospel (added 2026-10-13): 'gospel' was previously a single tag
+    # inside Soul / Funk / R&B, which left traditional gospel (~245
+    # uses) and the other gospel-family tags unreachable by bucket
+    # selection. 'live gospel', 'southern gospel', 'soul gospel' and
+    # 'country gospel' are below the usual 21-use threshold but are
+    # unambiguously gospel. Influence tags ('gospel-influenced r&b')
+    # stay in Soul / Funk / R&B.
+    ("Gospel", [
+        'african american gospel',
+        'contemporary gospel',
+        'country gospel',
+        'gospel',
+        'gospel blues',
+        'live gospel',
+        'soul gospel',
+        'southern gospel',
+        'traditional gospel',
+    ]),
     ("Chant / Choral / Sacred", [
         'chant',
         'chant reggae',
