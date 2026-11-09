@@ -411,7 +411,9 @@
             <p>
                 Verifies the enrichment scripts behave correctly — safe to run anytime. <strong>Script Tests</strong> run
                 dry-run and small real passes of the MusicBrainz and AI enrichment scripts. <strong>Data Integrity Checks</strong>
-                run instant SQL assertions confirming your data is internally consistent.
+                run instant SQL assertions confirming your data is internally consistent. When a check fails, it shows a
+                breakdown of what's wrong, a sample of the offending rows, and suggested repair steps. The checks only
+                read your database and the repair steps are for you to run yourself — this page never changes your data.
             </p>
             <a href="#top" class="guide-back-to-top">↑ Back to top</a>
         </div>
