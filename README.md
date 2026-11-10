@@ -5,7 +5,7 @@
 
 > **⚠️ Upgrading from v2? You must run a migration script before starting v3, or the app will refuse to start against your existing database rather than risk creating an empty one by mistake. See [Upgrading from v2](#upgrading-from-v2) below.**
 
-> **Latest release: 3.1.0** — country filter fixes, a new Chant / Choral / Sacred genre bucket, a Full Sync data-loss fix, and clearer OpenAI errors. Already on 3.0? See [Upgrading to 3.1](#upgrading-to-31) (one new dependency). Full details in [CHANGELOG.md](CHANGELOG.md).
+> **Latest release: 3.1.2** — country filter fixes, new Chant / Choral / Sacred and Gospel genre buckets, a Full Sync data-loss fix, and clearer OpenAI errors. Already on 3.0? See [Upgrading to 3.1](#upgrading-to-31) (one new dependency). Full details in [CHANGELOG.md](CHANGELOG.md).
 
 > The AI-enhanced music companion Plex should have built.
 
@@ -32,7 +32,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 - Library gap analysis — artists you have scrobbled 50+ times that are not in your library, categorized into Worth Acquiring, Classical, Ambient/Meditation, and Unknown.
 - Compilation enrichment — recovers real artist names from ID3 tags for "Various Artists" tracks. 30% of most libraries are compilations; now they are first-class citizens.
 - Metadata filters — filter by gender, country, era, genre, year, play count, rating, instrumental-only. "Female artists from Brazil in the 70s" is a valid query. The Country dropdown is built from your own data, with ISO codes and spelling variants folded into one entry per country.
-- Genre buckets — narrow a playlist to a family of genres (Jazz, Soul / Funk / R&B, World / Reggae / Latin / Afro, Electronic, Classical, and more, including the new Chant / Choral / Sacred).
+- Genre buckets — narrow a playlist to a family of genres (Jazz, Soul / Funk / R&B, World / Reggae / Latin / Afro, Electronic, Classical, and more, including the new Chant / Choral / Sacred and Gospel).
 - Admin panel — one-click Full Sync pipeline: Plex scan, ingest, Last.fm, AI tag new tracks, plus Synapse analysis controls and a Resync Item tool for re-pulling one artist/album's metadata after you fix it in Plex. Live streaming output.
 - DB query console — run any SELECT query against your music database directly from the browser.
 

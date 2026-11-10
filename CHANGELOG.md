@@ -4,6 +4,27 @@ All notable changes to MusicMind for Plex are documented here.
 
 ## [Unreleased]
 
+## [3.1.2] — 2026-11-09
+
+### Added
+- **Gospel genre bucket.** Traditional, contemporary, southern, soul and
+  country gospel (and related tags) now have their own bucket for Genre
+  focus. The plain `gospel` tag used to sit inside Soul / Funk / R&B,
+  which left gospel hard to reach on its own. Gospel-influenced R&B stays
+  in Soul / Funk / R&B.
+- **Richer Data Integrity Checks on the Tests page.** A failing check now
+  shows a breakdown of what is wrong, a sample of the affected rows and
+  suggested repair steps. The checks still only read your database; the
+  repair steps are for you to run yourself.
+- `artist_meta.mb_country_checked_at`: a marker, added automatically the
+  next time MusicBrainz enrichment runs, recording that an artist's
+  country has been looked up. The "every MBID has a country" check uses
+  it so artists MusicBrainz has no country for stop failing the check.
+
+### Changed
+- In-app guide: the Tests page section describes the new check output.
+- Docs: added the Pipeline Lifecycle scope doc for v4.
+
 ## [3.1.1] — 2026-11-09
 
 ### Fixed
