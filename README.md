@@ -62,6 +62,12 @@ Start below is for a direct, native install instead.
 
 ## Quick Start
 
+For a local virtual environment, run `make install`, copy
+`config.example.py` to `config.py`, then run `make run`. Use
+`make install-full` for TensorFlow-backed voice/instrumental detection.
+The Makefile uses `python3.12` by default; set `PYTHON` to another
+compatible interpreter if needed.
+
 1. Install dependencies
 
    ```bash
