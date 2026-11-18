@@ -15,9 +15,19 @@ models/
 .github
 
 # Python
+.venv/
+*.egg-info/
+build/
+dist/
 __pycache__/
 *.pyc
 *.pyo
+
+# Local development files
+.idea/
+.ruff_cache/
+.pytest_cache/
+.env*
 
 # OS cruft
 .DS_Store

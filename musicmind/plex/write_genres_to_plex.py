@@ -221,14 +221,7 @@ def revert_mode(conn, plex):
     print(f"\nDone. {done} tracks reverted.")
 
 
-def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "--test"
-
-    print("MusicMind for Plex - Write AI Genres to Plex")
-    print("=" * 50)
-    print(f"Mode: {mode}\n")
-
-    conn = sqlite3.connect(DB_PATH)
+def init_snapshot_table(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS genre_snapshot (
             rating_key  TEXT,
@@ -237,6 +230,17 @@ def main():
         )
     """)
     conn.commit()
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "--test"
+
+    print("MusicMind for Plex - Write AI Genres to Plex")
+    print("=" * 50)
+    print(f"Mode: {mode}\n")
+
+    conn = sqlite3.connect(DB_PATH)
+    init_snapshot_table(conn)
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
 
     if mode == "--test":

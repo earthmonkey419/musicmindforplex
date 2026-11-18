@@ -72,10 +72,13 @@ The installable `musicmind_cli` package provides a `musicmind` command.
 Run it from the directory containing your `config.py`:
 
 ```bash
-uv run musicmind db init   # create the local database schema without contacting Plex
+uv run musicmind db init   # create all database tables without contacting Plex
 uv run musicmind ingest    # import your Plex music library
 uv run musicmind serve     # start the web server on port 8787
 ```
+
+The database command is safe to repeat: it adds missing tables and columns
+without importing data.
 
 1. Install dependencies
 

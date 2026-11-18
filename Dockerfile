@@ -30,7 +30,7 @@
 # real Docker environment to test against. A hardened non-root setup
 # is a reasonable future improvement once this base path is proven.
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG VARIANT=slim
 ENV MUSICMIND_VARIANT=${VARIANT}

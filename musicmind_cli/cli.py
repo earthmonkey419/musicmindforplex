@@ -34,11 +34,11 @@ def main(argv=None):
         app.run(host=args.host, port=args.port, debug=False)
     elif args.command == "db":
         from config import DB_PATH
-        from musicmind.ingest import init_db
+        from musicmind.db.schema import init_all
 
         conn = sqlite3.connect(DB_PATH, timeout=30)
         try:
-            init_db(conn)
+            init_all(conn)
         finally:
             conn.close()
     elif args.command == "ingest":
