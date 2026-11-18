@@ -142,19 +142,19 @@ the fallback if Phase 5 proves more than it is worth.
 Counts below are `commit()` calls, **VERIFIED**; they are a hint at
 granularity, not a safety verdict.
 
-| Script | commit() calls | Interruption verdict |
-|---|---|---|
-| `musicmind_ingest.py` | 5 | **To test** — upsert is `ON CONFLICT DO UPDATE` since 2026-09-06; commits inside the loop and once at the end |
-| `fingerprint_tracks.py` | 3 | To test |
-| `copy_forward_analysis.py` | 2 | To test |
-| `va_resolve.py` | 3 | To test (documented resumable) |
-| `enrich_compilations.py` | 2 | To test |
-| `resolve_recording_mbids.py` | 3 | To test |
-| `lastfm_sync.py` | 8 | To test (has lock already) |
-| `mb_enrich_artists.py` | 4 | To test |
-| `enrich_artists.py` | 2 | To test |
-| `plex_tag_tracks.py` | 2 | To test |
-| `synapse_analyze.py` | 2 | Documented resumable; has lock |
+| Script                       | commit() calls | Interruption verdict                                                                                          |
+| ---------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------- |
+| `musicmind_ingest.py`        | 5              | **To test** — upsert is `ON CONFLICT DO UPDATE` since 2026-09-06; commits inside the loop and once at the end |
+| `fingerprint_tracks.py`      | 3              | To test                                                                                                       |
+| `copy_forward_analysis.py`   | 2              | To test                                                                                                       |
+| `va_resolve.py`              | 3              | To test (documented resumable)                                                                                |
+| `enrich_compilations.py`     | 2              | To test                                                                                                       |
+| `resolve_recording_mbids.py` | 3              | To test                                                                                                       |
+| `lastfm_sync.py`             | 8              | To test (has lock already)                                                                                    |
+| `mb_enrich_artists.py`       | 4              | To test                                                                                                       |
+| `enrich_artists.py`          | 2              | To test                                                                                                       |
+| `plex_tag_tracks.py`         | 2              | To test                                                                                                       |
+| `synapse_analyze.py`         | 2              | Documented resumable; has lock                                                                                |
 
 ## Phases
 

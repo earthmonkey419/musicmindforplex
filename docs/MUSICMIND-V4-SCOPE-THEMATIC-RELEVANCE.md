@@ -26,7 +26,7 @@ job as designed.
 
 The real gap: **every tag in the system describes sound — genre,
 subgenre, era, style. Nothing describes subject matter.** "Love
-songs" as a mood will always resolve to *some* genre/style subset,
+songs" as a mood will always resolve to _some_ genre/style subset,
 because that's the only axis of information that exists. A
 post-punk song about betrayal and a post-punk song about love are
 indistinguishable to the current pipeline — they carry identical
@@ -37,8 +37,8 @@ tags.
 Mood-based generation ("songs about X," "I want to hear Y") is a
 primary entry point to the app, not an edge case. Prompts like
 "tribal sounding songs" or "modern stuff" — where the user is
-describing *sound*, not *subject* — work correctly today and don't
-need this fix. But prompts describing a *theme* ("love songs,"
+describing _sound_, not _subject_ — work correctly today and don't
+need this fix. But prompts describing a _theme_ ("love songs,"
 "breakup songs," "songs about summer," "songs about loss") will
 silently produce the same failure mode demonstrated above, for any
 theme, in any genre bucket, until this exists. This is a systemic
@@ -65,7 +65,7 @@ tags that lean thematic rather than purely sonic: **romantic**,
 **ballad**, **emotional**, **reflective**, alongside **soul**,
 **soft rock**, **dream pop**, **singer-songwriter**. Those aren't
 theme-evaluation — they're a lucky overlap between a handful of
-mood-adjacent tag *names* and this specific prompt's *theme*. The
+mood-adjacent tag _names_ and this specific prompt's _theme_. The
 system still has no mechanism that reads "Blasphemous Rumours" or
 "Psycho Killer" and knows those aren't about love — it just wasn't
 offered tags that would have let a similarly wrong pick happen this
@@ -86,7 +86,7 @@ the one prompt we know can get lucky.
 **Conclusion, and why this doesn't change the proposed mechanism:**
 removing bucket restriction is not the fix. It's a smaller-scale
 version of the same underlying failure — a system that matches mood
-prompts against tag *names* rather than actually evaluating a
+prompts against tag _names_ rather than actually evaluating a
 candidate track's theme. The gap is systemic to mood/theme matching
 generally, confirmed to exist independent of bucket selection, and
 the LLM relevance-scoring pass proposed below remains the real
@@ -100,7 +100,7 @@ the correct mechanism for "sound" prompts and for narrowing the
 candidate pool before thematic filtering — rebuilding that would be
 solving a problem that doesn't exist. This scope is specifically
 about adding a second, independent axis — thematic fit — that acts
-*after* tag-based candidate selection, not instead of it.
+_after_ tag-based candidate selection, not instead of it.
 
 ## Proposed mechanism: LLM relevance scoring pass
 
@@ -108,7 +108,7 @@ Rather than a new structural data source (lyrics ingestion, a new
 `theme_tags` table), the fastest real fix given "measure, don't
 guess": add a scoring/filtering step using the same OpenAI
 integration already proven throughout the pipeline (`expand_prompt()`,
-`classify_prompt()`), applied to the *candidate list*, not the tag
+`classify_prompt()`), applied to the _candidate list_, not the tag
 selection.
 
 Rough shape:
@@ -117,7 +117,7 @@ Rough shape:
    emotional") — no new classification work needed there.
 2. Tag-based matching runs as it does today, but pulls a **wider**
    candidate pool than the final 30 (e.g. 60-100), specifically so
-   there's real headroom for a relevance filter to narrow *from*
+   there's real headroom for a relevance filter to narrow _from_
    rather than re-ranking a pool that was already too small to
    filter meaningfully.
 3. A new scoring call sends the candidate list (title + artist,
