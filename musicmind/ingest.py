@@ -33,6 +33,7 @@ def set_last_ingest(conn, ts):
 
 
 def init_db(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tracks (
             rating_key   TEXT PRIMARY KEY,
