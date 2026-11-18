@@ -1,106 +1,173 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicMind for Plex — DB Query</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex — DB Query">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex — DB Query" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
     <div class="container">
-{% set back_target = "/" %}{% set back_label = "Back to the Stacks" %}
-{% include "_admin_nav.html" %}
-        <h1 class="page-title">🗄️ The Ledger</h1>
-        <p class="page-subtitle">SELECT queries only. Click a hint to load it. Ctrl+Enter to run.</p>
+      {% set back_target = "/" %}{% set back_label = "Back to the Stacks" %} {%
+      include "_admin_nav.html" %}
+      <h1 class="page-title">🗄️ The Ledger</h1>
+      <p class="page-subtitle">
+        SELECT queries only. Click a hint to load it. Ctrl+Enter to run.
+      </p>
 
-        <div class="hints">
-            <h3>Example Queries</h3>
-            <div class="hint" onclick="load(this)">SELECT artist, COUNT(*) as tracks FROM tracks GROUP BY artist ORDER BY tracks DESC LIMIT 20</div>
-            <div class="hint" onclick="load(this)">SELECT tag, COUNT(*) as cnt FROM track_tags GROUP BY tag ORDER BY cnt DESC LIMIT 30</div>
-            <div class="hint" onclick="load(this)">SELECT artist, scrobbles, category FROM artist_gaps ORDER BY scrobbles DESC LIMIT 30</div>
-            <div class="hint" onclick="load(this)">SELECT title, artist, play_count FROM tracks WHERE play_count > 0 ORDER BY play_count DESC LIMIT 20</div>
-            <div class="hint" onclick="load(this)">SELECT gender, COUNT(*) as cnt FROM artist_meta GROUP BY gender ORDER BY cnt DESC</div>
-            <div class="hint" onclick="load(this)">SELECT country, COUNT(*) as cnt FROM artist_meta GROUP BY country ORDER BY cnt DESC LIMIT 20</div>
-            <div class="hint" onclick="load(this)">SELECT era, COUNT(*) as cnt FROM artist_meta GROUP BY era ORDER BY cnt DESC</div>
-            <div class="hint" onclick="load(this)">SELECT strftime('%Y', datetime(timestamp, 'unixepoch', 'localtime')) as year, COUNT(*) as plays FROM lastfm_scrobbles GROUP BY year ORDER BY year</div>
-            <div class="hint" onclick="load(this)">SELECT artist, title, real_artist FROM tracks WHERE real_artist IS NOT NULL LIMIT 20</div>
-            <div class="hint" onclick="load(this)">SELECT key, value FROM meta</div>
-            <div class="hint" onclick="load(this)">SELECT album, year, COUNT(*) as tracks FROM tracks WHERE LOWER(artist) = LOWER('African Head Charge') OR LOWER(real_artist) = LOWER('African Head Charge') GROUP BY album ORDER BY year</div>
-            <div class="hint" onclick="load(this)">SELECT DISTINCT COALESCE(real_artist, artist) as artist, COUNT(*) as tracks FROM tracks GROUP BY artist ORDER BY tracks DESC LIMIT 20</div>
-            <div class="hint" onclick="load(this)">SELECT title, COALESCE(real_artist, artist) as artist, album, year, play_count FROM tracks WHERE play_count > 0 ORDER BY play_count DESC LIMIT 20</div>
+      <div class="hints">
+        <h3>Example Queries</h3>
+        <div class="hint" onclick="load(this)">
+          SELECT artist, COUNT(*) as tracks FROM tracks GROUP BY artist ORDER BY
+          tracks DESC LIMIT 20
         </div>
-
-        <textarea id="sql" placeholder="SELECT ..."></textarea>
-        <button onclick="runQuery()">Run Query</button>
-
-        <div class="results" id="results" style="display:none">
-            <div class="result-count" id="result-count"></div>
-            <div style="overflow-x:auto;">
-                <table id="result-table">
-                    <thead id="result-head"></thead>
-                    <tbody id="result-body"></tbody>
-                </table>
-            </div>
+        <div class="hint" onclick="load(this)">
+          SELECT tag, COUNT(*) as cnt FROM track_tags GROUP BY tag ORDER BY cnt
+          DESC LIMIT 30
         </div>
-        <div class="error" id="error" style="display:none"></div>
+        <div class="hint" onclick="load(this)">
+          SELECT artist, scrobbles, category FROM artist_gaps ORDER BY scrobbles
+          DESC LIMIT 30
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT title, artist, play_count FROM tracks WHERE play_count > 0
+          ORDER BY play_count DESC LIMIT 20
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT gender, COUNT(*) as cnt FROM artist_meta GROUP BY gender ORDER
+          BY cnt DESC
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT country, COUNT(*) as cnt FROM artist_meta GROUP BY country
+          ORDER BY cnt DESC LIMIT 20
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT era, COUNT(*) as cnt FROM artist_meta GROUP BY era ORDER BY cnt
+          DESC
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT strftime('%Y', datetime(timestamp, 'unixepoch', 'localtime'))
+          as year, COUNT(*) as plays FROM lastfm_scrobbles GROUP BY year ORDER
+          BY year
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT artist, title, real_artist FROM tracks WHERE real_artist IS NOT
+          NULL LIMIT 20
+        </div>
+        <div class="hint" onclick="load(this)">SELECT key, value FROM meta</div>
+        <div class="hint" onclick="load(this)">
+          SELECT album, year, COUNT(*) as tracks FROM tracks WHERE LOWER(artist)
+          = LOWER('African Head Charge') OR LOWER(real_artist) = LOWER('African
+          Head Charge') GROUP BY album ORDER BY year
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT DISTINCT COALESCE(real_artist, artist) as artist, COUNT(*) as
+          tracks FROM tracks GROUP BY artist ORDER BY tracks DESC LIMIT 20
+        </div>
+        <div class="hint" onclick="load(this)">
+          SELECT title, COALESCE(real_artist, artist) as artist, album, year,
+          play_count FROM tracks WHERE play_count > 0 ORDER BY play_count DESC
+          LIMIT 20
+        </div>
+      </div>
+
+      <textarea id="sql" placeholder="SELECT ..."></textarea>
+      <button onclick="runQuery()">Run Query</button>
+
+      <div class="results" id="results" style="display: none">
+        <div class="result-count" id="result-count"></div>
+        <div style="overflow-x: auto">
+          <table id="result-table">
+            <thead id="result-head"></thead>
+            <tbody id="result-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="error" id="error" style="display: none"></div>
     </div>
 
     <script>
-        function load(el) {
-            document.getElementById('sql').value = el.textContent;
-        }
+      function load(el) {
+        document.getElementById("sql").value = el.textContent;
+      }
 
-        async function runQuery() {
-            const sql = document.getElementById('sql').value.trim();
-            if (!sql) return;
+      async function runQuery() {
+        const sql = document.getElementById("sql").value.trim();
+        if (!sql) return;
 
-            document.getElementById('results').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
+        document.getElementById("results").style.display = "none";
+        document.getElementById("error").style.display = "none";
 
-            const res = await fetch('/query', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sql})
-            });
-            const data = await res.json();
-
-            if (data.error) {
-                const err = document.getElementById('error');
-                err.textContent = '❌ ' + data.error;
-                err.style.display = 'block';
-                return;
-            }
-
-            // Build table
-            const head = document.getElementById('result-head');
-            const body = document.getElementById('result-body');
-            head.innerHTML = '<tr>' + data.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
-            body.innerHTML = data.rows.map(row =>
-                '<tr>' + row.map(cell => `<td title="${cell ?? ''}">${cell ?? ''}</td>`).join('') + '</tr>'
-            ).join('');
-
-            document.getElementById('result-count').textContent = `${data.count} rows`;
-            document.getElementById('results').style.display = 'block';
-        }
-
-        // Ctrl+Enter to run
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('sql').addEventListener('keydown', e => {
-                if (e.key === 'Enter' && e.ctrlKey) runQuery();
-            });
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql }),
         });
+        const data = await res.json();
+
+        if (data.error) {
+          const err = document.getElementById("error");
+          err.textContent = "❌ " + data.error;
+          err.style.display = "block";
+          return;
+        }
+
+        // Build table
+        const head = document.getElementById("result-head");
+        const body = document.getElementById("result-body");
+        head.innerHTML =
+          "<tr>" + data.columns.map((c) => `<th>${c}</th>`).join("") + "</tr>";
+        body.innerHTML = data.rows
+          .map(
+            (row) =>
+              "<tr>" +
+              row
+                .map((cell) => `<td title="${cell ?? ""}">${cell ?? ""}</td>`)
+                .join("") +
+              "</tr>",
+          )
+          .join("");
+
+        document.getElementById("result-count").textContent =
+          `${data.count} rows`;
+        document.getElementById("results").style.display = "block";
+      }
+
+      // Ctrl+Enter to run
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("sql").addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && e.ctrlKey) runQuery();
+        });
+      });
     </script>
-{% include "footer.html" %}
-</body>
+    {% include "footer.html" %}
+  </body>
 </html>

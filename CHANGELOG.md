@@ -7,15 +7,17 @@ All notable changes to MusicMind for Plex are documented here.
 ## [3.1.1] — 2026-11-09
 
 ### Fixed
+
 - **Upgrading from 3.0 with "Update Now" or `git pull` no longer breaks
   country features.** 3.1.0 made `pycountry` a hard import, but Update
   Now only pulls code and never installs packages, so the Stats page,
   the Country dropdown and the country filter errored until you ran
-  `pip install -r requirements.txt`. They now keep working without it
-  (country *codes* like "IN" stay unconverted and a warning is logged)
+  the new dependency. They now keep working without it
+  (country _codes_ like "IN" stay unconverted and a warning is logged)
   and become fully correct once `pycountry` is installed.
 
 ### Changed
+
 - In-app guide: Quick Start now installs `pycountry`; added Resync Item
   and the ID3 compilation step to Back Office; the Country filter and
   genre-bucket descriptions are current; the Update section now says to
@@ -27,12 +29,13 @@ All notable changes to MusicMind for Plex are documented here.
 
 ### ⚠️ Upgrade notes
 
-- **New dependency: `pycountry`.** Run `pip install -r requirements.txt`.
+- **New dependency: `pycountry`.** Run `python3.12 -m pip install pycountry`.
   Docker users must rebuild the image.
 - **DJ-ify is now always on.** The UI toggle is gone; every generated
   playlist gets tempo-arc sequencing.
 
 ### Added
+
 - **Chant / Choral / Sacred genre bucket**, so chant, choral and sacred
   tracks are no longer invisible to Genre-focus filtering.
 - **Country filter normalization.** The Country dropdown is now built
@@ -53,6 +56,7 @@ All notable changes to MusicMind for Plex are documented here.
   all app pages.
 
 ### Changed
+
 - The stats page "Library by Country" chart uses the canonical country
   map and no longer hides every other label.
 - Admin pages: unified navigation order and "Back to the Stacks" links.
@@ -62,6 +66,7 @@ All notable changes to MusicMind for Plex are documented here.
 - `.gitignore` and `.dockerignore` now cover `*.bak-*` backups.
 
 ### Fixed
+
 - **Full Sync no longer wipes `is_instrumental`, `real_artist` or
   `genres_written`.** The ingest upsert now preserves analysis results.
   The old unsafe `INSERT OR REPLACE` ingest script is deprecated and
@@ -91,6 +96,7 @@ Fresh installs are unaffected; this only matters for existing
 installs upgrading in place.
 
 ### Added
+
 - **Docker support** — two variants (slim / full), deployable via
   Portainer or `docker compose`. See [DOCKER.md](DOCKER.md).
 - `migrate_v2_to_v3.py` — one-time migration script for existing v2
@@ -104,6 +110,7 @@ installs upgrading in place.
 ## [2.0.0] — 2026-07-07
 
 ### Added
+
 - **Synapse** — real audio analysis via Essentia. Measures tempo (BPM),
   musical key, and danceability directly from your audio files. Fully
   local, no API cost. Includes a dedicated dashboard with Count,
@@ -123,6 +130,7 @@ installs upgrading in place.
 - New Guide sections for Synapse and Last.fm search.
 
 ### Fixed
+
 - Stats page: gender chart was silently splitting into duplicate
   categories due to inconsistent capitalization between two different
   enrichment sources. Normalized at the source and backfilled.
@@ -147,6 +155,7 @@ installs upgrading in place.
   as valid data — now caught and flagged for review instead.
 
 ### Changed
+
 - "AI-powered" language updated to "AI-enhanced" throughout the docs
   and app.
 

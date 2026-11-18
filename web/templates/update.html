@@ -1,327 +1,439 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicMind for Plex — Update</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex — Update">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
-    <link rel="stylesheet" href="/static/style.css">
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex — Update" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
+    <link rel="stylesheet" href="/static/style.css" />
     <style>
-        .version-card {
-            background: #eeeae0;
-            border: 1px solid #c9b99a;
-            border-radius: 4px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .version-card h3 {
-            font-family: "Playfair Display", serif;
-            color: #2c1810;
-            margin-bottom: 1rem;
-            font-size: 1rem;
-        }
-        .version-row {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 0.4rem;
-            font-size: 0.85rem;
-        }
-        .version-label { color: #8b6914; width: 140px; flex-shrink: 0; }
-        .version-value { color: #2c1810; font-family: monospace; }
-        .master-badge {
-            display: inline-block;
-            background: #2c1810;
-            color: #e2b96f;
-            padding: 0.2rem 0.6rem;
-            border-radius: 3px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            margin-bottom: 1rem;
-        }
-        .update-result {
-            margin: 1rem 0;
-            padding: 0.75rem 1rem;
-            border-radius: 4px;
-            font-size: 0.88rem;
-            display: none;
-        }
-        .update-result.up-to-date { background: #d8f0e0; color: #2d6a4f; border: 1px solid #a8d8b8; }
-        .update-result.behind { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
-        .update-result.error { background: #f8d7da; color: #9b2226; border: 1px solid #f5c6cb; }
-        .log-box {
-            background: #2c1810;
-            color: #c9b99a;
-            font-family: monospace;
-            font-size: 0.72rem;
-            padding: 0.75rem;
-            border-radius: 3px;
-            white-space: pre-wrap;
-            max-height: 250px;
-            overflow-y: auto;
-            margin-top: 1rem;
-            display: none;
-        }
-        .log-box.active { display: block; }
-        .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
-        .btn-outline {
-            padding: 0.6rem 1.2rem;
-            background: transparent;
-            color: #2c1810;
-            border: 2px solid #2c1810;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .btn-outline:hover { background: #ede8df; }
-        .manual-instructions {
-            background: #fffef9;
-            border: 1px solid #c9b99a;
-            border-radius: 4px;
-            padding: 1.25rem;
-            margin-top: 1rem;
-        }
-        .manual-steps { margin-top: 0.5rem; }
-        .manual-step {
-            display: flex !important;
-            align-items: baseline;
-            gap: 0.75rem;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #d5cabb;
-            color: #5a3e28;
-            font-size: 0.88rem;
-            counter-increment: none;
-        }
-        .manual-step::before { display: none !important; }
-        .step-num {
-            background: #2c1810;
-            color: #f5f0e8;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.72rem;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-        .manual-step code {
-            background: #ede8df;
-            padding: 0.1rem 0.4rem;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 0.82rem;
-        }
-        .manual-instructions h4 {
-            font-family: "Playfair Display", serif;
-            color: #2c1810;
-            margin-bottom: 0.75rem;
-        }
-        .manual-instructions ol,
-        .manual-instructions ul {
-            list-style: decimal;
-        }
-        .manual-instructions li {
-            display: list-item !important;
-            padding: 0 !important;
-            border: none !important;
-            justify-content: unset !important;
-        }
-        .manual-instructions li::before {
-            display: none !important;
-        }
-        .manual-instructions ol {
-            padding-left: 1.25rem;
-            color: #5a3e28;
-            font-size: 0.88rem;
-            line-height: 2;
-        }
-        .manual-instructions li {
-            margin-bottom: 0.25rem;
-        }
-        .manual-instructions code {
-            display: inline;
-            background: #ede8df;
-            padding: 0.1rem 0.4rem;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 0.82rem;
-            white-space: nowrap;
-        }
-
+      .version-card {
+        background: #eeeae0;
+        border: 1px solid #c9b99a;
+        border-radius: 4px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+      .version-card h3 {
+        font-family: "Playfair Display", serif;
+        color: #2c1810;
+        margin-bottom: 1rem;
+        font-size: 1rem;
+      }
+      .version-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.85rem;
+      }
+      .version-label {
+        color: #8b6914;
+        width: 140px;
+        flex-shrink: 0;
+      }
+      .version-value {
+        color: #2c1810;
+        font-family: monospace;
+      }
+      .master-badge {
+        display: inline-block;
+        background: #2c1810;
+        color: #e2b96f;
+        padding: 0.2rem 0.6rem;
+        border-radius: 3px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 1rem;
+      }
+      .update-result {
+        margin: 1rem 0;
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+        font-size: 0.88rem;
+        display: none;
+      }
+      .update-result.up-to-date {
+        background: #d8f0e0;
+        color: #2d6a4f;
+        border: 1px solid #a8d8b8;
+      }
+      .update-result.behind {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+      }
+      .update-result.error {
+        background: #f8d7da;
+        color: #9b2226;
+        border: 1px solid #f5c6cb;
+      }
+      .log-box {
+        background: #2c1810;
+        color: #c9b99a;
+        font-family: monospace;
+        font-size: 0.72rem;
+        padding: 0.75rem;
+        border-radius: 3px;
+        white-space: pre-wrap;
+        max-height: 250px;
+        overflow-y: auto;
+        margin-top: 1rem;
+        display: none;
+      }
+      .log-box.active {
+        display: block;
+      }
+      .btn-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+      }
+      .btn-outline {
+        padding: 0.6rem 1.2rem;
+        background: transparent;
+        color: #2c1810;
+        border: 2px solid #2c1810;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .btn-outline:hover {
+        background: #ede8df;
+      }
+      .manual-instructions {
+        background: #fffef9;
+        border: 1px solid #c9b99a;
+        border-radius: 4px;
+        padding: 1.25rem;
+        margin-top: 1rem;
+      }
+      .manual-steps {
+        margin-top: 0.5rem;
+      }
+      .manual-step {
+        display: flex !important;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #d5cabb;
+        color: #5a3e28;
+        font-size: 0.88rem;
+        counter-increment: none;
+      }
+      .manual-step::before {
+        display: none !important;
+      }
+      .step-num {
+        background: #2c1810;
+        color: #f5f0e8;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .manual-step code {
+        background: #ede8df;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.82rem;
+      }
+      .manual-instructions h4 {
+        font-family: "Playfair Display", serif;
+        color: #2c1810;
+        margin-bottom: 0.75rem;
+      }
+      .manual-instructions ol,
+      .manual-instructions ul {
+        list-style: decimal;
+      }
+      .manual-instructions li {
+        display: list-item !important;
+        padding: 0 !important;
+        border: none !important;
+        justify-content: unset !important;
+      }
+      .manual-instructions li::before {
+        display: none !important;
+      }
+      .manual-instructions ol {
+        padding-left: 1.25rem;
+        color: #5a3e28;
+        font-size: 0.88rem;
+        line-height: 2;
+      }
+      .manual-instructions li {
+        margin-bottom: 0.25rem;
+      }
+      .manual-instructions code {
+        display: inline;
+        background: #ede8df;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.82rem;
+        white-space: nowrap;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-{% set back_target = "/" %}{% set back_label = "Back to the Stacks" %}
-{% include "_admin_nav.html" %}
-        <h1 class="page-title">🔄 Update</h1>
-        <p class="page-subtitle">Version information and update tools.</p>
+      {% set back_target = "/" %}{% set back_label = "Back to the Stacks" %} {%
+      include "_admin_nav.html" %}
+      <h1 class="page-title">🔄 Update</h1>
+      <p class="page-subtitle">Version information and update tools.</p>
 
-        {% if is_master %}
-        <div class="master-badge">⭐ MASTER INSTALLATION — Updates disabled</div>
+      {% if is_master %}
+      <div class="master-badge">⭐ MASTER INSTALLATION — Updates disabled</div>
+      {% endif %}
+
+      <!-- Current Version -->
+      <div class="version-card">
+        <h3>Current Installation</h3>
+        {% if git.is_git_repo %}
+        <div class="version-row">
+          <span class="version-label">Commit</span
+          ><span class="version-value">{{ git.commit }}</span>
+        </div>
+        <div class="version-row">
+          <span class="version-label">Date</span
+          ><span class="version-value">{{ git.date }}</span>
+        </div>
+        <div class="version-row">
+          <span class="version-label">Message</span
+          ><span class="version-value">{{ git.message }}</span>
+        </div>
+        <div class="version-row">
+          <span class="version-label">Branch</span
+          ><span class="version-value">{{ git.branch }}</span>
+        </div>
+        <div class="version-row">
+          <span class="version-label">Install path</span
+          ><span class="version-value">{{ git.path }}</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-outline" onclick="checkUpdate()">
+            🔍 Check for Updates
+          </button>
+          <button class="btn-outline" onclick="restartApp(this)">
+            🔁 Restart App
+          </button>
+        </div>
+
+        <div id="update-result" class="update-result"></div>
+        <p style="color: #8b6914; font-size: 0.85rem; margin-top: 0.75rem">
+          To update: <code>git pull</code> in your install directory, then click
+          "Restart App" above (or restart your PM2 process) to load the new
+          code.
+        </p>
+
+        {% else %}
+        <div class="version-row">
+          <span class="version-label">Install path</span
+          ><span class="version-value">{{ git.path }}</span>
+        </div>
+        <div class="version-row">
+          <span class="version-label">Git repo</span
+          ><span class="version-value" style="color: #9b2226"
+            >Not a git repository</span
+          >
+        </div>
+        <p style="color: #8b6914; font-size: 0.85rem; margin-top: 0.75rem">
+          Automatic updates require installation via git clone. See manual
+          update instructions below.
+        </p>
+
+        <div class="btn-row">
+          <button class="btn-outline" onclick="restartApp(this)">
+            🔁 Restart App
+          </button>
+        </div>
+        <div id="update-log" class="log-box"></div>
+
+        <div class="manual-instructions">
+          <h4>Manual Update Instructions</h4>
+          <div class="manual-steps">
+            <div class="manual-step">
+              <span class="step-num">1</span> Download the latest release from
+              <a
+                href="https://github.com/earthmonkey419/musicmindforplex"
+                target="_blank"
+                >GitHub</a
+              >
+            </div>
+            <div class="manual-step">
+              <span class="step-num">2</span> Back up your
+              <code>config.py</code> and database
+            </div>
+            <div class="manual-step">
+              <span class="step-num">3</span> Replace all <code>.py</code> files
+              and the <code>web/</code> folder with the new versions
+            </div>
+            <div class="manual-step">
+              <span class="step-num">4</span> Restore your
+              <code>config.py</code>
+            </div>
+            <div class="manual-step">
+              <span class="step-num">5</span> Run:
+              <code>sudo pm2 restart musicmind</code> (or your PM2 process name)
+            </div>
+          </div>
+        </div>
         {% endif %}
+      </div>
 
-        <!-- Current Version -->
-        <div class="version-card">
-            <h3>Current Installation</h3>
-            {% if git.is_git_repo %}
-            <div class="version-row"><span class="version-label">Commit</span><span class="version-value">{{ git.commit }}</span></div>
-            <div class="version-row"><span class="version-label">Date</span><span class="version-value">{{ git.date }}</span></div>
-            <div class="version-row"><span class="version-label">Message</span><span class="version-value">{{ git.message }}</span></div>
-            <div class="version-row"><span class="version-label">Branch</span><span class="version-value">{{ git.branch }}</span></div>
-            <div class="version-row"><span class="version-label">Install path</span><span class="version-value">{{ git.path }}</span></div>
-
-            <div class="btn-row">
-                <button class="btn-outline" onclick="checkUpdate()">🔍 Check for Updates</button>
-                <button class="btn-outline" onclick="restartApp(this)">🔁 Restart App</button>
-            </div>
-
-            <div id="update-result" class="update-result"></div>
-            <p style="color:#8b6914; font-size:0.85rem; margin-top:0.75rem;">
-                To update: <code>git pull</code> in your install directory, then click
-                "Restart App" above (or restart your PM2 process) to load the new code.
-            </p>
-
-            {% else %}
-            <div class="version-row"><span class="version-label">Install path</span><span class="version-value">{{ git.path }}</span></div>
-            <div class="version-row"><span class="version-label">Git repo</span><span class="version-value" style="color:#9b2226;">Not a git repository</span></div>
-            <p style="color:#8b6914; font-size:0.85rem; margin-top:0.75rem;">
-                Automatic updates require installation via git clone.
-                See manual update instructions below.
-            </p>
-
-            <div class="btn-row">
-                <button class="btn-outline" onclick="restartApp(this)">🔁 Restart App</button>
-            </div>
-            <div id="update-log" class="log-box"></div>
-
-            <div class="manual-instructions">
-                <h4>Manual Update Instructions</h4>
-                <div class="manual-steps">
-                    <div class="manual-step"><span class="step-num">1</span> Download the latest release from <a href="https://github.com/earthmonkey419/musicmindforplex" target="_blank">GitHub</a></div>
-                    <div class="manual-step"><span class="step-num">2</span> Back up your <code>config.py</code> and database</div>
-                    <div class="manual-step"><span class="step-num">3</span> Replace all <code>.py</code> files and the <code>web/</code> folder with the new versions</div>
-                    <div class="manual-step"><span class="step-num">4</span> Restore your <code>config.py</code></div>
-                    <div class="manual-step"><span class="step-num">5</span> Run: <code>sudo pm2 restart musicmind</code> (or your PM2 process name)</div>
-                </div>
-            </div>
-            {% endif %}
+      <!-- GitHub Link -->
+      <div class="version-card">
+        <h3>Repository</h3>
+        <div class="version-row">
+          <span class="version-label">GitHub</span>
+          <span class="version-value">
+            <a
+              href="https://github.com/earthmonkey419/musicmindforplex"
+              target="_blank"
+            >
+              earthmonkey419/musicmindforplex
+            </a>
+          </span>
         </div>
-
-        <!-- GitHub Link -->
-        <div class="version-card">
-            <h3>Repository</h3>
-            <div class="version-row">
-                <span class="version-label">GitHub</span>
-                <span class="version-value">
-                    <a href="https://github.com/earthmonkey419/musicmindforplex" target="_blank">
-                        earthmonkey419/musicmindforplex
-                    </a>
-                </span>
-            </div>
-            <div class="version-row"><span class="version-label">Branch</span><span class="version-value">main</span></div>
+        <div class="version-row">
+          <span class="version-label">Branch</span
+          ><span class="version-value">main</span>
         </div>
+      </div>
     </div>
 
     <script>
-        async function checkUpdate() {
-            const result = document.getElementById('update-result');
-            result.style.display = 'block';
-            result.className = 'update-result';
-            result.textContent = '⏳ Checking GitHub...';
+      async function checkUpdate() {
+        const result = document.getElementById("update-result");
+        result.style.display = "block";
+        result.className = "update-result";
+        result.textContent = "⏳ Checking GitHub...";
 
-            try {
-                const res = await fetch('/check-update');
-                const d = await res.json();
+        try {
+          const res = await fetch("/check-update");
+          const d = await res.json();
 
-                if (d.error && !d.is_git_repo) {
-                    result.className = 'update-result error';
-                    result.textContent = '❌ ' + d.error;
-                    return;
-                }
-                if (d.error) {
-                    result.className = 'update-result error';
-                    result.textContent = '❌ ' + d.error;
-                    return;
-                }
-                if (d.up_to_date) {
-                    result.className = 'update-result up-to-date';
-                    result.textContent = '✅ Up to date — you are on the latest version (' + d.local + ')';
-                } else {
-                    result.className = 'update-result behind';
-                    result.innerHTML = '🆕 Update available!<br>' +
-                        '<strong>' + d.remote + '</strong> — ' + d.message + ' (' + d.date + ')<br>' +
-                        'Your version: ' + d.local;
-                    const updateBtn = document.getElementById('update-btn');
-                    if (updateBtn) updateBtn.style.display = 'inline-block';
-                }
-            } catch(e) {
-                result.className = 'update-result error';
-                result.textContent = '❌ Request failed: ' + e;
-            }
-        }
-
-        async function runUpdate(btn) {
-            // Self-update via the web UI isn't implemented — see the
-            // "git pull" instructions on this page instead.
+          if (d.error && !d.is_git_repo) {
+            result.className = "update-result error";
+            result.textContent = "❌ " + d.error;
             return;
-            const log = document.getElementById('update-log');
-            log.textContent = '';
-            log.classList.add('active');
-            btn.disabled = true;
-            btn.textContent = '⏳ Updating...';
-
-            const es = new EventSource('/run/update');
-            es.onmessage = function(e) {
-                if (e.data === '__DONE__') {
-                    es.close();
-                    btn.disabled = false;
-                    btn.textContent = '⬇️ Update Now';
-                    return;
-                }
-                log.textContent += e.data + '\n';
-                log.scrollTop = log.scrollHeight;
-            };
-            es.onerror = function() {
-                es.close();
-                btn.disabled = false;
-            };
+          }
+          if (d.error) {
+            result.className = "update-result error";
+            result.textContent = "❌ " + d.error;
+            return;
+          }
+          if (d.up_to_date) {
+            result.className = "update-result up-to-date";
+            result.textContent =
+              "✅ Up to date — you are on the latest version (" + d.local + ")";
+          } else {
+            result.className = "update-result behind";
+            result.innerHTML =
+              "🆕 Update available!<br>" +
+              "<strong>" +
+              d.remote +
+              "</strong> — " +
+              d.message +
+              " (" +
+              d.date +
+              ")<br>" +
+              "Your version: " +
+              d.local;
+            const updateBtn = document.getElementById("update-btn");
+            if (updateBtn) updateBtn.style.display = "inline-block";
+          }
+        } catch (e) {
+          result.className = "update-result error";
+          result.textContent = "❌ Request failed: " + e;
         }
+      }
 
-        async function restartApp(btn) {
-            const log = document.getElementById('update-log');
-            log.textContent = '';
-            log.classList.add('active');
-            btn.disabled = true;
-            btn.textContent = '⏳ Restarting...';
+      async function runUpdate(btn) {
+        // Self-update via the web UI isn't implemented — see the
+        // "git pull" instructions on this page instead.
+        return;
+        const log = document.getElementById("update-log");
+        log.textContent = "";
+        log.classList.add("active");
+        btn.disabled = true;
+        btn.textContent = "⏳ Updating...";
 
-            try {
-                const res = await fetch('/restart');
-                const d = await res.json();
-                log.textContent = d.message || d.error;
-                btn.disabled = false;
-                btn.textContent = '🔁 Restart App';
-            } catch(e) {
-                log.textContent = 'Error: ' + e;
-                btn.disabled = false;
-                btn.textContent = '🔁 Restart App';
-            }
+        const es = new EventSource("/run/update");
+        es.onmessage = function (e) {
+          if (e.data === "__DONE__") {
+            es.close();
+            btn.disabled = false;
+            btn.textContent = "⬇️ Update Now";
+            return;
+          }
+          log.textContent += e.data + "\n";
+          log.scrollTop = log.scrollHeight;
+        };
+        es.onerror = function () {
+          es.close();
+          btn.disabled = false;
+        };
+      }
+
+      async function restartApp(btn) {
+        const log = document.getElementById("update-log");
+        log.textContent = "";
+        log.classList.add("active");
+        btn.disabled = true;
+        btn.textContent = "⏳ Restarting...";
+
+        try {
+          const res = await fetch("/restart");
+          const d = await res.json();
+          log.textContent = d.message || d.error;
+          btn.disabled = false;
+          btn.textContent = "🔁 Restart App";
+        } catch (e) {
+          log.textContent = "Error: " + e;
+          btn.disabled = false;
+          btn.textContent = "🔁 Restart App";
         }
+      }
     </script>
-{% include "footer.html" %}
-</body>
+    {% include "footer.html" %}
+  </body>
 </html>

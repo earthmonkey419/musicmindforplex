@@ -5,10 +5,10 @@
 MusicMind for Plex is under active development. Only the latest
 version on the `main` branch is supported with security fixes.
 
-| Version | Supported |
-| ------- | --------- |
-| Latest (main) | ✅ |
-| Older releases | ❌ |
+| Version        | Supported |
+| -------------- | --------- |
+| Latest (main)  | ✅        |
+| Older releases | ❌        |
 
 ## Reporting a Vulnerability
 
@@ -17,6 +17,7 @@ public GitHub Issue.** Instead, email
 **info@verbenaprojects.com** with details.
 
 Please include:
+
 - A description of the vulnerability and its potential impact
 - Steps to reproduce it
 - Any relevant logs, screenshots, or code
@@ -35,6 +36,7 @@ no MusicMind-operated server, account system, or shared infrastructure
 — your installation's security is your installation's own.
 
 That said, real vulnerability classes worth reporting include:
+
 - Anything that could expose another user's data on a shared/multi-
   user install
 - SQL injection or command injection in any of the web routes or

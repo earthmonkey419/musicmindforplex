@@ -1,333 +1,454 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicMind for Plex — The Collection</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex — The Collection">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
-    <link rel="stylesheet" href="/static/style.css">
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex — The Collection" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
+    <link rel="stylesheet" href="/static/style.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <style>
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.25rem;
-            margin-top: 1.5rem;
-        }
-        .stat-card {
-            background: #eeeae0;
-            border: 1px solid #c9b99a;
-            border-radius: 4px;
-            padding: 1.25rem;
-        }
-        .stat-card.wide { grid-column: span 2; }
-        .stat-card h3 {
-            font-family: "Playfair Display", serif;
-            color: #2c1810;
-            font-size: 1rem;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid #c9b99a;
-            padding-bottom: 0.5rem;
-        }
-        .hero-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .hero-stat {
-            background: #2c1810;
-            color: #f5f0e8;
-            border-radius: 4px;
-            padding: 1.25rem;
-            text-align: center;
-        }
-        .hero-stat .number {
-            font-family: "Playfair Display", serif;
-            font-size: 2rem;
-            color: #e2b96f;
-            display: block;
-            line-height: 1;
-            margin-bottom: 0.25rem;
-        }
-        .hero-stat .label {
-            font-size: 0.75rem;
-            color: #c9b99a;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        canvas { max-height: 280px; }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem;
+        margin-top: 1.5rem;
+      }
+      .stat-card {
+        background: #eeeae0;
+        border: 1px solid #c9b99a;
+        border-radius: 4px;
+        padding: 1.25rem;
+      }
+      .stat-card.wide {
+        grid-column: span 2;
+      }
+      .stat-card h3 {
+        font-family: "Playfair Display", serif;
+        color: #2c1810;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #c9b99a;
+        padding-bottom: 0.5rem;
+      }
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .hero-stat {
+        background: #2c1810;
+        color: #f5f0e8;
+        border-radius: 4px;
+        padding: 1.25rem;
+        text-align: center;
+      }
+      .hero-stat .number {
+        font-family: "Playfair Display", serif;
+        font-size: 2rem;
+        color: #e2b96f;
+        display: block;
+        line-height: 1;
+        margin-bottom: 0.25rem;
+      }
+      .hero-stat .label {
+        font-size: 0.75rem;
+        color: #c9b99a;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      canvas {
+        max-height: 280px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="nav">
-            <a href="/">← Back to the Stacks</a>
-        </div>
-        <h1 class="page-title">📊 The Collection</h1>
-        <p class="page-subtitle">Your library and listening history at a glance.</p>
-        <a href="/export-csv" style="display:inline-block; margin-bottom:1rem; padding:0.5rem 1rem; background:#4a3728; color:#f0e8d8; text-decoration:none; border-radius:4px; font-size:0.9rem;" download>⬇️ Export enriched library data (CSV)</a>
+      <div class="nav">
+        <a href="/">← Back to the Stacks</a>
+      </div>
+      <h1 class="page-title">📊 The Collection</h1>
+      <p class="page-subtitle">
+        Your library and listening history at a glance.
+      </p>
+      <a
+        href="/export-csv"
+        style="
+          display: inline-block;
+          margin-bottom: 1rem;
+          padding: 0.5rem 1rem;
+          background: #4a3728;
+          color: #f0e8d8;
+          text-decoration: none;
+          border-radius: 4px;
+          font-size: 0.9rem;
+        "
+        download
+        >⬇️ Export enriched library data (CSV)</a
+      >
 
-        <div class="hero-stats" id="hero-stats">
-            <div class="hero-stat"><span class="number" id="stat-tracks">—</span><span class="label">Tracks</span></div>
-            <div class="hero-stat"><span class="number" id="stat-artists">—</span><span class="label">Artists</span></div>
-            <div class="hero-stat"><span class="number" id="stat-scrobbles">—</span><span class="label">Scrobbles</span></div>
-            <div class="hero-stat"><span class="number" id="stat-instrumental">—</span><span class="label">Instrumentals</span></div>
+      <div class="hero-stats" id="hero-stats">
+        <div class="hero-stat">
+          <span class="number" id="stat-tracks">—</span
+          ><span class="label">Tracks</span>
         </div>
+        <div class="hero-stat">
+          <span class="number" id="stat-artists">—</span
+          ><span class="label">Artists</span>
+        </div>
+        <div class="hero-stat">
+          <span class="number" id="stat-scrobbles">—</span
+          ><span class="label">Scrobbles</span>
+        </div>
+        <div class="hero-stat">
+          <span class="number" id="stat-instrumental">—</span
+          ><span class="label">Instrumentals</span>
+        </div>
+      </div>
 
-        <div class="stats-grid">
-            <div class="stat-card wide">
-                <h3>🎵 Listening History by Year</h3>
-                <canvas id="chart-years"></canvas>
-            </div>
-            <div class="stat-card">
-                <h3>🎤 Top Artists
-                    <select id="limit-artists" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
-                <canvas id="chart-artists"></canvas>
-            </div>
-            <div class="stat-card">
-                <h3>🏷️ Top Genres
-                    <select id="limit-genres" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
-                <canvas id="chart-genres"></canvas>
-            </div>
-            <div class="stat-card">
-                <h3>📅 Library by Era</h3>
-                <canvas id="chart-era"></canvas>
-            </div>
-            <div class="stat-card">
-                <h3>🌍 Library by Country
-                    <select id="limit-country" class="tile-limit" style="float:right; font-size:0.75rem;">
-                        <option value="10">Top 10</option>
-                        <option value="25">Top 25</option>
-                        <option value="50">Top 50</option>
-                        <option value="100">Top 100</option>
-                    </select>
-                </h3>
-                <canvas id="chart-country"></canvas>
-            </div>
-            <div class="stat-card">
-                <h3>👤 Artists by Gender</h3>
-                <canvas id="chart-gender"></canvas>
-            </div>
+      <div class="stats-grid">
+        <div class="stat-card wide">
+          <h3>🎵 Listening History by Year</h3>
+          <canvas id="chart-years"></canvas>
         </div>
+        <div class="stat-card">
+          <h3>
+            🎤 Top Artists
+            <select
+              id="limit-artists"
+              class="tile-limit"
+              style="float: right; font-size: 0.75rem"
+            >
+              <option value="10">Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </h3>
+          <canvas id="chart-artists"></canvas>
+        </div>
+        <div class="stat-card">
+          <h3>
+            🏷️ Top Genres
+            <select
+              id="limit-genres"
+              class="tile-limit"
+              style="float: right; font-size: 0.75rem"
+            >
+              <option value="10">Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </h3>
+          <canvas id="chart-genres"></canvas>
+        </div>
+        <div class="stat-card">
+          <h3>📅 Library by Era</h3>
+          <canvas id="chart-era"></canvas>
+        </div>
+        <div class="stat-card">
+          <h3>
+            🌍 Library by Country
+            <select
+              id="limit-country"
+              class="tile-limit"
+              style="float: right; font-size: 0.75rem"
+            >
+              <option value="10">Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+            </select>
+          </h3>
+          <canvas id="chart-country"></canvas>
+        </div>
+        <div class="stat-card">
+          <h3>👤 Artists by Gender</h3>
+          <canvas id="chart-gender"></canvas>
+        </div>
+      </div>
     </div>
 
     <script>
-        const WARM = {
-            brown:  '#2c1810',
-            gold:   '#8b6914',
-            cream:  '#f5f0e8',
-            tan:    '#c9b99a',
-            rust:   '#b5452a',
-            sage:   '#5a7a5e',
-            slate:  '#4a6b8a',
-            plum:   '#6b3a5e',
-            amber:  '#d4a843',
-            terr:   '#c17f5a',
-        }
+      const WARM = {
+        brown: "#2c1810",
+        gold: "#8b6914",
+        cream: "#f5f0e8",
+        tan: "#c9b99a",
+        rust: "#b5452a",
+        sage: "#5a7a5e",
+        slate: "#4a6b8a",
+        plum: "#6b3a5e",
+        amber: "#d4a843",
+        terr: "#c17f5a",
+      };
 
-        const PALETTE = [
-            WARM.brown, WARM.gold, WARM.rust, WARM.sage,
-            WARM.slate, WARM.plum, WARM.amber, WARM.terr,
-            '#2c5a3a', '#8b4513',
-            '#5c4a72', '#a3623c', '#3d6e6e', '#8a5a44', '#6b7d3d'
-        ]
+      const PALETTE = [
+        WARM.brown,
+        WARM.gold,
+        WARM.rust,
+        WARM.sage,
+        WARM.slate,
+        WARM.plum,
+        WARM.amber,
+        WARM.terr,
+        "#2c5a3a",
+        "#8b4513",
+        "#5c4a72",
+        "#a3623c",
+        "#3d6e6e",
+        "#8a5a44",
+        "#6b7d3d",
+      ];
 
-        Chart.defaults.font.family = 'Inter, sans-serif'
-        Chart.defaults.color = WARM.brown
+      Chart.defaults.font.family = "Inter, sans-serif";
+      Chart.defaults.color = WARM.brown;
 
-        let charts = {}
+      let charts = {};
 
-        function getLimits() {
-            return {
-                genre_limit: localStorage.getItem('statsGenreLimit') || 10,
-                artist_limit: localStorage.getItem('statsArtistLimit') || 10,
-                country_limit: localStorage.getItem('statsCountryLimit') || 10,
-            }
-        }
+      function getLimits() {
+        return {
+          genre_limit: localStorage.getItem("statsGenreLimit") || 10,
+          artist_limit: localStorage.getItem("statsArtistLimit") || 10,
+          country_limit: localStorage.getItem("statsCountryLimit") || 10,
+        };
+      }
 
-        async function loadStats() {
-            const limits = getLimits()
-            const qs = new URLSearchParams(limits).toString()
-            const res = await fetch('/stats/data?' + qs)
-            const d = await res.json()
+      async function loadStats() {
+        const limits = getLimits();
+        const qs = new URLSearchParams(limits).toString();
+        const res = await fetch("/stats/data?" + qs);
+        const d = await res.json();
 
-            // Tear down any existing charts before recreating —
-            // Chart.js throws if you reuse a canvas without this.
-            Object.values(charts).forEach(c => c.destroy())
-            charts = {}
+        // Tear down any existing charts before recreating —
+        // Chart.js throws if you reuse a canvas without this.
+        Object.values(charts).forEach((c) => c.destroy());
+        charts = {};
 
-            // Reflect current limits in the dropdowns
-            document.getElementById('limit-artists').value = limits.artist_limit
-            document.getElementById('limit-genres').value = limits.genre_limit
-            document.getElementById('limit-country').value = limits.country_limit
+        // Reflect current limits in the dropdowns
+        document.getElementById("limit-artists").value = limits.artist_limit;
+        document.getElementById("limit-genres").value = limits.genre_limit;
+        document.getElementById("limit-country").value = limits.country_limit;
 
-            // Hero stats
-            document.getElementById('stat-tracks').textContent = d.stats.total_tracks.toLocaleString()
-            document.getElementById('stat-artists').textContent = d.stats.total_artists.toLocaleString()
-            document.getElementById('stat-scrobbles').textContent = d.stats.total_scrobbles.toLocaleString()
-            document.getElementById('stat-instrumental').textContent = d.stats.total_instrumental.toLocaleString()
+        // Hero stats
+        document.getElementById("stat-tracks").textContent =
+          d.stats.total_tracks.toLocaleString();
+        document.getElementById("stat-artists").textContent =
+          d.stats.total_artists.toLocaleString();
+        document.getElementById("stat-scrobbles").textContent =
+          d.stats.total_scrobbles.toLocaleString();
+        document.getElementById("stat-instrumental").textContent =
+          d.stats.total_instrumental.toLocaleString();
 
-            // Listening by year
-            charts['years'] = new Chart(document.getElementById('chart-years'), {
-                type: 'bar',
-                data: {
-                    labels: d.listening_by_year.map(r => r.year),
-                    datasets: [{
-                        label: 'Scrobbles',
-                        data: d.listening_by_year.map(r => r.plays),
-                        backgroundColor: WARM.gold,
-                        borderRadius: 2,
-                    }]
+        // Listening by year
+        charts["years"] = new Chart(document.getElementById("chart-years"), {
+          type: "bar",
+          data: {
+            labels: d.listening_by_year.map((r) => r.year),
+            datasets: [
+              {
+                label: "Scrobbles",
+                data: d.listening_by_year.map((r) => r.plays),
+                backgroundColor: WARM.gold,
+                borderRadius: 2,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { grid: { color: WARM.tan + "44" } },
+              x: { grid: { display: false } },
+            },
+          },
+        });
+
+        // Top artists — horizontal bar
+        charts["artists"] = new Chart(
+          document.getElementById("chart-artists"),
+          {
+            type: "bar",
+            data: {
+              labels: d.top_artists.map((r) => r.artist),
+              datasets: [
+                {
+                  data: d.top_artists.map((r) => r.plays),
+                  backgroundColor: WARM.brown,
+                  borderRadius: 2,
                 },
-                options: {
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: WARM.tan + '44' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            })
-
-            // Top artists — horizontal bar
-            charts['artists'] = new Chart(document.getElementById('chart-artists'), {
-                type: 'bar',
-                data: {
-                    labels: d.top_artists.map(r => r.artist),
-                    datasets: [{
-                        data: d.top_artists.map(r => r.plays),
-                        backgroundColor: WARM.brown,
-                        borderRadius: 2,
-                    }]
+              ],
+            },
+            options: {
+              indexAxis: "y",
+              aspectRatio: 1.2,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { color: WARM.tan + "44" } },
+                y: {
+                  grid: { display: false },
+                  ticks: { font: { size: 10 }, autoSkip: false },
                 },
-                options: {
-                    indexAxis: 'y',
-                    aspectRatio: 1.2,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: WARM.tan + '44' } },
-                        y: { grid: { display: false }, ticks: { font: { size: 10 }, autoSkip: false } }
-                    }
-                }
-            })
+              },
+            },
+          },
+        );
 
-            // Top genres — donut
-            charts['genres'] = new Chart(document.getElementById('chart-genres'), {
-                type: 'doughnut',
-                data: {
-                    labels: d.top_genres.map(r => r.tag),
-                    datasets: [{
-                        data: d.top_genres.map(r => r.cnt),
-                        backgroundColor: PALETTE,
-                        borderColor: WARM.cream,
-                        borderWidth: 2,
-                    }]
+        // Top genres — donut
+        charts["genres"] = new Chart(document.getElementById("chart-genres"), {
+          type: "doughnut",
+          data: {
+            labels: d.top_genres.map((r) => r.tag),
+            datasets: [
+              {
+                data: d.top_genres.map((r) => r.cnt),
+                backgroundColor: PALETTE,
+                borderColor: WARM.cream,
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: { font: { size: 10 }, boxWidth: 10, padding: 6 },
+              },
+            },
+          },
+        });
+
+        // By era — bar
+        charts["era"] = new Chart(document.getElementById("chart-era"), {
+          type: "bar",
+          data: {
+            labels: d.by_era.map((r) => r.era),
+            datasets: [
+              {
+                data: d.by_era.map((r) => r.cnt),
+                backgroundColor: WARM.rust,
+                borderRadius: 2,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { grid: { color: WARM.tan + "44" } },
+              x: { grid: { display: false } },
+            },
+          },
+        });
+
+        // By country — horizontal bar
+        charts["country"] = new Chart(
+          document.getElementById("chart-country"),
+          {
+            type: "bar",
+            data: {
+              labels: d.by_country.map((r) => r.country),
+              datasets: [
+                {
+                  data: d.by_country.map((r) => r.cnt),
+                  backgroundColor: WARM.sage,
+                  borderRadius: 2,
                 },
-                options: {
-                    plugins: {
-                        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 6 } }
-                    }
-                }
-            })
-
-            // By era — bar
-            charts['era'] = new Chart(document.getElementById('chart-era'), {
-                type: 'bar',
-                data: {
-                    labels: d.by_era.map(r => r.era),
-                    datasets: [{
-                        data: d.by_era.map(r => r.cnt),
-                        backgroundColor: WARM.rust,
-                        borderRadius: 2,
-                    }]
+              ],
+            },
+            options: {
+              indexAxis: "y",
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { color: WARM.tan + "44" } },
+                y: {
+                  grid: { display: false },
+                  ticks: { font: { size: 10 }, autoSkip: false },
                 },
-                options: {
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: WARM.tan + '44' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            })
+              },
+            },
+          },
+        );
 
-            // By country — horizontal bar
-            charts['country'] = new Chart(document.getElementById('chart-country'), {
-                type: 'bar',
-                data: {
-                    labels: d.by_country.map(r => r.country),
-                    datasets: [{
-                        data: d.by_country.map(r => r.cnt),
-                        backgroundColor: WARM.sage,
-                        borderRadius: 2,
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: WARM.tan + '44' } },
-                        y: { grid: { display: false }, ticks: { font: { size: 10 }, autoSkip: false } }
-                    }
-                }
-            })
+        // Gender — donut
+        charts["gender"] = new Chart(document.getElementById("chart-gender"), {
+          type: "doughnut",
+          data: {
+            labels: d.by_gender.map((r) => r.gender),
+            datasets: [
+              {
+                data: d.by_gender.map((r) => r.cnt),
+                backgroundColor: [
+                  WARM.slate,
+                  WARM.rust,
+                  WARM.gold,
+                  WARM.tan,
+                  WARM.plum,
+                ],
+                borderColor: WARM.cream,
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            plugins: {
+              legend: {
+                position: "right",
+                labels: { font: { size: 11 }, boxWidth: 12 },
+              },
+            },
+          },
+        });
+      }
 
-            // Gender — donut
-            charts['gender'] = new Chart(document.getElementById('chart-gender'), {
-                type: 'doughnut',
-                data: {
-                    labels: d.by_gender.map(r => r.gender),
-                    datasets: [{
-                        data: d.by_gender.map(r => r.cnt),
-                        backgroundColor: [WARM.slate, WARM.rust, WARM.gold, WARM.tan, WARM.plum],
-                        borderColor: WARM.cream,
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    plugins: {
-                        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } }
-                    }
-                }
-            })
-        }
+      loadStats();
 
-        loadStats()
-
-        document.getElementById('limit-artists').addEventListener('change', e => {
-            localStorage.setItem('statsArtistLimit', e.target.value)
-            loadStats()
-        })
-        document.getElementById('limit-genres').addEventListener('change', e => {
-            localStorage.setItem('statsGenreLimit', e.target.value)
-            loadStats()
-        })
-        document.getElementById('limit-country').addEventListener('change', e => {
-            localStorage.setItem('statsCountryLimit', e.target.value)
-            loadStats()
-        })
+      document
+        .getElementById("limit-artists")
+        .addEventListener("change", (e) => {
+          localStorage.setItem("statsArtistLimit", e.target.value);
+          loadStats();
+        });
+      document
+        .getElementById("limit-genres")
+        .addEventListener("change", (e) => {
+          localStorage.setItem("statsGenreLimit", e.target.value);
+          loadStats();
+        });
+      document
+        .getElementById("limit-country")
+        .addEventListener("change", (e) => {
+          localStorage.setItem("statsCountryLimit", e.target.value);
+          loadStats();
+        });
     </script>
-{% include "footer.html" %}
-</body>
+    {% include "footer.html" %}
+  </body>
 </html>
