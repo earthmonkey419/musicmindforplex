@@ -23,6 +23,7 @@ regardless of what the backend/database actually contains.
 **Bug 2 — the two enrichment paths write country in different
 formats, and the filter only handles one.** Confirmed directly in
 source:
+
 - `mb_enrich_artists.py` (the primary, free path) writes
   `country = area.get("name")` — full names like "United Kingdom,"
   "Brazil," "Greece."
@@ -57,6 +58,7 @@ Switzerland|6            Singapore|6  Israel|6      Greece|6
 ```
 
 Three distinct problems visible in this one query:
+
 1. **Same country, multiple strings** — United States/US (2268
    combined), United Kingdom/UK/GB/England (794 combined).
 2. **City-level values, not countries** — New York, Los Angeles,
@@ -78,7 +80,7 @@ returns wrong results today.
 
 New `/countries` endpoint in `web/app.py`, same shape as the
 existing `/genres` route (`sqlite3` connection, `busy_timeout`,
-`GROUP BY`, `ORDER BY cnt DESC`) — but grouping by *canonical* name,
+`GROUP BY`, `ORDER BY cnt DESC`) — but grouping by _canonical_ name,
 not raw stored value, so "United States" and "US" collapse into one
 entry instead of showing as two.
 
@@ -109,6 +111,7 @@ COUNTRY_ALIASES = {
 ```
 
 Used in two places:
+
 - `/countries` endpoint groups raw values into canonical buckets
   before counting, so the dropdown shows one clean entry per real
   country.
@@ -135,7 +138,7 @@ split from getting wider with every new artist OpenAI resolves.
   — New York/Los Angeles/London/Nashville stay as-is in
   `artist_meta`; the alias map folds them into their country for
   filtering purposes only, it doesn't correct the underlying stored
-  value. A real fix for *that* would mean re-deriving country from
+  value. A real fix for _that_ would mean re-deriving country from
   MusicBrainz's actual country-level area hierarchy (not just
   whatever `area.get("name")` happens to return), which is a bigger,
   separate piece of work.
@@ -148,6 +151,7 @@ split from getting wider with every new artist OpenAI resolves.
 ## Rough complexity estimate
 
 Small-to-moderate, well-scoped:
+
 - 1 new Flask route (`/countries`), directly mirrors existing
   `/genres` — low risk, proven pattern.
 - 1 template change (remove hardcoded options, add `loadCountries()`

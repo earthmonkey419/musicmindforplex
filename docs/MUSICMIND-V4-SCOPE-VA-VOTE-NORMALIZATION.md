@@ -2,8 +2,8 @@
 
 **Status:** Scoped 2026-08-27. Promoted from the v3 punch list's
 "leave as-is for now (July 25)" entry to a real v4 item, per that
-entry's own stated condition: *"revisit only if a real track resolves
-incorrectly because of a split vote... with real evidence."* That
+entry's own stated condition: _"revisit only if a real track resolves
+incorrectly because of a split vote... with real evidence."_ That
 evidence now exists.
 
 ## Why this moved from theoretical to real
@@ -29,10 +29,10 @@ a clear, repeated, real pattern, not noise. Representative confirmed
 cases:
 
 - **"&" vs "and":** Dion & The Belmonts (3) vs. Dion and The
-  Belmonts (2); Paul Revere and the Raiders (2) *tied* with Paul
+  Belmonts (2); Paul Revere and the Raiders (2) _tied_ with Paul
   Revere & the Raiders (2)
 - **"The" prefix:** The Gentlemen (2) vs. Gentlemen (1); The Uncalled
-  For (1) *tied* with Uncalled For (1)
+  For (1) _tied_ with Uncalled For (1)
 - **Pure case:** DEVO (2) vs. Devo (1)
 - **Unicode hyphen** (the exact class of bug `normalize_for_matching()`
   was already built to catch elsewhere in this project): X-Ray Spex
@@ -65,6 +65,7 @@ It is **not currently applied** to `va_resolve.py`'s vote-counting
 keys at all.
 
 **Checked against the real cases above, not assumed:**
+
 - ✅ Would merge: DEVO/Devo (case), Dion & The Belmonts/Dion and The
   Belmonts ("and"→"&"), X-Ray Spex/X‑Ray Spex (Unicode hyphen)
 - ❌ Would NOT merge: The Gentlemen/Gentlemen ("The" prefix — no
@@ -84,6 +85,7 @@ lowercased normalized form.
 
 Left explicitly unfixed by this pass (real, still-open sub-problems,
 not silently ignored):
+
 - **"The" prefix stripping** — genuinely risky to add blindly (some
   artists are legitimately different with/without "The" — needs a
   confirmed-safe rule, not blanket stripping)

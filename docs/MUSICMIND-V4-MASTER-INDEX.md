@@ -10,6 +10,7 @@ this is an index, not a new scoping pass.
 `73e1217`, missing 16 real commits; reset and re-pushed).
 
 **Confidence key:**
+
 - 🟢 **Formally scoped** — has its own dedicated `MUSICMIND-V4-SCOPE-*.md`
 - 🟡 **Described, not formally scoped** — real and discussed, no
   dedicated scope doc exists yet
@@ -21,7 +22,8 @@ this is an index, not a new scoping pass.
 ## 🟢 Formally scoped items
 
 ### 1. Country filter — data normalization + dynamic dropdown
-*See `MUSICMIND-V4-SCOPE-COUNTRY-NORMALIZATION.md`*
+
+_See `MUSICMIND-V4-SCOPE-COUNTRY-NORMALIZATION.md`_
 
 **Status:** 🟢 SHIPPED to production 2026-08-27. First v4 item —
 motivated the `v4-dev` branch. Found while investigating why India
@@ -44,6 +46,7 @@ results immediately after deploy.
 
 **Follow-up fixes, same evening (undocumented tweaks, not separately
 scoped):**
+
 - **Auto-generated playlist name now includes the selected country**
   — e.g. `My Playlist (World / Reggae / Latin / Afro)(India)`.
   Previously the bucket suffix showed but the country choice was
@@ -55,7 +58,7 @@ scoped):**
   Memphis, Baltimore) and split country spellings showing side by
   side in the same "Top 100" chart. Fixed with the same
   `country_aliases.canonicalize_country()` approach, canonicalizing
-  and summing *before* applying the `country_limit`, not after —
+  and summing _before_ applying the `country_limit`, not after —
   the naive order would have let "US"/"United States" each occupy a
   separate top-N slot.
 - **Chart hiding every other country label** — unrelated to the data
@@ -67,7 +70,8 @@ scoped):**
   `autoSkip: false` treatment. One-line fix.
 
 ### 2. MusicBrainz artist alias integration
-*See `MUSICMIND-V4-SCOPE-ARTIST-ALIASES.md`*
+
+_See `MUSICMIND-V4-SCOPE-ARTIST-ALIASES.md`_
 
 **Status:** Scoped, not started. Most fully scoped item prior to the
 country-normalization doc. Real motivating case: Mos Def (142 real
@@ -79,7 +83,8 @@ Recommended first pass: gap analysis (`lastfm_gaps.py`) only, before
 extending to scrobble matching or search.
 
 ### 3. Thematic relevance scoring
-*See `MUSICMIND-V4-SCOPE-THEMATIC-RELEVANCE.md`* — already committed
+
+_See `MUSICMIND-V4-SCOPE-THEMATIC-RELEVANCE.md`_ — already committed
 to `main`.
 
 **Status:** Scoped. Addresses the core, confirmed gap that the full
@@ -90,7 +95,8 @@ final 30, validated against real failure cases ("love songs",
 "breakup songs" as the test bar — no lucky tag-name overlap allowed).
 
 ### 4. Tracklist import
-*See `MUSICMIND-V4-SCOPE-TRACKLIST-IMPORT.md`*
+
+_See `MUSICMIND-V4-SCOPE-TRACKLIST-IMPORT.md`_
 
 **Status:** Scoped. Plain `.txt` upload (`Artist - Title` per line),
 three-bucket match report (matched / ambiguous / unmatched) before
@@ -99,7 +105,8 @@ artist-aliases feature** (#2 above) — matching quality benefits
 directly from alias resolution.
 
 ### 5. Artist-name normalization for AcoustID vote counting
-*See `MUSICMIND-V4-SCOPE-VA-VOTE-NORMALIZATION.md`*
+
+_See `MUSICMIND-V4-SCOPE-VA-VOTE-NORMALIZATION.md`_
 
 **Status:** Scoped 2026-08-27. Promoted from the v3 punch list's
 "leave as-is for now (July 25)" entry — real evidence now exists,
@@ -135,6 +142,7 @@ than treating them as equally ready — worth a proper scope doc each
 before starting, same discipline as the rest of v4.
 
 ### 6. Date-range playlist generator
+
 Date range as a composable filter dimension, combinable with
 existing tag/mood/bucket filtering (optional, not required). Gating
 question: confirming a reliable "date added" field exists
@@ -142,6 +150,7 @@ consistently across the full library. No dependency on the alias or
 thematic-relevance work — could be picked up independently.
 
 ### 7. Ollama integration (local LLM inference)
+
 Goal: reduce or eliminate OpenAI dependency for tagging. Docker/
 Portainer install path preferred over a standard script, since DSM
 lacks systemd. A hardware upgrade (mini PC with a newer CPU) has been
@@ -149,14 +158,16 @@ informally discussed but not decided. Only appears as a single line
 in the general roadmap doc currently — no scope doc yet.
 
 ### 8. `fullsync.lock` file-based lock
+
 Prevents `pm2 restart` from killing a Full Sync run mid-execution.
 Explicitly deferred until the SSE/subprocess threading fix (already
 shipped — `tail_subprocess()`, commit `8dee1f4`) proves stable over
 more real-world runs first.
 
 ### 9. Streamline analysis speed
-*Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 2, and the v3 punch
-list's "v4 basket."* Real target: the one-time initial backlog clear,
+
+_Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 2, and the v3 punch
+list's "v4 basket."_ Real target: the one-time initial backlog clear,
 not ongoing incremental syncs. Levers, roughly by likely impact:
 parallelize across tracks (Synapse/VI currently fully sequential,
 single process — likely the biggest lever on multi-core NAS
@@ -167,19 +178,21 @@ ground-truth BPM test). Hard external ceiling: AcoustID's 3 req/s
 rate limit.
 
 ### 10. Additional self-hosted audio tools
-*Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 3.* Essentia's own
+
+_Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 3._ Essentia's own
 pre-trained mood/genre classifiers (same library already integrated
 for BPM/key/danceability and voice/instrumental detection — no new
 dependency). An alternative beat-tracking algorithm as a cross-check
 (e.g. `madmom`) — born from the octave-error investigation.
 Lyrics-based search as a genuinely new search modality — "find songs
 about heartbreak" — the one idea here that changes what MusicMind can
-be *asked*, not just how well it answers what it's asked today;
+be _asked_, not just how well it answers what it's asked today;
 working Mureka lyrics-extraction code already exists from a related
 project, Musixmatch is another path if licensing works out.
 
 ### 11. A real "calm/ambient" signal distinct from raw BPM
-*Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 5.* Found investigating
+
+_Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 5._ Found investigating
 `bpm_reliable`: reverb-heavy, atmospheric material can measure as
 genuinely slow-tempo while still feeling tense or driving rather than
 restful. Low BPM is a real signal but an incomplete proxy for
@@ -187,8 +200,9 @@ restful. Low BPM is a real signal but an incomplete proxy for
 worth considering.
 
 ### 12. Second-opinion re-check for already-flagged tracks
-*From the v3 punch list, noted as "genuinely good future direction,
-not abandoned."* A targeted re-analysis pass for tracks already
+
+_From the v3 punch list, noted as "genuinely good future direction,
+not abandoned."_ A targeted re-analysis pass for tracks already
 flagged suspicious by three existing signals together: `bpm_reliable
 = 0`, VA-resolution **REVIEW** confidence (the ~15.5% that didn't
 resolve at the 84.5% HIGH-confidence rate), and thin tag coverage.
@@ -197,8 +211,9 @@ multiple independent signals already agree are worth a second look.
 Nothing built, no scope doc yet.
 
 ### 13. Chant / Choral / Sacred genre bucket
-*Raised 2026-08-28, investigated same night with real data — no
-longer a bare placeholder.* Confirmed via direct query against
+
+_Raised 2026-08-28, investigated same night with real data — no
+longer a bare placeholder._ Confirmed via direct query against
 `track_tags`: **12 distinct tags, 61 tagged instances** (`chant`,
 `chanting`, `mantra`, `spiritual chant`, `melodic chant`, `hymn`,
 `chorale`, `choral`, `sacred music`, `choral jazz`, `children's
@@ -229,8 +244,9 @@ album) before finalizing bucket membership. No scope doc written
 yet — this entry captures the investigation, not a final plan.
 
 ### 14. Content genuinely absent from MusicBrainz/AcoustID
-*Surfaced investigating #13, same night.* Chasing why a specific
-album (Manjeera Ganguly's *Amazing Mantra Power Vol I*, 46 tracks
+
+_Surfaced investigating #13, same night._ Chasing why a specific
+album (Manjeera Ganguly's _Amazing Mantra Power Vol I_, 46 tracks
 per Plex) wasn't reachable led to a real, separate, and larger
 finding: of **10,211 tracks** currently sitting under literal
 `artist = 'Various Artists'`, **2,059 have no `real_artist`
@@ -239,6 +255,7 @@ resolved at all** — every one of them was attempted by
 ran resolution" gap.
 
 Breaking down why they failed, by `va_results.confidence`:
+
 - **~1,374 (67%) got zero fingerprint match whatsoever** —
   `no_recordings` (688) + `no_results` (686). AcoustID's database
   simply has no data for this audio. Confirmed directly for the
@@ -277,7 +294,8 @@ yet a proposed implementation.
 Kept here explicitly so these don't get silently re-proposed.
 
 ### Mureka's audio-analysis API
-*Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 4.* Feasibility
+
+_Discussed in `MUSICMIND-V4-SYNOPSIS.md` item 4._ Feasibility
 genuinely tested (not just discussed) — the `/v1/song/describe`
 endpoint works, real signal quality confirmed both on a clear-cut
 case and an honestly-ambiguous one. **Decided PASS for now**: freeform
@@ -288,20 +306,24 @@ scoped "second opinion for already-flagged tracks" version remains a
 real future option, not fully closed.
 
 ### Sharing one audio decode between Synapse and VI
+
 Proven to hurt accuracy directly via a real ground-truth BPM test — a
 closed door, not an open one.
 
 ### Loudness normalization (ReplayGain/EBU R128) and stem separation
+
 (Demucs/Spleeter)
 Explicitly ruled out when self-hosted audio tool ideas were discussed.
 
-### A hand-maintained artist alias table as the *primary* mechanism
+### A hand-maintained artist alias table as the _primary_ mechanism
+
 Too reactive, doesn't scale — only ever helps after a specific
 mismatch is personally noticed. A small manual override table remains
-a reasonable *secondary* fallback alongside the MusicBrainz-driven
+a reasonable _secondary_ fallback alongside the MusicBrainz-driven
 approach (#2 above), not a replacement for it.
 
 ### A "scrobble grammar" convention for Louis to manually follow
+
 Doesn't solve historical scrobble data, and asks too much consistency
 of a human over years of listening.
 
