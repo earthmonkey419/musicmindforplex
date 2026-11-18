@@ -68,6 +68,15 @@ For a local virtual environment, run `make install`, copy
 The Makefile requires `uv` and uses `python3.12` by default; set
 `PYTHON` to another compatible interpreter if needed.
 
+The installable `musicmind_cli` package provides a `musicmind` command.
+Run it from the directory containing your `config.py`:
+
+```bash
+uv run musicmind db init   # create the local database schema without contacting Plex
+uv run musicmind ingest    # import your Plex music library
+uv run musicmind serve     # start the web server on port 8787
+```
+
 1. Install dependencies
 
    ```bash
