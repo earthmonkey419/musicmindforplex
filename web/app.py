@@ -20,7 +20,6 @@ from musicmind.brain import (
     PlexServer,
     PLEX_URL,
     PLEX_TOKEN,
-    MUSIC_LIB,
     detect_instrumental_intent,
     extract_lastfm_dates,
     get_scrobbled_tracks_in_range,
@@ -33,7 +32,7 @@ from musicmind.brain import (
     find_similar_by_track,
     find_similar_by_artist,
 )
-from config import DB_PATH, BASE_DIR, LASTFM_KEY
+from config import DB_PATH, BASE_DIR, LASTFM_KEY, MUSIC_LIB
 from musicmind.config_check import check_config
 from musicmind.commands import MODULES
 
