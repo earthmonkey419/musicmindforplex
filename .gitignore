@@ -13,6 +13,10 @@ config.py
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+build/
+dist/
+.idea
 
 # Mac
 .DS_Store
@@ -20,6 +24,6 @@ __pycache__/
 # Licensed model files — CC BY-NC-SA, link don't bundle
 models/
 
-# Timestamped backups made by make_plex_token.py (they contain tokens)
+# Timestamped backups made by auth.py (they contain tokens)
 *.bak-*
 *.bak*
