@@ -1,445 +1,598 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicMind for Plex — Admin</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex — Admin">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex — Admin" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
     <div class="container">
-{% set back_target = "/" %}{% set back_label = "Back to the Stacks" %}
-{% include "_admin_nav.html" %}
-        <h1 class="page-title">⚙️ Back Office</h1>
-        <p class="page-subtitle">Sync jobs and maintenance. Each job streams live output. Use direct IP for long-running jobs.</p>
+      {% set back_target = "/" %}{% set back_label = "Back to the Stacks" %} {%
+      include "_admin_nav.html" %}
+      <h1 class="page-title">⚙️ Back Office</h1>
+      <p class="page-subtitle">
+        Sync jobs and maintenance. Each job streams live output. Use direct IP
+        for long-running jobs.
+      </p>
 
-        <div class="admin-card" style="margin-bottom:1.5rem;">
-            <h3>⚡ Full Sync</h3>
-            <p>Runs the complete pipeline: scan Plex for new files → ingest → fingerprint → check duplicates → resolve Various Artists tracks → resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz + AI) → tag new tracks → analyze audio (Synapse).</p>
-            <p style="font-size:0.85rem; color:#8b6914;">📡 If your connection drops mid-run, the sync itself keeps going on the server — it does NOT stop. This page will automatically reconnect and pick the real output back up.</p>
-            <div id="other-processes-status" style="font-size:0.85rem; margin-bottom:0.75rem;">Checking for other running processes…</div>
-            <button id="btn-fullsync" onclick="runScript('fullsync', this)">Run Full Sync</button>
-            <div class="status" id="status-fullsync"></div>
-            <div class="log-box" id="log-fullsync" style="height:200px;"></div>
+      <div class="admin-card" style="margin-bottom: 1.5rem">
+        <h3>⚡ Full Sync</h3>
+        <p>
+          Runs the complete pipeline: scan Plex for new files → ingest →
+          fingerprint → check duplicates → resolve Various Artists tracks →
+          resolve recording IDs → sync Last.fm → enrich artists (MusicBrainz +
+          AI) → tag new tracks → analyze audio (Synapse).
+        </p>
+        <p style="font-size: 0.85rem; color: #8b6914">
+          📡 If your connection drops mid-run, the sync itself keeps going on
+          the server — it does NOT stop. This page will automatically reconnect
+          and pick the real output back up.
+        </p>
+        <div
+          id="other-processes-status"
+          style="font-size: 0.85rem; margin-bottom: 0.75rem"
+        >
+          Checking for other running processes…
+        </div>
+        <button id="btn-fullsync" onclick="runScript('fullsync', this)">
+          Run Full Sync
+        </button>
+        <div class="status" id="status-fullsync"></div>
+        <div class="log-box" id="log-fullsync" style="height: 200px"></div>
+      </div>
+
+      <div class="admin-card" style="margin-bottom: 1.5rem">
+        <h3>🎯 Resync Item from Plex</h3>
+        <p>
+          Instantly re-pull one artist/album's metadata from Plex without a full
+          sync. Use right after correcting metadata (e.g. an artist or album
+          name) directly in Plex.
+        </p>
+        <div style="margin-bottom: 0.5rem">
+          <input
+            type="text"
+            id="resync-artist"
+            placeholder="Artist name"
+            style="margin-right: 0.5rem"
+          />
+          <input
+            type="text"
+            id="resync-album"
+            placeholder="Album name"
+            style="margin-right: 0.5rem"
+          />
+        </div>
+        <label
+          style="font-size: 0.85rem; display: block; margin-bottom: 0.5rem"
+        >
+          <input type="checkbox" id="resync-apply" /> Apply changes (unchecked =
+          preview only, no writes)
+        </label>
+        <button id="btn-resync" onclick="runResync(this)">Resync</button>
+        <div class="status" id="status-resync"></div>
+        <div class="log-box" id="log-resync"></div>
+      </div>
+
+      <div class="admin-grid">
+        <div class="admin-card">
+          <h3>🔍 Scan Plex Library</h3>
+          <p>
+            Tells Plex to scan for new or changed files on disk. Plex handles
+            the scan in the background.
+          </p>
+          <button onclick="scanPlex(this)">Scan Now</button>
+          <div class="status" id="status-scan"></div>
         </div>
 
-        <div class="admin-card" style="margin-bottom:1.5rem;">
-            <h3>🎯 Resync Item from Plex</h3>
-            <p>Instantly re-pull one artist/album's metadata from Plex without a full sync. Use right after correcting metadata (e.g. an artist or album name) directly in Plex.</p>
-            <div style="margin-bottom:0.5rem;">
-                <input type="text" id="resync-artist" placeholder="Artist name" style="margin-right:0.5rem;">
-                <input type="text" id="resync-album" placeholder="Album name" style="margin-right:0.5rem;">
-            </div>
-            <label style="font-size:0.85rem; display:block; margin-bottom:0.5rem;">
-                <input type="checkbox" id="resync-apply"> Apply changes (unchecked = preview only, no writes)
-            </label>
-            <button id="btn-resync" onclick="runResync(this)">Resync</button>
-            <div class="status" id="status-resync"></div>
-            <div class="log-box" id="log-resync"></div>
+        <div class="admin-card">
+          <h3>🔄 Sync Plex Library</h3>
+          <p>
+            Pulls all tracks from Plex into SQLite. Safe to re-run — updates
+            existing records.
+          </p>
+          <button onclick="runScript('ingest', this)">Run Now</button>
+          <div class="status" id="status-ingest"></div>
+          <div class="log-box" id="log-ingest"></div>
         </div>
 
-        <div class="admin-grid">
-            <div class="admin-card">
-                <h3>🔍 Scan Plex Library</h3>
-                <p>Tells Plex to scan for new or changed files on disk. Plex handles the scan in the background.</p>
-                <button onclick="scanPlex(this)">Scan Now</button>
-                <div class="status" id="status-scan"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🔄 Sync Plex Library</h3>
-                <p>Pulls all tracks from Plex into SQLite. Safe to re-run — updates existing records.</p>
-                <button onclick="runScript('ingest', this)">Run Now</button>
-                <div class="status" id="status-ingest"></div>
-                <div class="log-box" id="log-ingest"></div>
-            </div>
-
-            {% if lastfm_enabled %}
-            <div class="admin-card">
-                <h3>🎵 Sync Last.fm</h3>
-                <p>Pulls new scrobbles since last sync. Updates play counts and loved tracks.</p>
-                <button onclick="runScript('lastfm', this)">Run Now</button>
-                <div class="status" id="status-lastfm"></div>
-                <div class="log-box" id="log-lastfm"></div>
-            </div>
-            {% endif %}
-
-            <div class="admin-card">
-                <h3>🏷️ Tag New Tracks</h3>
-                <p>AI-tags any untagged tracks via OpenAI gpt-4o-mini. Skips already-tagged tracks.</p>
-                <button onclick="runScript('tagger', this)">Run Now</button>
-                <div class="status" id="status-tagger"></div>
-                <div class="log-box" id="log-tagger"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🔗 Refresh Context Playlists</h3>
-                <p>Rebuilds Your Afternoon, Weekend Flow, and Often Together playlists in Plex.</p>
-                <button onclick="runScript('context', this)">Run Now</button>
-                <div class="status" id="status-context"></div>
-                <div class="log-box" id="log-context"></div>
-            </div>
-
+        {% if lastfm_enabled %}
         <div class="admin-card">
-                <h3>🎼 Enrich Artists (MusicBrainz)</h3>
-                <p>Looks up artist gender, country, and MusicBrainz ID via the free MusicBrainz API. No cost, ~2 seconds per artist. Skips already-enriched artists.</p>
-                <button onclick="runScript('mbenrich', this)">Run Now</button>
-                <div class="status" id="status-mbenrich"></div>
-                <div class="log-box" id="log-mbenrich"></div>
-            </div>
-
-        <div class="admin-card">
-                <h3>🤖 Enrich Artists (AI Fallback)</h3>
-                <p>Fills in era via OpenAI for all artists, and gender/country/era for any MusicBrainz couldn't match. Run after MusicBrainz enrichment.</p>
-                <button onclick="runScript('aienrich', this)">Run Now</button>
-                <div class="status" id="status-aienrich"></div>
-                <div class="log-box" id="log-aienrich"></div>
-            </div>
-
-        <div class="admin-card">
-                <h3>📋 Refresh Gap Analysis</h3>
-                <p>Re-runs gap analysis against current library. Removes acquired artists, adds new ones.</p>
-                <button onclick="runScript('gaps', this)">Run Now</button>
-                <div class="status" id="status-gaps"></div>
-                <div class="log-box" id="log-gaps"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🔗 Fingerprint New Tracks</h3>
-                <p>Computes acoustic fingerprints for any track that doesn't have one yet. Fast, local, no rate limit — also runs automatically as part of Full Sync.</p>
-                <button onclick="runScript('fingerprint', this)">Run Now</button>
-                <div class="status" id="status-fingerprint"></div>
-                <div class="log-box" id="log-fingerprint"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>♻️ Copy-Forward Analysis</h3>
-                <p>Two tracks with identical fingerprints are the same recording — copies existing Synapse/VI results to any duplicate that's missing them, skipping redundant analysis. Run this again after a Synapse pass to catch new duplicates.</p>
-                <button onclick="runScript('copyforward', this)">Run Now</button>
-                <div class="status" id="status-copyforward"></div>
-                <div class="log-box" id="log-copyforward"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🔍 Duplicate Report</h3>
-                <p>Read-only report — groups tracks by identical fingerprint to show real duplicates in your library. Never modifies or deletes anything.</p>
-                <button onclick="runScript('dedup', this)">Run Now</button>
-                <div class="status" id="status-dedup"></div>
-                <div class="log-box" id="log-dedup"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🎯 Resolve Various Artists</h3>
-                <p>Identifies real performers for "Various Artists" compilation tracks via acoustic fingerprinting + AcoustID lookup, instead of unreliable text matching. Rate-limited (~2s/track) — can take a while on a large backlog.</p>
-                <button onclick="runScript('varesolve', this)">Run Now</button>
-                <div class="status" id="status-varesolve"></div>
-                <div class="log-box" id="log-varesolve"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🎼 Resolve Recording IDs</h3>
-                <p>Identifies the specific MusicBrainz recording (not just the artist — precise release/edition) for every fingerprinted track via AcoustID. Free backfill first for anything already resolved via Various Artists, then fresh lookups for everything else. Rate-limited — a full first run can take an hour or more on a large library.</p>
-                <button onclick="runScript('recordingmbid', this)">Run Now</button>
-                <div class="status" id="status-recordingmbid"></div>
-                <div class="log-box" id="log-recordingmbid"></div>
-            </div>
-
-            <div class="admin-card">
-                <h3>🧹 Clear Errors</h3>
-                <p>Once a track fails and gets an error recorded, it's permanently skipped on future runs — even for a transient failure (a network hiccup, a 500 error) that a simple retry would likely fix. Clearing a source's errors makes those tracks eligible again the next time you click that section's own "Run Now" button — this only clears, it doesn't re-run anything automatically.</p>
-                <div id="error-counts-list" style="margin: 0.75rem 0; font-size: 0.9rem;">Loading current counts…</div>
-                <div class="status" id="status-clearerrors"></div>
-            </div>
-
+          <h3>🎵 Sync Last.fm</h3>
+          <p>
+            Pulls new scrobbles since last sync. Updates play counts and loved
+            tracks.
+          </p>
+          <button onclick="runScript('lastfm', this)">Run Now</button>
+          <div class="status" id="status-lastfm"></div>
+          <div class="log-box" id="log-lastfm"></div>
         </div>
+        {% endif %}
+
+        <div class="admin-card">
+          <h3>🏷️ Tag New Tracks</h3>
+          <p>
+            AI-tags any untagged tracks via OpenAI gpt-4o-mini. Skips
+            already-tagged tracks.
+          </p>
+          <button onclick="runScript('tagger', this)">Run Now</button>
+          <div class="status" id="status-tagger"></div>
+          <div class="log-box" id="log-tagger"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🔗 Refresh Context Playlists</h3>
+          <p>
+            Rebuilds Your Afternoon, Weekend Flow, and Often Together playlists
+            in Plex.
+          </p>
+          <button onclick="runScript('context', this)">Run Now</button>
+          <div class="status" id="status-context"></div>
+          <div class="log-box" id="log-context"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🎼 Enrich Artists (MusicBrainz)</h3>
+          <p>
+            Looks up artist gender, country, and MusicBrainz ID via the free
+            MusicBrainz API. No cost, ~2 seconds per artist. Skips
+            already-enriched artists.
+          </p>
+          <button onclick="runScript('mbenrich', this)">Run Now</button>
+          <div class="status" id="status-mbenrich"></div>
+          <div class="log-box" id="log-mbenrich"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🤖 Enrich Artists (AI Fallback)</h3>
+          <p>
+            Fills in era via OpenAI for all artists, and gender/country/era for
+            any MusicBrainz couldn't match. Run after MusicBrainz enrichment.
+          </p>
+          <button onclick="runScript('aienrich', this)">Run Now</button>
+          <div class="status" id="status-aienrich"></div>
+          <div class="log-box" id="log-aienrich"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>📋 Refresh Gap Analysis</h3>
+          <p>
+            Re-runs gap analysis against current library. Removes acquired
+            artists, adds new ones.
+          </p>
+          <button onclick="runScript('gaps', this)">Run Now</button>
+          <div class="status" id="status-gaps"></div>
+          <div class="log-box" id="log-gaps"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🔗 Fingerprint New Tracks</h3>
+          <p>
+            Computes acoustic fingerprints for any track that doesn't have one
+            yet. Fast, local, no rate limit — also runs automatically as part of
+            Full Sync.
+          </p>
+          <button onclick="runScript('fingerprint', this)">Run Now</button>
+          <div class="status" id="status-fingerprint"></div>
+          <div class="log-box" id="log-fingerprint"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>♻️ Copy-Forward Analysis</h3>
+          <p>
+            Two tracks with identical fingerprints are the same recording —
+            copies existing Synapse/VI results to any duplicate that's missing
+            them, skipping redundant analysis. Run this again after a Synapse
+            pass to catch new duplicates.
+          </p>
+          <button onclick="runScript('copyforward', this)">Run Now</button>
+          <div class="status" id="status-copyforward"></div>
+          <div class="log-box" id="log-copyforward"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🔍 Duplicate Report</h3>
+          <p>
+            Read-only report — groups tracks by identical fingerprint to show
+            real duplicates in your library. Never modifies or deletes anything.
+          </p>
+          <button onclick="runScript('dedup', this)">Run Now</button>
+          <div class="status" id="status-dedup"></div>
+          <div class="log-box" id="log-dedup"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🎯 Resolve Various Artists</h3>
+          <p>
+            Identifies real performers for "Various Artists" compilation tracks
+            via acoustic fingerprinting + AcoustID lookup, instead of unreliable
+            text matching. Rate-limited (~2s/track) — can take a while on a
+            large backlog.
+          </p>
+          <button onclick="runScript('varesolve', this)">Run Now</button>
+          <div class="status" id="status-varesolve"></div>
+          <div class="log-box" id="log-varesolve"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🎼 Resolve Recording IDs</h3>
+          <p>
+            Identifies the specific MusicBrainz recording (not just the artist —
+            precise release/edition) for every fingerprinted track via AcoustID.
+            Free backfill first for anything already resolved via Various
+            Artists, then fresh lookups for everything else. Rate-limited — a
+            full first run can take an hour or more on a large library.
+          </p>
+          <button onclick="runScript('recordingmbid', this)">Run Now</button>
+          <div class="status" id="status-recordingmbid"></div>
+          <div class="log-box" id="log-recordingmbid"></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>🧹 Clear Errors</h3>
+          <p>
+            Once a track fails and gets an error recorded, it's permanently
+            skipped on future runs — even for a transient failure (a network
+            hiccup, a 500 error) that a simple retry would likely fix. Clearing
+            a source's errors makes those tracks eligible again the next time
+            you click that section's own "Run Now" button — this only clears, it
+            doesn't re-run anything automatically.
+          </p>
+          <div
+            id="error-counts-list"
+            style="margin: 0.75rem 0; font-size: 0.9rem"
+          >
+            Loading current counts…
+          </div>
+          <div class="status" id="status-clearerrors"></div>
+        </div>
+      </div>
     </div>
 
     <script>
-        async function scanPlex(btn) {
-            const status = document.getElementById('status-scan');
-            btn.disabled = true;
-            status.textContent = '⏳ Triggering scan...';
-            status.className = 'status running';
-            try {
-                const res = await fetch('/scan');
-                const data = await res.json();
-                if (data.success) {
-                    status.textContent = '✅ ' + data.message;
-                    status.className = 'status done';
-                } else {
-                    status.textContent = '❌ ' + data.message;
-                    status.className = 'status error';
-                }
-            } catch(e) {
-                status.textContent = '❌ Request failed';
-                status.className = 'status error';
-            }
+      async function scanPlex(btn) {
+        const status = document.getElementById("status-scan");
+        btn.disabled = true;
+        status.textContent = "⏳ Triggering scan...";
+        status.className = "status running";
+        try {
+          const res = await fetch("/scan");
+          const data = await res.json();
+          if (data.success) {
+            status.textContent = "✅ " + data.message;
+            status.className = "status done";
+          } else {
+            status.textContent = "❌ " + data.message;
+            status.className = "status error";
+          }
+        } catch (e) {
+          status.textContent = "❌ Request failed";
+          status.className = "status error";
+        }
+        btn.disabled = false;
+      }
+      function runScript(name, btn, isReconnect) {
+        const log = document.getElementById("log-" + name);
+        const status = document.getElementById("status-" + name);
+
+        btn.disabled = true;
+        if (!isReconnect) {
+          log.textContent = "";
+        }
+        log.classList.add("active");
+        status.textContent = isReconnect
+          ? "⏳ Reconnecting to running sync..."
+          : "⏳ Running...";
+        status.className = "status running";
+
+        const url =
+          isReconnect && name === "fullsync"
+            ? "/run/fullsync-tail"
+            : "/run/" + name;
+        const es = new EventSource(url);
+
+        es.onmessage = function (e) {
+          if (e.data === "__DONE__") {
+            es.close();
             btn.disabled = false;
-        }
-        function runScript(name, btn, isReconnect) {
-            const log    = document.getElementById('log-' + name);
-            const status = document.getElementById('status-' + name);
-
-            btn.disabled = true;
-            if (!isReconnect) {
-                log.textContent = '';
-            }
-            log.classList.add('active');
-            status.textContent = isReconnect ? '⏳ Reconnecting to running sync...' : '⏳ Running...';
-            status.className = 'status running';
-
-            const url = (isReconnect && name === 'fullsync') ? '/run/fullsync-tail' : '/run/' + name;
-            const es = new EventSource(url);
-
-            es.onmessage = function(e) {
-                if (e.data === '__DONE__') {
-                    es.close();
-                    btn.disabled = false;
-                    return;
-                }
-                if (e.data.startsWith('✅')) {
-                    status.textContent = e.data;
-                    status.className = 'status done';
-                } else if (e.data.startsWith('❌')) {
-                    status.textContent = e.data;
-                    status.className = 'status error';
-                }
-                log.textContent += e.data + '\n';
-                log.scrollTop = log.scrollHeight;
-            };
-
-            es.onerror = function() {
-                es.close();
-                if (name === 'fullsync') {
-                    status.textContent = '⚠️ Connection lost — the sync itself keeps running on the server. Reconnecting...';
-                    status.className = 'status running';
-                    setTimeout(() => runScript(name, btn, true), 2000);
-                } else {
-                    btn.disabled = false;
-                    status.textContent = '❌ Connection error';
-                    status.className = 'status error';
-                }
-            };
-        }
-
-        function runResync(btn) {
-            const artist = document.getElementById('resync-artist').value.trim();
-            const album  = document.getElementById('resync-album').value.trim();
-            const apply  = document.getElementById('resync-apply').checked;
-            const log    = document.getElementById('log-resync');
-            const status = document.getElementById('status-resync');
-
-            if (!artist || !album) {
-                status.textContent = '❌ Artist and album are required';
-                status.className = 'status error';
-                return;
-            }
-
-            btn.disabled = true;
-            log.textContent = '';
-            log.classList.add('active');
-            status.textContent = '⏳ Running...';
-            status.className = 'status running';
-
-            const url = '/run/resync?artist=' + encodeURIComponent(artist) +
-                        '&album=' + encodeURIComponent(album) +
-                        '&apply=' + (apply ? '1' : '0');
-            const es = new EventSource(url);
-
-            es.onmessage = function(e) {
-                if (e.data === '__DONE__') {
-                    es.close();
-                    btn.disabled = false;
-                    return;
-                }
-                if (e.data.startsWith('✅')) {
-                    status.textContent = e.data;
-                    status.className = 'status done';
-                } else if (e.data.startsWith('❌')) {
-                    status.textContent = e.data;
-                    status.className = 'status error';
-                }
-                log.textContent += e.data + '\n';
-                log.scrollTop = log.scrollHeight;
-            };
-
-            es.onerror = function() {
-                es.close();
-                btn.disabled = false;
-                status.textContent = '❌ Connection error';
-                status.className = 'status error';
-            };
-        }
-
-        const ERROR_SOURCE_LABELS = {
-            synapse:      'Synapse (BPM/key/danceability) errors',
-            vi:           'Voice/Instrumental errors',
-            fingerprint:  'Fingerprinting errors',
-            mbid_no_match: 'Recording ID — no match found (AcoustID)',
+            return;
+          }
+          if (e.data.startsWith("✅")) {
+            status.textContent = e.data;
+            status.className = "status done";
+          } else if (e.data.startsWith("❌")) {
+            status.textContent = e.data;
+            status.className = "status error";
+          }
+          log.textContent += e.data + "\n";
+          log.scrollTop = log.scrollHeight;
         };
 
-        async function loadErrorCounts() {
-            const list = document.getElementById('error-counts-list');
-            const result = await friendlyFetchJSON('/admin/error-counts');
-            if (!result.ok) {
-                list.textContent = result.message;
-                return;
-            }
-            const counts = result.data;
-            list.innerHTML = Object.entries(ERROR_SOURCE_LABELS).map(([key, label]) => {
-                const n = counts[key] || 0;
-                const btn = n > 0
-                    ? `<button style="margin-left:0.75rem; font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="clearErrorSource('${key}')">Clear</button>`
-                    : '';
-                return `<div style="padding:0.25rem 0;">${label}: <strong>${n}</strong>${btn}</div>`;
-            }).join('');
+        es.onerror = function () {
+          es.close();
+          if (name === "fullsync") {
+            status.textContent =
+              "⚠️ Connection lost — the sync itself keeps running on the server. Reconnecting...";
+            status.className = "status running";
+            setTimeout(() => runScript(name, btn, true), 2000);
+          } else {
+            btn.disabled = false;
+            status.textContent = "❌ Connection error";
+            status.className = "status error";
+          }
+        };
+      }
+
+      function runResync(btn) {
+        const artist = document.getElementById("resync-artist").value.trim();
+        const album = document.getElementById("resync-album").value.trim();
+        const apply = document.getElementById("resync-apply").checked;
+        const log = document.getElementById("log-resync");
+        const status = document.getElementById("status-resync");
+
+        if (!artist || !album) {
+          status.textContent = "❌ Artist and album are required";
+          status.className = "status error";
+          return;
         }
 
-        /**
-         * Shared helper for every admin fetch action. Found real
-         * (July 2026): a genuine server-side error (e.g. a database
-         * lock conflict from another process running at the same
-         * time) returns an HTML error page, not JSON -- attempting
-         * res.json() on that throws a raw, confusing SyntaxError
-         * ("Unexpected token '<'...") with zero indication of what
-         * actually happened. Checks res.ok FIRST and gives a real,
-         * specific, human explanation based on the actual status
-         * code, before ever trying to parse the body as JSON.
-         */
-        async function friendlyFetchJSON(url, options) {
-            let res;
-            try {
-                res = await fetch(url, options);
-            } catch (e) {
-                return { ok: false, message: '⚠️ Could not reach the server at all — check your connection and try again.' };
-            }
+        btn.disabled = true;
+        log.textContent = "";
+        log.classList.add("active");
+        status.textContent = "⏳ Running...";
+        status.className = "status running";
 
-            if (!res.ok) {
-                if (res.status === 500) {
-                    return { ok: false, message: '⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.' };
-                }
-                if (res.status === 404) {
-                    return { ok: false, message: '⚠️ That feature is not available on this server yet — try refreshing the page, or check that the latest version is deployed.' };
-                }
-                return { ok: false, message: `⚠️ The server returned an unexpected error (HTTP ${res.status}). Try again in a moment.` };
-            }
+        const url =
+          "/run/resync?artist=" +
+          encodeURIComponent(artist) +
+          "&album=" +
+          encodeURIComponent(album) +
+          "&apply=" +
+          (apply ? "1" : "0");
+        const es = new EventSource(url);
 
-            try {
-                const data = await res.json();
-                return { ok: true, data };
-            } catch (e) {
-                return { ok: false, message: '⚠️ The server responded, but not with the data expected — this usually means a real bug. Worth checking the server logs.' };
-            }
-        }
-
-        async function clearErrorSource(source) {
-            const status = document.getElementById('status-clearerrors');
-            const label = ERROR_SOURCE_LABELS[source] || source;
-            if (!confirm(`Clear all ${label.toLowerCase()}? This only clears the error records -- affected tracks become eligible for retry next time you run that section's own analysis. This does not undo anything else.`)) {
-                return;
-            }
-            status.textContent = '⏳ Clearing…';
-            status.className = 'status running';
-
-            try {
-                const result = await friendlyFetchJSON(`/admin/clear-errors/${source}`, { method: 'POST' });
-                if (!result.ok) {
-                    status.textContent = result.message;
-                    status.className = 'status error';
-                    return;
-                }
-                if (result.data.error) {
-                    status.textContent = '❌ ' + result.data.error;
-                    status.className = 'status error';
-                    return;
-                }
-                status.textContent = `✅ Cleared ${result.data.cleared} error${result.data.cleared !== 1 ? 's' : ''}.`;
-                status.className = 'status done';
-                loadErrorCounts();
-            } catch (e) {
-                status.textContent = '❌ Unexpected error: ' + e;
-                status.className = 'status error';
-            }
-        }
-
-        const SCRIPT_FRIENDLY_NAMES = {
-            'musicmind_ingest.py':       'Library Ingest',
-            'lastfm_sync.py':            'Last.fm Sync',
-            'plex_tag_tracks.py':        'AI Tagging',
-            'listening_context.py':      'Listening Context',
-            'synapse_analyze.py':        'Synapse Analysis',
-            'va_resolve.py':             'Various Artists Resolution',
-            'resolve_recording_mbids.py': 'Recording ID Resolution',
-            'mb_enrich_artists.py':      'MusicBrainz Enrichment',
-            'enrich_artists.py':         'AI Artist Enrichment',
-            'fingerprint_tracks.py':     'Fingerprinting',
-            'copy_forward_analysis.py':  'Duplicate Check',
-            'dedup_report.py':           'Duplicate Report',
+        es.onmessage = function (e) {
+          if (e.data === "__DONE__") {
+            es.close();
+            btn.disabled = false;
+            return;
+          }
+          if (e.data.startsWith("✅")) {
+            status.textContent = e.data;
+            status.className = "status done";
+          } else if (e.data.startsWith("❌")) {
+            status.textContent = e.data;
+            status.className = "status error";
+          }
+          log.textContent += e.data + "\n";
+          log.scrollTop = log.scrollHeight;
         };
 
-        /**
-         * Found real (July 2026): a separately-scheduled job running
-         * completely outside this app caused a genuine database lock
-         * error during real use, and there was no way to see that
-         * anything else was even running until it actually failed.
-         * Checks real OS processes directly (not just this app's own
-         * bookkeeping), so it correctly catches anything -- launched
-         * through this dispatcher, or entirely externally.
-         */
-        async function checkOtherProcesses() {
-            const el = document.getElementById('other-processes-status');
-            const result = await friendlyFetchJSON('/admin/other-processes-status');
-            if (!result.ok) {
-                el.textContent = '';
-                return;
-            }
-            const data = result.data;
-            const names = data.other_scripts.map(s => SCRIPT_FRIENDLY_NAMES[s] || s);
-            if (data.fullsync_running) names.unshift('Full Sync');
+        es.onerror = function () {
+          es.close();
+          btn.disabled = false;
+          status.textContent = "❌ Connection error";
+          status.className = "status error";
+        };
+      }
 
-            if (names.length > 0) {
-                el.innerHTML = `⚠️ Currently running: <strong>${names.join(', ')}</strong> — starting Full Sync now may run into a database conflict.`;
-                el.style.color = '#9b2226';
-            } else {
-                el.textContent = '✓ Nothing else appears to be running right now.';
-                el.style.color = '#2d6a4f';
-            }
+      const ERROR_SOURCE_LABELS = {
+        synapse: "Synapse (BPM/key/danceability) errors",
+        vi: "Voice/Instrumental errors",
+        fingerprint: "Fingerprinting errors",
+        mbid_no_match: "Recording ID — no match found (AcoustID)",
+      };
+
+      async function loadErrorCounts() {
+        const list = document.getElementById("error-counts-list");
+        const result = await friendlyFetchJSON("/admin/error-counts");
+        if (!result.ok) {
+          list.textContent = result.message;
+          return;
+        }
+        const counts = result.data;
+        list.innerHTML = Object.entries(ERROR_SOURCE_LABELS)
+          .map(([key, label]) => {
+            const n = counts[key] || 0;
+            const btn =
+              n > 0
+                ? `<button style="margin-left:0.75rem; font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="clearErrorSource('${key}')">Clear</button>`
+                : "";
+            return `<div style="padding:0.25rem 0;">${label}: <strong>${n}</strong>${btn}</div>`;
+          })
+          .join("");
+      }
+
+      /**
+       * Shared helper for every admin fetch action. Found real
+       * (July 2026): a genuine server-side error (e.g. a database
+       * lock conflict from another process running at the same
+       * time) returns an HTML error page, not JSON -- attempting
+       * res.json() on that throws a raw, confusing SyntaxError
+       * ("Unexpected token '<'...") with zero indication of what
+       * actually happened. Checks res.ok FIRST and gives a real,
+       * specific, human explanation based on the actual status
+       * code, before ever trying to parse the body as JSON.
+       */
+      async function friendlyFetchJSON(url, options) {
+        let res;
+        try {
+          res = await fetch(url, options);
+        } catch (e) {
+          return {
+            ok: false,
+            message:
+              "⚠️ Could not reach the server at all — check your connection and try again.",
+          };
         }
 
-        checkOtherProcesses();
-        setInterval(checkOtherProcesses, 8000);
+        if (!res.ok) {
+          if (res.status === 500) {
+            return {
+              ok: false,
+              message:
+                "⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.",
+            };
+          }
+          if (res.status === 404) {
+            return {
+              ok: false,
+              message:
+                "⚠️ That feature is not available on this server yet — try refreshing the page, or check that the latest version is deployed.",
+            };
+          }
+          return {
+            ok: false,
+            message: `⚠️ The server returned an unexpected error (HTTP ${res.status}). Try again in a moment.`,
+          };
+        }
 
-        // Found real (Aug 2026): reconnecting to an in-progress Full
-        // Sync only ever happened via runScript's own onerror handler
-        // -- meaning it only helped if the tab stayed open through a
-        // dropped connection. Navigating away and coming back later
-        // left no code path that checked "is Full Sync already
-        // running?" and reconnected the log box -- the backend
-        // already supported this via /run/fullsync-tail, only the
-        // frontend was missing the hook. One-shot check on page load
-        // only, not inside the repeating 8s poll above, so it can
-        // never fire a second EventSource on top of an already-open one.
-        (async function reconnectFullsyncIfRunning() {
-            const result = await friendlyFetchJSON('/admin/other-processes-status');
-            if (result.ok && result.data.fullsync_running) {
-                const btn = document.getElementById('btn-fullsync');
-                if (btn) runScript('fullsync', btn, true);
-            }
-        })();
+        try {
+          const data = await res.json();
+          return { ok: true, data };
+        } catch (e) {
+          return {
+            ok: false,
+            message:
+              "⚠️ The server responded, but not with the data expected — this usually means a real bug. Worth checking the server logs.",
+          };
+        }
+      }
 
-        loadErrorCounts();
+      async function clearErrorSource(source) {
+        const status = document.getElementById("status-clearerrors");
+        const label = ERROR_SOURCE_LABELS[source] || source;
+        if (
+          !confirm(
+            `Clear all ${label.toLowerCase()}? This only clears the error records -- affected tracks become eligible for retry next time you run that section's own analysis. This does not undo anything else.`,
+          )
+        ) {
+          return;
+        }
+        status.textContent = "⏳ Clearing…";
+        status.className = "status running";
+
+        try {
+          const result = await friendlyFetchJSON(
+            `/admin/clear-errors/${source}`,
+            { method: "POST" },
+          );
+          if (!result.ok) {
+            status.textContent = result.message;
+            status.className = "status error";
+            return;
+          }
+          if (result.data.error) {
+            status.textContent = "❌ " + result.data.error;
+            status.className = "status error";
+            return;
+          }
+          status.textContent = `✅ Cleared ${result.data.cleared} error${result.data.cleared !== 1 ? "s" : ""}.`;
+          status.className = "status done";
+          loadErrorCounts();
+        } catch (e) {
+          status.textContent = "❌ Unexpected error: " + e;
+          status.className = "status error";
+        }
+      }
+
+      const SCRIPT_FRIENDLY_NAMES = {
+        "musicmind_ingest.py": "Library Ingest",
+        "lastfm_sync.py": "Last.fm Sync",
+        "plex_tag_tracks.py": "AI Tagging",
+        "listening_context.py": "Listening Context",
+        "synapse_analyze.py": "Synapse Analysis",
+        "va_resolve.py": "Various Artists Resolution",
+        "resolve_recording_mbids.py": "Recording ID Resolution",
+        "mb_enrich_artists.py": "MusicBrainz Enrichment",
+        "enrich_artists.py": "AI Artist Enrichment",
+        "fingerprint_tracks.py": "Fingerprinting",
+        "copy_forward_analysis.py": "Duplicate Check",
+        "dedup_report.py": "Duplicate Report",
+      };
+
+      /**
+       * Found real (July 2026): a separately-scheduled job running
+       * completely outside this app caused a genuine database lock
+       * error during real use, and there was no way to see that
+       * anything else was even running until it actually failed.
+       * Checks real OS processes directly (not just this app's own
+       * bookkeeping), so it correctly catches anything -- launched
+       * through this dispatcher, or entirely externally.
+       */
+      async function checkOtherProcesses() {
+        const el = document.getElementById("other-processes-status");
+        const result = await friendlyFetchJSON("/admin/other-processes-status");
+        if (!result.ok) {
+          el.textContent = "";
+          return;
+        }
+        const data = result.data;
+        const names = data.other_scripts.map(
+          (s) => SCRIPT_FRIENDLY_NAMES[s] || s,
+        );
+        if (data.fullsync_running) names.unshift("Full Sync");
+
+        if (names.length > 0) {
+          el.innerHTML = `⚠️ Currently running: <strong>${names.join(", ")}</strong> — starting Full Sync now may run into a database conflict.`;
+          el.style.color = "#9b2226";
+        } else {
+          el.textContent = "✓ Nothing else appears to be running right now.";
+          el.style.color = "#2d6a4f";
+        }
+      }
+
+      checkOtherProcesses();
+      setInterval(checkOtherProcesses, 8000);
+
+      // Found real (Aug 2026): reconnecting to an in-progress Full
+      // Sync only ever happened via runScript's own onerror handler
+      // -- meaning it only helped if the tab stayed open through a
+      // dropped connection. Navigating away and coming back later
+      // left no code path that checked "is Full Sync already
+      // running?" and reconnected the log box -- the backend
+      // already supported this via /run/fullsync-tail, only the
+      // frontend was missing the hook. One-shot check on page load
+      // only, not inside the repeating 8s poll above, so it can
+      // never fire a second EventSource on top of an already-open one.
+      (async function reconnectFullsyncIfRunning() {
+        const result = await friendlyFetchJSON("/admin/other-processes-status");
+        if (result.ok && result.data.fullsync_running) {
+          const btn = document.getElementById("btn-fullsync");
+          if (btn) runScript("fullsync", btn, true);
+        }
+      })();
+
+      loadErrorCounts();
     </script>
-{% include "footer.html" %}
-</body>
+    {% include "footer.html" %}
+  </body>
 </html>
