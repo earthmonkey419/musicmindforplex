@@ -4,6 +4,16 @@ All notable changes to MusicMind for Plex are documented here.
 
 ## [Unreleased]
 
+### Compatibility
+
+- The package reorganization keeps root-level launchers for previous script names,
+  so existing cron jobs and direct commands continue to work. No database migration
+  is needed for this code reorganization.
+- `musicmind db init` uses a shared schema initializer without contacting Plex.
+- `make install-full` installs the `full` optional dependency set; `make install`
+  continues to install `slim` by default.
+
+
 ## [3.1.1] — 2026-11-09
 
 ### Fixed
