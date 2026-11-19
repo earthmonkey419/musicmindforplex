@@ -1,0 +1,11 @@
+"""Backward-compatible entry point for :mod:`musicmind.plex.write_genres_to_plex`."""
+
+if __name__ == "__main__":
+    from runpy import run_module
+
+    run_module("musicmind.plex.write_genres_to_plex", run_name="__main__")
+else:
+    import importlib
+    import sys
+
+    sys.modules[__name__] = importlib.import_module("musicmind.plex.write_genres_to_plex")

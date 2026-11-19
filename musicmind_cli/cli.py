@@ -5,13 +5,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from musicmind.paths import PROJECT_ROOT
 
 
 def main(argv=None):
     # Installed console scripts start in the virtualenv's bin directory.
     # Prefer the current directory when it contains the user's config.py.
-    config_root = Path.cwd() if (Path.cwd() / "config.py").is_file() else PROJECT_ROOT
+    package_root = Path(__file__).resolve().parent.parent
+    config_root = Path.cwd() if (Path.cwd() / "config.py").is_file() else package_root
     sys.path.insert(0, str(config_root))
 
     parser = argparse.ArgumentParser(prog="musicmind")
