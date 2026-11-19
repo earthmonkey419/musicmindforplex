@@ -28,3 +28,4 @@ models/
 # Timestamped backups made by auth.py (they contain tokens)
 *.bak-*
 *.bak*
+/.coverage

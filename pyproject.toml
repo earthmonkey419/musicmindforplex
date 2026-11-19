@@ -26,8 +26,26 @@ musicmind = "musicmind_cli.cli:main"
 slim = ["essentia"]
 full = ["essentia-tensorflow", "numpy"]
 
+test = [
+    "pytest",
+    "coverage[toml]"
+]
+
 [tool.setuptools.packages.find]
 include = ["musicmind", "musicmind.*", "musicmind_cli", "musicmind_cli.*", "web"]
 
 [tool.setuptools.package-data]
 web = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+command_line = "-m pytest"
+source = ["musicmind", "musicmind_cli", "web"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
