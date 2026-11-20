@@ -30,7 +30,7 @@
 # real Docker environment to test against. A hardened non-root setup
 # is a reasonable future improvement once this base path is proven.
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG VARIANT=slim
 ENV MUSICMIND_VARIANT=${VARIANT}
@@ -65,19 +65,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python dependencies first, separately from the app code, so this
-# layer only rebuilds when dependencies actually change, not on every
-# code edit.
-COPY requirements.txt requirements-full.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
-    && if [ "$VARIANT" = "full" ]; then \
-         pip install --no-cache-dir -r requirements-full.txt; \
-       else \
-         pip install --no-cache-dir essentia; \
-       fi
-
-# App code
+# App code and package metadata
 COPY . .
+
+# The optional dependency group selects the audio engine for this image.
+RUN case "$VARIANT" in slim|full) ;; *) echo "Unknown variant: $VARIANT" >&2; exit 1 ;; esac \
+    && pip install --no-cache-dir ".[${VARIANT}]"
 
 # bin/fpcalc is a real, committed binary (statically-linked x86-64
 # Linux, verified — no glibc compatibility concerns on this base
@@ -95,4 +88,4 @@ VOLUME ["/app/data", "/app/models"]
 EXPOSE 8787
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["python3", "web/app.py"]
+CMD ["python3", "-m", "web.app"]

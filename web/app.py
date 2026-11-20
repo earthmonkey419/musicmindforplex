@@ -5,14 +5,37 @@ MusicMind for Plex - Flask Web UI
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 import openai
-from brain import expand_prompt, classify_prompt, search_tracks, sequence_for_flow, create_playlist, PlexServer, PLEX_URL, PLEX_TOKEN, MUSIC_LIB, detect_instrumental_intent, extract_lastfm_dates, get_scrobbled_tracks_in_range, get_scrobbled_tracks_around_date, get_missing_scrobbles_around_date, update_query_log_result_count, log_query, no_instrumental_data_exists, vi_capability_status, find_similar_by_track, find_similar_by_artist
-from config import DB_PATH, BASE_DIR, LASTFM_KEY
-from config_check import check_config
+from musicmind.brain import (
+    expand_prompt,
+    classify_prompt,
+    search_tracks,
+    sequence_for_flow,
+    create_playlist,
+    PlexServer,
+    PLEX_URL,
+    PLEX_TOKEN,
+    detect_instrumental_intent,
+    extract_lastfm_dates,
+    get_scrobbled_tracks_in_range,
+    get_scrobbled_tracks_around_date,
+    get_missing_scrobbles_around_date,
+    update_query_log_result_count,
+    log_query,
+    no_instrumental_data_exists,
+    vi_capability_status,
+    find_similar_by_track,
+    find_similar_by_artist,
+)
+from config import DB_PATH, BASE_DIR, LASTFM_KEY, MUSIC_LIB
+from musicmind.config_check import check_config
+from musicmind.commands import MODULES
+
 check_config()
 try:
     from config import IS_MASTER
@@ -21,12 +44,18 @@ except ImportError:
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return render_template('index.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year,
-                            vi_status=vi_capability_status())
 
-@app.route('/onthisday', methods=['POST'])
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        lastfm_enabled=bool(LASTFM_KEY),
+        year=datetime.now().year,
+        vi_status=vi_capability_status(),
+    )
+
+
+@app.route("/onthisday", methods=["POST"])
 def onthisday():
     """
     Zero-AI-cost complement to the typed lastfm: prefix. User picks a
@@ -37,22 +66,22 @@ def onthisday():
     ISO date, not natural language needing interpretation.
     """
     data = request.json
-    target_date = data.get('date', '').strip()
+    target_date = data.get("date", "").strip()
     if not target_date:
-        return jsonify({'error': 'No date provided'}), 400
+        return jsonify({"error": "No date provided"}), 400
 
     try:
         rating_keys = get_scrobbled_tracks_around_date(target_date, window_days=4)
         missing = get_missing_scrobbles_around_date(target_date, window_days=4)
     except ValueError:
-        return jsonify({'error': 'Invalid date format'}), 400
+        return jsonify({"error": "Invalid date format"}), 400
 
     filters = {
         **{
-            'limit': int(data.get('limit', 30)),
-            'max_per_artist': int(data.get('max_per_artist', 1)),
+            "limit": int(data.get("limit", 30)),
+            "max_per_artist": int(data.get("max_per_artist", 1)),
         },
-        'lastfm_rating_keys': rating_keys,
+        "lastfm_rating_keys": rating_keys,
     }
 
     tracks = search_tracks([], filters)
@@ -62,58 +91,75 @@ def onthisday():
     # a playlist means now.
     tracks = sequence_for_flow(tracks)
 
-    return jsonify({
-        'tracks': tracks,
-        'missing': missing,  # real Last.fm scrobbles from this window that never matched a local track -- shown separately, never included in the playlist
-        'intent': 'lastfm_window',
-        'search_term': f"{target_date} ± 4 days",
-    })
+    return jsonify(
+        {
+            "tracks": tracks,
+            "missing": missing,  # real Last.fm scrobbles from this window that never matched a local track -- shown separately, never included in the playlist
+            "intent": "lastfm_window",
+            "search_term": f"{target_date} ± 4 days",
+        }
+    )
 
 
-@app.route('/based-on-search')
+@app.route("/based-on-search")
 def based_on_search():
     """Autocomplete for the 'Based on:' box -- searches both track
     titles and artist names, clearly labeled by type, so the frontend
     knows which mode to use once the user picks a suggestion."""
     import sqlite3
-    q = request.args.get('q', '').strip()
+
+    q = request.args.get("q", "").strip()
     if len(q) < 2:
-        return jsonify({'results': []})
+        return jsonify({"results": []})
 
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
-    track_rows = conn.execute("""
+    track_rows = conn.execute(
+        """
         SELECT rating_key, title, COALESCE(real_artist, artist) as artist
         FROM tracks WHERE title LIKE ? LIMIT 8
-    """, (f'%{q}%',)).fetchall()
-    artist_rows = conn.execute("""
+    """,
+        (f"%{q}%",),
+    ).fetchall()
+    artist_rows = conn.execute(
+        """
         SELECT DISTINCT COALESCE(real_artist, artist) as artist
         FROM tracks WHERE COALESCE(real_artist, artist) LIKE ? LIMIT 8
-    """, (f'%{q}%',)).fetchall()
+    """,
+        (f"%{q}%",),
+    ).fetchall()
     conn.close()
 
-    results = [{'type': 'track', 'rating_key': rk, 'label': f'{title} — {artist}'} for rk, title, artist in track_rows]
-    results += [{'type': 'artist', 'value': a[0], 'label': f'{a[0]} (artist)'} for a in artist_rows]
-    return jsonify({'results': results})
+    results = [
+        {"type": "track", "rating_key": rk, "label": f"{title} — {artist}"}
+        for rk, title, artist in track_rows
+    ]
+    results += [
+        {"type": "artist", "value": a[0], "label": f"{a[0]} (artist)"}
+        for a in artist_rows
+    ]
+    return jsonify({"results": results})
 
 
-@app.route('/based-on', methods=['POST'])
+@app.route("/based-on", methods=["POST"])
 def based_on():
     """The actual 'Based on:' results -- routes to track mode (local
     tag+Synapse blend, no AI) or artist mode (Last.fm real similarity
     data, AI only as a last-resort fallback) depending on what the
     user picked."""
     data = request.json
-    seed_type = data.get('type')
-    limit = int(data.get('limit', 30))
-    max_per_artist = int(data.get('max_per_artist', 3))
+    seed_type = data.get("type")
+    limit = int(data.get("limit", 30))
+    max_per_artist = int(data.get("max_per_artist", 3))
 
     try:
-        if seed_type == 'track':
-            rating_key = data.get('rating_key')
+        if seed_type == "track":
+            rating_key = data.get("rating_key")
             if not rating_key:
-                return jsonify({'error': 'No track specified'}), 400
-            results = find_similar_by_track(rating_key, limit=limit, max_per_artist=max_per_artist)
+                return jsonify({"error": "No track specified"}), 400
+            results = find_similar_by_track(
+                rating_key, limit=limit, max_per_artist=max_per_artist
+            )
             # Found missing entirely (July 2026): the /based-on routes
             # were built after centralized logging and never wired
             # into it -- same class of gap as the original
@@ -121,21 +167,34 @@ def based_on():
             # code path. log_query() works standalone (no
             # classify_prompt needed), same pattern already used for
             # the lastfm: prefix path.
-            log_id = log_query(prompt=f"[based-on:track] {data.get('seed_label', rating_key)}", intent='based_on_track')
-            update_query_log_result_count(log_id, len(results), {'limit': limit, 'max_per_artist': max_per_artist})
-            return jsonify({'tracks': results, 'mode': 'track'})
-        elif seed_type == 'artist':
-            artist = data.get('value')
+            log_id = log_query(
+                prompt=f"[based-on:track] {data.get('seed_label', rating_key)}",
+                intent="based_on_track",
+            )
+            update_query_log_result_count(
+                log_id, len(results), {"limit": limit, "max_per_artist": max_per_artist}
+            )
+            return jsonify({"tracks": results, "mode": "track"})
+        elif seed_type == "artist":
+            artist = data.get("value")
             if not artist:
-                return jsonify({'error': 'No artist specified'}), 400
-            results, source = find_similar_by_artist(artist, limit=limit, max_per_artist=max_per_artist)
-            log_id = log_query(prompt=f"[based-on:artist] {artist}", intent='based_on_artist')
-            update_query_log_result_count(log_id, len(results), {'limit': limit, 'max_per_artist': max_per_artist, 'source': source})
-            return jsonify({'tracks': results, 'mode': 'artist', 'source': source})
+                return jsonify({"error": "No artist specified"}), 400
+            results, source = find_similar_by_artist(
+                artist, limit=limit, max_per_artist=max_per_artist
+            )
+            log_id = log_query(
+                prompt=f"[based-on:artist] {artist}", intent="based_on_artist"
+            )
+            update_query_log_result_count(
+                log_id,
+                len(results),
+                {"limit": limit, "max_per_artist": max_per_artist, "source": source},
+            )
+            return jsonify({"tracks": results, "mode": "artist", "source": source})
         else:
-            return jsonify({'error': 'Unknown seed type'}), 400
+            return jsonify({"error": "Unknown seed type"}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 def _openai_error_response(e):
@@ -146,34 +205,34 @@ def _openai_error_response(e):
     message so the UI and any API client can tell "slow down / check
     billing" apart from a genuine server bug.
     """
-    code = getattr(e, 'code', None)
+    code = getattr(e, "code", None)
     if isinstance(e, openai.RateLimitError):
         status = 429
-        if code == 'insufficient_quota':
+        if code == "insufficient_quota":
             # Also a 429, but retrying won't help -- billing/quota issue.
             msg = "OpenAI quota exhausted. Check your OpenAI plan and billing."
         else:
             msg = "OpenAI is rate limiting requests. Wait a moment and try again."
-            code = code or 'rate_limited'
+            code = code or "rate_limited"
     elif isinstance(e, openai.AuthenticationError):
-        status, code = 502, 'openai_auth'
+        status, code = 502, "openai_auth"
         msg = "OpenAI rejected the API key. Check OPENAI_KEY in config.py."
     elif isinstance(e, (openai.APIConnectionError, openai.APITimeoutError)):
-        status, code = 504, 'openai_unreachable'
+        status, code = 504, "openai_unreachable"
         msg = "Could not reach OpenAI. Check the server's internet connection."
     else:
-        status, code = 502, 'openai_error'
+        status, code = 502, "openai_error"
         msg = f"OpenAI returned an error: {e}"
 
-    resp = jsonify({'error': msg, 'code': code})
+    resp = jsonify({"error": msg, "code": code})
     resp.status_code = status
     retry_after = None
     try:
-        retry_after = e.response.headers.get('retry-after')
+        retry_after = e.response.headers.get("retry-after")
     except Exception:
         pass
     if status == 429 and retry_after:
-        resp.headers['Retry-After'] = retry_after
+        resp.headers["Retry-After"] = retry_after
     return resp
 
 
@@ -183,16 +242,20 @@ def handle_openai_error(e):
     return _openai_error_response(e)
 
 
-@app.route('/preview', methods=['POST'])
+@app.route("/preview", methods=["POST"])
 def preview():
     data = request.json
-    prompt = data.get('prompt', '').strip()
-    bucket_names = data.get('buckets') or None  # optional list of genre bucket names to narrow tag vocabulary
-    strict_buckets = bool(bucket_names)  # confirmed default (July 2026): checking ANY bucket means strict genre-only vocabulary — proven 3/3 on production that this produces genuinely genre-coherent results, and lets the AI interpret the prompt's mood THROUGH the selected genre's own vocabulary rather than reaching for generic cross-genre mood words
+    prompt = data.get("prompt", "").strip()
+    bucket_names = (
+        data.get("buckets") or None
+    )  # optional list of genre bucket names to narrow tag vocabulary
+    strict_buckets = bool(
+        bucket_names
+    )  # confirmed default (July 2026): checking ANY bucket means strict genre-only vocabulary — proven 3/3 on production that this produces genuinely genre-coherent results, and lets the AI interpret the prompt's mood THROUGH the selected genre's own vocabulary rather than reaching for generic cross-genre mood words
 
     try:
         tags = []
-        intent = 'mood'
+        intent = "mood"
         search_term = None
         detected_filters = {}
         classification = {}
@@ -206,11 +269,13 @@ def preview():
         # there's no cost/token data — just makes the prompt visible
         # in query_log, same completeness goal as the classify-based
         # path below).
-        if prompt.lower().startswith('lastfm:'):
-            date_text = prompt[len('lastfm:'):].strip()
+        if prompt.lower().startswith("lastfm:"):
+            date_text = prompt[len("lastfm:") :].strip()
             dates = extract_lastfm_dates(date_text)
-            lastfm_rating_keys = get_scrobbled_tracks_in_range(dates['start_date'], dates['end_date'])
-            intent = 'lastfm_range'
+            lastfm_rating_keys = get_scrobbled_tracks_in_range(
+                dates["start_date"], dates["end_date"]
+            )
+            intent = "lastfm_range"
             search_term = f"{dates['start_date']} to {dates['end_date']}"
             query_log_id = log_query(prompt=prompt, intent=intent)
         elif prompt:
@@ -224,19 +289,23 @@ def preview():
             # runs, appends onto this SAME row instead of creating a
             # duplicate — true combined cost across both API calls.
             classification, query_log_id = classify_prompt(prompt)
-            intent      = classification.get('intent', 'mood')
-            search_term = classification.get('title_search') or classification.get('artist_search')
-            detected_filters = classification.get('filters', {}) or {}
+            intent = classification.get("intent", "mood")
+            search_term = classification.get("title_search") or classification.get(
+                "artist_search"
+            )
+            detected_filters = classification.get("filters", {}) or {}
 
             # Expand mood if there is a mood component
-            mood = classification.get('mood')
-            if mood and intent in ('mood', 'filter_only'):
-                if intent == 'mood':
-                    tags, query_log_id = expand_prompt(prompt, bucket_names, strict=strict_buckets, log_id=query_log_id)
+            mood = classification.get("mood")
+            if mood and intent in ("mood", "filter_only"):
+                if intent == "mood":
+                    tags, query_log_id = expand_prompt(
+                        prompt, bucket_names, strict=strict_buckets, log_id=query_log_id
+                    )
                 # for filter_only with no mood, skip expansion
 
         filters = {
-            'unplayed':       data.get('unplayed', False),
+            "unplayed": data.get("unplayed", False),
             # Fallback to the AI-detected genre (classify_prompt's
             # own GENRE field) when the manual dropdown wasn't used.
             # Confirmed real bug (query_log ids 122/127/129/197):
@@ -245,30 +314,38 @@ def preview():
             # expand_prompt() entirely, AND the AI's correctly-
             # detected genre was being silently discarded here.
             # Manual dropdown still wins if the user explicitly set one.
-            'genre':          data.get('genre') or classification.get('genre') or None,
-            'min_year':       int(data['min_year']) if data.get('min_year') else None,
-            'max_year':       int(data['max_year']) if data.get('max_year') else None,
-            'min_plays':      int(data['min_plays']) if data.get('min_plays') else detected_filters.get('min_plays'),
-            'popularity_min': int(data['popularity_min']) if data.get('popularity_min') else detected_filters.get('popularity_min'),
-            'max_plays':      int(data['max_plays']) if data.get('max_plays') else None,
-            'limit':          int(data.get('limit', 30)),
-            'max_per_artist': int(data.get('max_per_artist', 3)),
-            'min_rating':     float(data['min_rating']) if data.get('min_rating') else None,
-            'gender':         data.get('gender') or detected_filters.get('gender') or None,
-            'country':        data.get('country') or detected_filters.get('country') or None,
-            'era':            data.get('era') or detected_filters.get('era') or None,
-            'instrumental':   1 if data.get('instrumental') else (detect_instrumental_intent(prompt) if prompt else None),
-            'vocal_tolerance': float(data['vocal_tolerance']) if data.get('vocal_tolerance') else None,
-            'bpm_min':        int(data['bpm_min']) if data.get('bpm_min') else None,
-            'bpm_max':        int(data['bpm_max']) if data.get('bpm_max') else None,
-            'danceability':   data.get('danceability') or None,
-            'bucket_names':   bucket_names,
-            'lastfm_rating_keys': lastfm_rating_keys,
-            'title_search':   classification.get('title_search'),
-            'artist_search':  classification.get('artist_search'),
-            'year_search':    detected_filters.get('year') or (search_term if intent == 'year_search' else None),
-            'intent':         intent,
-
+            "genre": data.get("genre") or classification.get("genre") or None,
+            "min_year": int(data["min_year"]) if data.get("min_year") else None,
+            "max_year": int(data["max_year"]) if data.get("max_year") else None,
+            "min_plays": int(data["min_plays"])
+            if data.get("min_plays")
+            else detected_filters.get("min_plays"),
+            "popularity_min": int(data["popularity_min"])
+            if data.get("popularity_min")
+            else detected_filters.get("popularity_min"),
+            "max_plays": int(data["max_plays"]) if data.get("max_plays") else None,
+            "limit": int(data.get("limit", 30)),
+            "max_per_artist": int(data.get("max_per_artist", 3)),
+            "min_rating": float(data["min_rating"]) if data.get("min_rating") else None,
+            "gender": data.get("gender") or detected_filters.get("gender") or None,
+            "country": data.get("country") or detected_filters.get("country") or None,
+            "era": data.get("era") or detected_filters.get("era") or None,
+            "instrumental": 1
+            if data.get("instrumental")
+            else (detect_instrumental_intent(prompt) if prompt else None),
+            "vocal_tolerance": float(data["vocal_tolerance"])
+            if data.get("vocal_tolerance")
+            else None,
+            "bpm_min": int(data["bpm_min"]) if data.get("bpm_min") else None,
+            "bpm_max": int(data["bpm_max"]) if data.get("bpm_max") else None,
+            "danceability": data.get("danceability") or None,
+            "bucket_names": bucket_names,
+            "lastfm_rating_keys": lastfm_rating_keys,
+            "title_search": classification.get("title_search"),
+            "artist_search": classification.get("artist_search"),
+            "year_search": detected_filters.get("year")
+            or (search_term if intent == "year_search" else None),
+            "intent": intent,
         }
 
         # Found real (July 2026): the "Tracks per artist" field
@@ -282,8 +359,8 @@ def preview():
         # actual limit control is the `limit` field itself; ignore
         # whatever max_per_artist the client sent and use a high
         # enough value that it's effectively uncapped.
-        if intent == 'artist_search':
-            filters['max_per_artist'] = max(filters['limit'], 100)
+        if intent == "artist_search":
+            filters["max_per_artist"] = max(filters["limit"], 100)
 
         tracks = search_tracks(tags, filters)
         update_query_log_result_count(query_log_id, len(tracks), filters)
@@ -292,43 +369,58 @@ def preview():
         # playlist -- no longer a user-facing toggle.
         tracks = sequence_for_flow(tracks)
 
-        response = {'tags': tags, 'tracks': tracks, 'intent': intent, 'search_term': search_term, 'detected_filters': detected_filters, 'dj_ified': True}
+        response = {
+            "tags": tags,
+            "tracks": tracks,
+            "intent": intent,
+            "search_term": search_term,
+            "detected_filters": detected_filters,
+            "dj_ified": True,
+        }
 
         # Found via July 2026 fresh-install sanity check: checking
         # "Instrumental only" on an install with no VI data at all
         # (fresh v3-dev, model never downloaded) silently returned
         # zero results with no explanation. Distinguish that from
         # "genuinely nothing matches this specific query."
-        if filters.get('instrumental') == 1 and len(tracks) == 0 and no_instrumental_data_exists():
-            response['warning'] = ("No tracks have been analyzed for voice/instrumental content "
-                                    "yet. Run VI verification from the Admin page (requires "
-                                    "downloading the voice/instrumental model first — see the "
-                                    "Admin page for the download link).")
+        if (
+            filters.get("instrumental") == 1
+            and len(tracks) == 0
+            and no_instrumental_data_exists()
+        ):
+            response["warning"] = (
+                "No tracks have been analyzed for voice/instrumental content "
+                "yet. Run VI verification from the Admin page (requires "
+                "downloading the voice/instrumental model first — see the "
+                "Admin page for the download link)."
+            )
 
         return jsonify(response)
 
     except openai.OpenAIError as e:
         return _openai_error_response(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/create', methods=['POST'])
+
+@app.route("/create", methods=["POST"])
 def create():
     data = request.json
-    name = data.get('name', '').strip()
-    rating_keys = data.get('rating_keys', [])
-    prompt = data.get('prompt', '').strip() or None
+    name = data.get("name", "").strip()
+    rating_keys = data.get("rating_keys", [])
+    prompt = data.get("prompt", "").strip() or None
 
     if not name:
-        return jsonify({'error': 'No playlist name provided'}), 400
+        return jsonify({"error": "No playlist name provided"}), 400
     if not rating_keys:
-        return jsonify({'error': 'No tracks provided'}), 400
+        return jsonify({"error": "No tracks provided"}), 400
 
     try:
         count = create_playlist(name, rating_keys, prompt=prompt)
-        return jsonify({'success': True, 'count': count, 'name': name})
+        return jsonify({"success": True, "count": count, "name": name})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
 
 import subprocess
 import threading
@@ -367,10 +459,12 @@ def tail_subprocess(cmd, result, cwd=None, extra_popen_kwargs=None):
     check success/failure after iterating (matches every existing
     call site's proc.wait() + proc.returncode check).
     """
-    log_fd, log_path = tempfile.mkstemp(prefix='streamlog_', suffix='.log', dir=cwd or BASE_DIR)
+    log_fd, log_path = tempfile.mkstemp(
+        prefix="streamlog_", suffix=".log", dir=cwd or BASE_DIR
+    )
     os.close(log_fd)
     try:
-        with open(log_path, 'w') as logfile:
+        with open(log_path, "w") as logfile:
             proc = subprocess.Popen(
                 cmd,
                 stdout=logfile,
@@ -379,7 +473,7 @@ def tail_subprocess(cmd, result, cwd=None, extra_popen_kwargs=None):
                 text=True,
                 **(extra_popen_kwargs or {}),
             )
-        with open(log_path, 'r') as f:
+        with open(log_path, "r") as f:
             while True:
                 line = f.readline()
                 if line:
@@ -392,14 +486,15 @@ def tail_subprocess(cmd, result, cwd=None, extra_popen_kwargs=None):
                     break
                 time.sleep(0.3)
         proc.wait()
-        result['returncode'] = proc.returncode
+        result["returncode"] = proc.returncode
     finally:
         try:
             os.remove(log_path)
         except OSError:
             pass
 
-@app.route('/admin/error-counts')
+
+@app.route("/admin/error-counts")
 def admin_error_counts():
     """
     Live counts for the three real, persistent error sources --
@@ -414,23 +509,30 @@ def admin_error_counts():
     surfaces the real counts so Clear Errors (below) can act on them.
     """
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
 
     synapse_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
 
-    has_vi_results = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
-    ).fetchone() is not None
+    has_vi_results = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone()
+        is not None
+    )
     vi_count = 0
     if has_vi_results:
         vi_count = conn.execute(
             "SELECT COUNT(*) FROM vi_results WHERE verdict = 'ERROR'"
         ).fetchone()[0]
 
-    has_fingerprints = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='track_fingerprints'"
-    ).fetchone() is not None
+    has_fingerprints = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='track_fingerprints'"
+        ).fetchone()
+        is not None
+    )
     fingerprint_count = 0
     mbid_no_match_count = 0
     if has_fingerprints:
@@ -442,24 +544,29 @@ def admin_error_counts():
         # keeps growing, so a genuine no-match today could resolve
         # on its own after enough time passes (already handled
         # automatically). This lets it happen sooner, on demand.
-        has_status_col = conn.execute(
-            "SELECT 1 FROM pragma_table_info('track_fingerprints') WHERE name='mbid_check_status'"
-        ).fetchone() is not None
+        has_status_col = (
+            conn.execute(
+                "SELECT 1 FROM pragma_table_info('track_fingerprints') WHERE name='mbid_check_status'"
+            ).fetchone()
+            is not None
+        )
         if has_status_col:
             mbid_no_match_count = conn.execute(
                 "SELECT COUNT(*) FROM track_fingerprints WHERE mbid_check_status IS NOT NULL"
             ).fetchone()[0]
 
     conn.close()
-    return jsonify({
-        'synapse': synapse_count,
-        'vi': vi_count,
-        'fingerprint': fingerprint_count,
-        'mbid_no_match': mbid_no_match_count,
-    })
+    return jsonify(
+        {
+            "synapse": synapse_count,
+            "vi": vi_count,
+            "fingerprint": fingerprint_count,
+            "mbid_no_match": mbid_no_match_count,
+        }
+    )
 
 
-@app.route('/admin/clear-errors/<source>', methods=['POST'])
+@app.route("/admin/clear-errors/<source>", methods=["POST"])
 def admin_clear_errors(source):
     """
     Deletes persistent error records for one specific source, making
@@ -474,18 +581,21 @@ def admin_clear_errors(source):
     import sqlite3
 
     valid_sources = {
-        'synapse': ("DELETE FROM synapse_errors", None),
-        'vi': ("DELETE FROM vi_results WHERE verdict = 'ERROR'", 'vi_results'),
-        'fingerprint': ("DELETE FROM track_fingerprints WHERE error IS NOT NULL", 'track_fingerprints'),
+        "synapse": ("DELETE FROM synapse_errors", None),
+        "vi": ("DELETE FROM vi_results WHERE verdict = 'ERROR'", "vi_results"),
+        "fingerprint": (
+            "DELETE FROM track_fingerprints WHERE error IS NOT NULL",
+            "track_fingerprints",
+        ),
         # UPDATE, not DELETE -- these rows hold real, valid fingerprint
         # data, only the "no match" determination itself should reset.
-        'mbid_no_match': (
+        "mbid_no_match": (
             "UPDATE track_fingerprints SET mbid_check_status = NULL, mbid_checked_at = NULL WHERE mbid_check_status IS NOT NULL",
-            'track_fingerprints'
+            "track_fingerprints",
         ),
     }
     if source not in valid_sources:
-        return jsonify({'error': 'Unknown error source'}), 400
+        return jsonify({"error": "Unknown error source"}), 400
 
     delete_sql, required_table = valid_sources[source]
 
@@ -498,26 +608,33 @@ def admin_clear_errors(source):
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     if required_table:
-        exists = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (required_table,)
-        ).fetchone() is not None
+        exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (required_table,),
+            ).fetchone()
+            is not None
+        )
         if not exists:
             conn.close()
-            return jsonify({'cleared': 0})
+            return jsonify({"cleared": 0})
 
     cursor = conn.execute(delete_sql)
     cleared = cursor.rowcount
     conn.commit()
     conn.close()
 
-    return jsonify({'cleared': cleared})
+    return jsonify({"cleared": cleared})
 
 
-@app.route('/admin')
+@app.route("/admin")
 def admin():
-    return render_template('admin.html', lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year)
+    return render_template(
+        "admin.html", lastfm_enabled=bool(LASTFM_KEY), year=datetime.now().year
+    )
 
-@app.route('/run/synapse-full')
+
+@app.route("/run/synapse-full")
 def run_synapse_full():
     """
     Dedicated route for Synapse's Full Run — genuinely different from
@@ -538,86 +655,95 @@ def run_synapse_full():
        instead — see that route, which already reports analyzed count,
        error count, and seconds-since-last-write for stall detection.
     """
-    if running.get('synapse_full_started_flag'):
-        return jsonify({'error': 'Already started this session — check /synapse-status'}), 400
+    if running.get("synapse_full_started_flag"):
+        return jsonify(
+            {"error": "Already started this session — check /synapse-status"}
+        ), 400
 
-    lock_path = os.path.join(BASE_DIR, 'synapse.lock')
+    lock_path = os.path.join(BASE_DIR, "synapse.lock")
     if os.path.exists(lock_path):
         with open(lock_path) as f:
             existing_pid = f.read().strip()
-        proc_dir = f'/proc/{existing_pid}'
+        proc_dir = f"/proc/{existing_pid}"
         if os.path.exists(proc_dir):
             try:
-                with open(f'{proc_dir}/cmdline', 'rb') as cf:
-                    cmdline = cf.read().decode('utf-8', errors='ignore')
-                if 'synapse_analyze.py' in cmdline:
-                    return jsonify({'error': 'A Synapse run is already active'}), 400
+                with open(f"{proc_dir}/cmdline", "rb") as cf:
+                    cmdline = cf.read().decode("utf-8", errors="ignore")
+                if MODULES["synapse_analyze.py"] in cmdline:
+                    return jsonify({"error": "A Synapse run is already active"}), 400
             except (OSError, IOError):
                 pass
 
-    log_path = os.path.join(BASE_DIR, 'synapse_full_run.log')
+    log_path = os.path.join(BASE_DIR, "synapse_full_run.log")
     try:
-        with open(log_path, 'a') as logfile:
+        with open(log_path, "a") as logfile:
             subprocess.Popen(
-                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py')],
+                [sys.executable, "-u", "-m", MODULES["synapse_analyze.py"]],
                 stdout=logfile,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,  # detach from this Flask process entirely
                 cwd=BASE_DIR,
             )
-        running['synapse_full_started_flag'] = True
-        return jsonify({'message': 'Full analysis started. It will keep running even if the app restarts. Check /synapse-status for progress.'})
+        running["synapse_full_started_flag"] = True
+        return jsonify(
+            {
+                "message": "Full analysis started. It will keep running even if the app restarts. Check /synapse-status for progress."
+            }
+        )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/synapse-full-log')
+@app.route("/synapse-full-log")
 def synapse_full_log():
     """Returns the tail of the detached Full Run's log file, since its
     output no longer streams live to the browser."""
-    log_path = os.path.join(BASE_DIR, 'synapse_full_run.log')
+    log_path = os.path.join(BASE_DIR, "synapse_full_run.log")
     if not os.path.exists(log_path):
-        return jsonify({'log': '(no log yet — run has not started, or log file was cleared)'})
+        return jsonify(
+            {"log": "(no log yet — run has not started, or log file was cleared)"}
+        )
     try:
-        with open(log_path, 'r', errors='ignore') as f:
+        with open(log_path, "r", errors="ignore") as f:
             lines = f.readlines()
-        tail = ''.join(lines[-100:])  # last 100 lines is plenty for a status check
-        return jsonify({'log': tail})
+        tail = "".join(lines[-100:])  # last 100 lines is plenty for a status check
+        return jsonify({"log": tail})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/run/<script>')
+@app.route("/run/<script>")
 def run_script(script):
     scripts = {
-        'ingest':   os.path.join(BASE_DIR, 'musicmind_ingest.py'),
-        'lastfm':   os.path.join(BASE_DIR, 'lastfm_sync.py') if LASTFM_KEY else None,
-        'tagger':   os.path.join(BASE_DIR, 'plex_tag_tracks.py'),
-        'context':  os.path.join(BASE_DIR, 'listening_context.py'),
-        'mbenrich': os.path.join(BASE_DIR, 'mb_enrich_artists.py'),
-        'aienrich': os.path.join(BASE_DIR, 'enrich_artists.py'),
-        'synapse':  os.path.join(BASE_DIR, 'synapse_analyze.py'),
-        'fingerprint':  os.path.join(BASE_DIR, 'fingerprint_tracks.py'),
-        'copyforward':  os.path.join(BASE_DIR, 'copy_forward_analysis.py'),
-        'dedup':        os.path.join(BASE_DIR, 'dedup_report.py'),
-        'varesolve':    os.path.join(BASE_DIR, 'va_resolve.py'),
-        'recordingmbid': os.path.join(BASE_DIR, 'resolve_recording_mbids.py'),
+        "ingest": MODULES["ingest.py"],
+        "lastfm": MODULES["sync.py"] if LASTFM_KEY else None,
+        "tagger": MODULES["tag_tracks.py"],
+        "context": MODULES["listening_context.py"],
+        "mbenrich": MODULES["mb_enrich_artists.py"],
+        "aienrich": MODULES["enrich_artists.py"],
+        "synapse": MODULES["synapse_analyze.py"],
+        "fingerprint": MODULES["fingerprint_tracks.py"],
+        "copyforward": MODULES["copy_forward_analysis.py"],
+        "dedup": MODULES["dedup_report.py"],
+        "varesolve": MODULES["va_resolve.py"],
+        "recordingmbid": MODULES["resolve_recording_mbids.py"],
     }
     if script not in scripts:
-        return jsonify({'error': 'Unknown script'}), 400
+        return jsonify({"error": "Unknown script"}), 400
     if running.get(script):
-        return jsonify({'error': 'Already running'}), 400
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
         running[script] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', scripts[script]],
+                [sys.executable, "-u", "-m", scripts[script]],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
                 start_new_session=True,  # detach from this Flask worker -- found missing entirely (July 2026) after a real pm2 restart interrupted a live Synapse run started via this exact generic dispatcher. This ONE mechanism serves all 11 admin-page "Run Now" buttons (ingest, tagger, fingerprint, VA-resolve, dedup, Synapse, and more) -- every one of them was equally vulnerable, despite the DEDICATED /run/synapse-full route and Full Sync's own steps both already having this same protection.
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -632,10 +758,10 @@ def run_script(script):
             running[script] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/resync')
+@app.route("/run/resync")
 def run_resync():
     """
     Runs resync_item.py for a single artist/album pulled from the admin
@@ -643,22 +769,30 @@ def run_resync():
     dispatcher since this one takes real arguments from user input.
     Defaults to a dry run (no --run flag) unless apply=1 is passed.
     """
-    artist = request.args.get('artist', '').strip()
-    album = request.args.get('album', '').strip()
-    apply_changes = request.args.get('apply') == '1'
+    artist = request.args.get("artist", "").strip()
+    album = request.args.get("album", "").strip()
+    apply_changes = request.args.get("apply") == "1"
 
     if not artist or not album:
-        return jsonify({'error': 'artist and album are required'}), 400
-    if running.get('resync'):
-        return jsonify({'error': 'Already running'}), 400
+        return jsonify({"error": "artist and album are required"}), 400
+    if running.get("resync"):
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
-        running['resync'] = True
+        running["resync"] = True
         try:
-            cmd = ['python3.12', '-u', os.path.join(BASE_DIR, 'resync_item.py'),
-                   '--artist', artist, '--album', album]
+            cmd = [
+                sys.executable,
+                "-u",
+                "-m",
+                MODULES["resync_item.py"],
+                "--artist",
+                artist,
+                "--album",
+                album,
+            ]
             if apply_changes:
-                cmd.append('--run')
+                cmd.append("--run")
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -666,6 +800,7 @@ def run_resync():
                 text=True,
                 bufsize=1,
                 start_new_session=True,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -677,13 +812,13 @@ def run_resync():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['resync'] = False
+            running["resync"] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/test/<test_id>')
+@app.route("/run/test/<test_id>")
 def run_test(test_id):
     """
     Runs a predefined test command (script + args) and streams output.
@@ -691,28 +826,41 @@ def run_test(test_id):
     is never at risk from test-specific argument handling.
     """
     test_scripts = {
-        'mb_dry_run':     (os.path.join(BASE_DIR, 'mb_enrich_artists.py'), ['--test', '--limit', '3']),
-        'mb_limited_run': (os.path.join(BASE_DIR, 'mb_enrich_artists.py'), ['--limit', '1']),
-        'ai_dry_run':     (os.path.join(BASE_DIR, 'enrich_artists.py'),    ['--test', '--limit', '3']),
-        'ai_limited_run': (os.path.join(BASE_DIR, 'enrich_artists.py'),    ['--limit', '1']),
+        "mb_dry_run": (
+            MODULES["mb_enrich_artists.py"],
+            ["--test", "--limit", "3"],
+        ),
+        "mb_limited_run": (
+            MODULES["mb_enrich_artists.py"],
+            ["--limit", "1"],
+        ),
+        "ai_dry_run": (
+            MODULES["enrich_artists.py"],
+            ["--test", "--limit", "3"],
+        ),
+        "ai_limited_run": (
+            MODULES["enrich_artists.py"],
+            ["--limit", "1"],
+        ),
     }
     if test_id not in test_scripts:
-        return jsonify({'error': 'Unknown test'}), 400
+        return jsonify({"error": "Unknown test"}), 400
 
     script_path, args = test_scripts[test_id]
     run_key = f"test_{test_id}"
     if running.get(run_key):
-        return jsonify({'error': 'Already running'}), 400
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
         running[run_key] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', script_path] + args,
+                [sys.executable, "-u", "-m", script_path] + args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -727,10 +875,10 @@ def run_test(test_id):
             running[run_key] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/assertion/<assertion_id>')
+@app.route("/run/assertion/<assertion_id>")
 def run_assertion(assertion_id):
     """
     Runs a predefined SQL-based assertion and returns instant pass/fail,
@@ -745,39 +893,41 @@ def run_assertion(assertion_id):
         conn = sqlite3.connect(DB_PATH, timeout=30)
         conn.execute("PRAGMA busy_timeout=30000")
         conn.execute("PRAGMA query_only = ON")
-        has_marker = _table_has_column(conn, 'artist_meta', 'mb_country_checked_at')
+        has_marker = _table_has_column(conn, "artist_meta", "mb_country_checked_at")
         assertions = _integrity_assertions(has_marker)
 
         if assertion_id not in assertions:
-            return jsonify({'error': 'Unknown assertion'}), 400
+            return jsonify({"error": "Unknown assertion"}), 400
 
         a = assertions[assertion_id]
-        result = conn.execute(a['query']).fetchone()[0]
-        passed = (result == 0) if a['expect_zero'] else (result > 0)
+        result = conn.execute(a["query"]).fetchone()[0]
+        passed = (result == 0) if a["expect_zero"] else (result > 0)
 
         payload = {
-            'label': a['label'],
-            'pass': passed,
-            'count': result,
-            'why': a.get('why', ''),
+            "label": a["label"],
+            "pass": passed,
+            "count": result,
+            "why": a.get("why", ""),
         }
         if not passed:
-            payload['fix'] = a.get('fix', '')
-            if a.get('breakdown'):
-                payload['breakdown'] = [
-                    {'label': str(r[0]), 'n': r[1]}
-                    for r in conn.execute(a['breakdown']).fetchall()
+            payload["fix"] = a.get("fix", "")
+            if a.get("breakdown"):
+                payload["breakdown"] = [
+                    {"label": str(r[0]), "n": r[1]}
+                    for r in conn.execute(a["breakdown"]).fetchall()
                 ]
-            if a.get('sample'):
-                cur = conn.execute(a['sample'])
-                payload['sample'] = {
-                    'columns': [d[0] for d in cur.description],
-                    'rows': [['' if v is None else str(v) for v in row]
-                             for row in cur.fetchall()],
+            if a.get("sample"):
+                cur = conn.execute(a["sample"])
+                payload["sample"] = {
+                    "columns": [d[0] for d in cur.description],
+                    "rows": [
+                        ["" if v is None else str(v) for v in row]
+                        for row in cur.fetchall()
+                    ],
                 }
         return jsonify(payload)
     except Exception as e:
-        return jsonify({'label': assertion_id, 'pass': False, 'error': str(e)}), 500
+        return jsonify({"label": assertion_id, "pass": False, "error": str(e)}), 500
     finally:
         if conn is not None:
             conn.close()
@@ -799,7 +949,9 @@ def _integrity_assertions(has_marker):
     it does, check 1 runs in its original form.
     """
     if has_marker:
-        c1_where = "mbid IS NOT NULL AND country IS NULL AND mb_country_checked_at IS NULL"
+        c1_where = (
+            "mbid IS NOT NULL AND country IS NULL AND mb_country_checked_at IS NULL"
+        )
         c1_fix = (
             "Back up first:\n"
             "  cp musicmind.db musicmind.pre-country-fill.db\n\n"
@@ -827,17 +979,17 @@ def _integrity_assertions(has_marker):
         )
 
     return {
-        'mbid_has_country': {
-            'label': 'Every artist with an mbid also has country set',
-            'query': f"SELECT COUNT(*) FROM artist_meta WHERE {c1_where}",
-            'expect_zero': True,
-            'why': (
+        "mbid_has_country": {
+            "label": "Every artist with an mbid also has country set",
+            "query": f"SELECT COUNT(*) FROM artist_meta WHERE {c1_where}",
+            "expect_zero": True,
+            "why": (
                 "Country filters and the country charts skip artists with a blank "
                 "country. An artist with an MBID should either have a country or "
                 "have been checked against MusicBrainz and confirmed to have none "
                 "recorded (many small or obscure artists have no area on MusicBrainz)."
             ),
-            'breakdown': f"""
+            "breakdown": f"""
                 SELECT CASE
                          WHEN mbid IN (SELECT mbid FROM artist_meta
                                        WHERE mbid IS NOT NULL
@@ -851,25 +1003,25 @@ def _integrity_assertions(has_marker):
                 GROUP BY bucket
                 ORDER BY n DESC
             """,
-            'sample': f"""
+            "sample": f"""
                 SELECT artist, mbid, group_type, enriched_at
                 FROM artist_meta
                 WHERE {c1_where}
                 ORDER BY artist
                 LIMIT 25
             """,
-            'fix': c1_fix,
+            "fix": c1_fix,
         },
-        'no_null_era': {
-            'label': 'No artist has a NULL era value',
-            'query': "SELECT COUNT(*) FROM artist_meta WHERE era IS NULL",
-            'expect_zero': True,
-            'why': (
+        "no_null_era": {
+            "label": "No artist has a NULL era value",
+            "query": "SELECT COUNT(*) FROM artist_meta WHERE era IS NULL",
+            "expect_zero": True,
+            "why": (
                 "Decade filters and era charts exclude artists with no era. "
                 "MusicBrainz cannot supply an era, so the AI enrichment step fills "
                 "it for every artist, including ones MusicBrainz already matched."
             ),
-            'breakdown': """
+            "breakdown": """
                 SELECT CASE WHEN mbid IS NULL
                             THEN 'No MBID (not yet enriched at all)'
                             ELSE 'Has MBID (matched by MusicBrainz, AI era pass pending)'
@@ -880,36 +1032,36 @@ def _integrity_assertions(has_marker):
                 GROUP BY bucket
                 ORDER BY n DESC
             """,
-            'sample': """
+            "sample": """
                 SELECT artist, mbid, group_type, enriched_at
                 FROM artist_meta
                 WHERE era IS NULL
                 ORDER BY artist
                 LIMIT 25
             """,
-            'fix': (
+            "fix": (
                 "Run the AI enrichment step; it picks up every artist whose era is NULL.\n"
                 "Small trial first:\n"
-                "  python3.12 enrich_artists.py --limit 5\n\n"
+                "  python3.12 -m musicmind.enrichment.enrich_artists --limit 5\n\n"
                 "Then the full run (or use the AI enrich step in Back Office):\n"
-                "  python3.12 enrich_artists.py"
+                "  python3.12 -m musicmind.enrichment.enrich_artists"
             ),
         },
-        'unmatched_artists_not_in_meta': {
-            'label': 'No artist appears in both artist_meta and mb_unmatched_artists',
-            'query': """
+        "unmatched_artists_not_in_meta": {
+            "label": "No artist appears in both artist_meta and mb_unmatched_artists",
+            "query": """
                 SELECT COUNT(*) FROM mb_unmatched_artists u
                 JOIN artist_meta m ON m.artist = u.artist
                 WHERE m.mbid IS NOT NULL
             """,
-            'expect_zero': True,
-            'why': (
+            "expect_zero": True,
+            "why": (
                 "mb_unmatched_artists is the list of artists MusicBrainz enrichment "
                 "skips. An artist that is on it but also has an MBID means the log is "
                 "stale: it was matched some other way after being logged. Lookups are "
                 "unaffected, but the two tables disagree about what is matched."
             ),
-            'breakdown': """
+            "breakdown": """
                 SELECT CASE
                          WHEN u.best_score IS NULL THEN 'Logged by hand (no score)'
                          WHEN u.best_score = 0     THEN 'Score 0 (failed search or no result)'
@@ -923,7 +1075,7 @@ def _integrity_assertions(has_marker):
                 GROUP BY bucket
                 ORDER BY n DESC
             """,
-            'sample': """
+            "sample": """
                 SELECT m.artist, m.mbid, u.best_score, u.checked_at
                 FROM mb_unmatched_artists u
                 JOIN artist_meta m ON m.artist = u.artist
@@ -931,33 +1083,40 @@ def _integrity_assertions(has_marker):
                 ORDER BY u.checked_at
                 LIMIT 25
             """,
-            'fix': (
+            "fix": (
                 "The unmatched log is only a skip list, so entries for artists that now\n"
                 "have an MBID can be removed. Back up first:\n"
                 "  cp musicmind.db musicmind.pre-unmatched-cleanup.db\n\n"
                 "Then:\n"
-                "  sqlite3 musicmind.db \"DELETE FROM mb_unmatched_artists\n"
-                "    WHERE artist IN (SELECT artist FROM artist_meta WHERE mbid IS NOT NULL);\""
+                '  sqlite3 musicmind.db "DELETE FROM mb_unmatched_artists\n'
+                '    WHERE artist IN (SELECT artist FROM artist_meta WHERE mbid IS NOT NULL);"'
             ),
         },
     }
 
 
-@app.route('/run/synapse-count')
+@app.route("/run/synapse-count")
 def run_synapse_count():
     """Streams a full-library file format count. Read-only, no writes."""
-    if running.get('synapse_count'):
-        return jsonify({'error': 'Already running'}), 400
+    if running.get("synapse_count"):
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
-        running['synapse_count'] = True
+        running["synapse_count"] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--count'],
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    MODULES["synapse_analyze.py"],
+                    "--count",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -969,28 +1128,35 @@ def run_synapse_count():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['synapse_count'] = False
+            running["synapse_count"] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/synapse-estimate')
+@app.route("/run/synapse-estimate")
 def run_synapse_estimate():
     """Streams a live-sample time estimate. Analyzes a few real tracks
     on this hardware, no permanent writes to track_audio_features."""
-    if running.get('synapse_estimate'):
-        return jsonify({'error': 'Already running'}), 400
+    if running.get("synapse_estimate"):
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
-        running['synapse_estimate'] = True
+        running["synapse_estimate"] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--estimate'],
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    MODULES["synapse_analyze.py"],
+                    "--estimate",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -1002,36 +1168,45 @@ def run_synapse_estimate():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['synapse_estimate'] = False
+            running["synapse_estimate"] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/synapse-limited')
+@app.route("/run/synapse-limited")
 def run_synapse_limited():
     """Streams a real analysis run capped to a user-specified N tracks."""
     from flask import request
-    n = request.args.get('n', '10')
+
+    n = request.args.get("n", "10")
     try:
         n = int(n)
         if n < 1 or n > 500:
-            return jsonify({'error': 'N must be between 1 and 500'}), 400
+            return jsonify({"error": "N must be between 1 and 500"}), 400
     except ValueError:
-        return jsonify({'error': 'N must be a number'}), 400
+        return jsonify({"error": "N must be a number"}), 400
 
-    if running.get('synapse_limited'):
-        return jsonify({'error': 'Already running'}), 400
+    if running.get("synapse_limited"):
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
-        running['synapse_limited'] = True
+        running["synapse_limited"] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', os.path.join(BASE_DIR, 'synapse_analyze.py'), '--limit', str(n)],
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    MODULES["synapse_analyze.py"],
+                    "--limit",
+                    str(n),
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -1043,35 +1218,35 @@ def run_synapse_limited():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['synapse_limited'] = False
+            running["synapse_limited"] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/synapse-status')
+@app.route("/synapse-status")
 def synapse_status():
     """Plain status check — is a real run active, and how far along.
     No streaming, no long-lived connection — safe to poll anytime."""
     import sqlite3
     from datetime import datetime as _dt
 
-    lock_path = os.path.join(BASE_DIR, 'synapse.lock')
+    lock_path = os.path.join(BASE_DIR, "synapse.lock")
     is_running = False
     if os.path.exists(lock_path):
         try:
             with open(lock_path) as f:
                 pid = int(f.read().strip())
-            proc_dir = f'/proc/{pid}'
+            proc_dir = f"/proc/{pid}"
             if os.path.exists(proc_dir):
                 # Verify it's genuinely still synapse_analyze.py, not
                 # just some unrelated process that happens to now have
                 # this PID (can happen after the OS reassigns a freed
                 # PID number) — checking existence alone isn't enough.
                 try:
-                    with open(f'{proc_dir}/cmdline', 'rb') as cf:
-                        cmdline = cf.read().decode('utf-8', errors='ignore')
-                    is_running = 'synapse_analyze.py' in cmdline
+                    with open(f"{proc_dir}/cmdline", "rb") as cf:
+                        cmdline = cf.read().decode("utf-8", errors="ignore")
+                    is_running = MODULES["synapse_analyze.py"] in cmdline
                 except (OSError, IOError):
                     is_running = False
         except ValueError:
@@ -1080,22 +1255,29 @@ def synapse_status():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
-    synapse_error_count = conn.execute("SELECT COUNT(*) FROM synapse_errors").fetchone()[0]
+    synapse_error_count = conn.execute(
+        "SELECT COUNT(*) FROM synapse_errors"
+    ).fetchone()[0]
     # VI errors live in a separate table (vi_results, verdict='ERROR')
     # -- since the July 2026 merge, this page needs to surface BOTH
     # failure sources, not just Synapse's. Found via a real run: the
     # Errors section showed nothing even while VI was actively
     # failing on real files (Bananarama, an Iggy Pop cluster).
-    has_vi_results = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
-    ).fetchone() is not None
+    has_vi_results = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone()
+        is not None
+    )
     vi_error_count = 0
     if has_vi_results:
         vi_error_count = conn.execute(
             "SELECT COUNT(*) FROM vi_results WHERE verdict = 'ERROR'"
         ).fetchone()[0]
     errors = synapse_error_count + vi_error_count
-    last_write_row = conn.execute("SELECT MAX(analyzed_at) FROM track_audio_features").fetchone()
+    last_write_row = conn.execute(
+        "SELECT MAX(analyzed_at) FROM track_audio_features"
+    ).fetchone()
     conn.close()
 
     seconds_since_last_write = None
@@ -1107,15 +1289,17 @@ def synapse_status():
         except ValueError:
             pass
 
-    return jsonify({
-        'running': is_running,
-        'analyzed': analyzed,
-        'errors': errors,
-        'seconds_since_last_write': seconds_since_last_write,
-    })
+    return jsonify(
+        {
+            "running": is_running,
+            "analyzed": analyzed,
+            "errors": errors,
+            "seconds_since_last_write": seconds_since_last_write,
+        }
+    )
 
 
-@app.route('/synapse-errors')
+@app.route("/synapse-errors")
 def synapse_errors_view():
     """Returns BOTH Synapse's and VI's error tables as one combined,
     labeled JSON list, for display on the Synapse page. Since the
@@ -1125,6 +1309,7 @@ def synapse_errors_view():
     cluster) are invisible here even though they're real, tracked
     data sitting in vi_results."""
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
 
@@ -1135,9 +1320,12 @@ def synapse_errors_view():
         LIMIT 200
     """).fetchall()
 
-    has_vi_results = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
-    ).fetchone() is not None
+    has_vi_results = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone()
+        is not None
+    )
     vi_rows = []
     if has_vi_results:
         vi_rows = conn.execute("""
@@ -1149,38 +1337,50 @@ def synapse_errors_view():
         """).fetchall()
     conn.close()
 
-    combined = [{
-        'type':       'synapse',
-        'rating_key': r[0],
-        'label':      r[1].split('/')[-1] if r[1] else r[0],
-        'error':      r[2],
-        'at':         r[3],
-    } for r in synapse_rows] + [{
-        'type':       'vi',
-        'rating_key': r[0],
-        'label':      f"{r[2]} — {r[1]}" if r[1] or r[2] else r[0],
-        'error':      r[3],
-        'at':         r[4],
-    } for r in vi_rows]
+    combined = [
+        {
+            "type": "synapse",
+            "rating_key": r[0],
+            "label": r[1].split("/")[-1] if r[1] else r[0],
+            "error": r[2],
+            "at": r[3],
+        }
+        for r in synapse_rows
+    ] + [
+        {
+            "type": "vi",
+            "rating_key": r[0],
+            "label": f"{r[2]} — {r[1]}" if r[1] or r[2] else r[0],
+            "error": r[3],
+            "at": r[4],
+        }
+        for r in vi_rows
+    ]
 
-    combined.sort(key=lambda e: e['at'] or '', reverse=True)
+    combined.sort(key=lambda e: e["at"] or "", reverse=True)
     return jsonify(combined[:200])
 
 
-@app.route('/synapse')
+@app.route("/synapse")
 def synapse_page():
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     total_tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
     analyzed = conn.execute("SELECT COUNT(*) FROM track_audio_features").fetchone()[0]
     conn.close()
     pct = round((analyzed / total_tracks * 100), 1) if total_tracks else 0
-    return render_template('synapse.html', year=datetime.now().year,
-                            synapse_analyzed=analyzed, synapse_total=total_tracks, synapse_pct=pct)
+    return render_template(
+        "synapse.html",
+        year=datetime.now().year,
+        synapse_analyzed=analyzed,
+        synapse_total=total_tracks,
+        synapse_pct=pct,
+    )
 
 
-FULLSYNC_LOG_PATH = os.path.join(BASE_DIR, 'fullsync_live.log')
+FULLSYNC_LOG_PATH = os.path.join(BASE_DIR, "fullsync_live.log")
 
 # Every real script this pipeline/admin dispatcher can run, checked
 # directly against actual OS processes -- deliberately NOT limited to
@@ -1191,15 +1391,22 @@ FULLSYNC_LOG_PATH = os.path.join(BASE_DIR, 'fullsync_live.log')
 # scheduled shell chain) caused a genuine database lock error during
 # the Clear Errors feature's first real use.
 KNOWN_PIPELINE_SCRIPTS = [
-    'musicmind_ingest.py', 'lastfm_sync.py', 'plex_tag_tracks.py',
-    'listening_context.py', 'synapse_analyze.py', 'va_resolve.py',
-    'resolve_recording_mbids.py', 'mb_enrich_artists.py',
-    'enrich_artists.py', 'fingerprint_tracks.py',
-    'copy_forward_analysis.py', 'dedup_report.py',
+    "ingest.py",
+    "sync.py",
+    "tag_tracks.py",
+    "listening_context.py",
+    "synapse_analyze.py",
+    "va_resolve.py",
+    "resolve_recording_mbids.py",
+    "mb_enrich_artists.py",
+    "enrich_artists.py",
+    "fingerprint_tracks.py",
+    "copy_forward_analysis.py",
+    "dedup_report.py",
 ]
 
 
-@app.route('/admin/other-processes-status')
+@app.route("/admin/other-processes-status")
 def other_processes_status():
     """
     Real, live check for anything that might be actively using the
@@ -1212,24 +1419,26 @@ def other_processes_status():
     """
     running_scripts = set()
     try:
-        for pid_dir in os.listdir('/proc'):
+        for pid_dir in os.listdir("/proc"):
             if not pid_dir.isdigit():
                 continue
             try:
-                with open(f'/proc/{pid_dir}/cmdline', 'rb') as f:
-                    cmdline = f.read().decode('utf-8', errors='ignore')
+                with open(f"/proc/{pid_dir}/cmdline", "rb") as f:
+                    cmdline = f.read().decode("utf-8", errors="ignore")
             except (OSError, IOError):
                 continue
             for script in KNOWN_PIPELINE_SCRIPTS:
-                if script in cmdline:
+                if MODULES[script] in cmdline:
                     running_scripts.add(script)
     except OSError:
         pass
 
-    return jsonify({
-        'other_scripts': sorted(running_scripts),
-        'fullsync_running': bool(running.get('fullsync')),
-    })
+    return jsonify(
+        {
+            "other_scripts": sorted(running_scripts),
+            "fullsync_running": bool(running.get("fullsync")),
+        }
+    )
 
 
 def _run_fullsync_pipeline():
@@ -1260,7 +1469,8 @@ def _run_fullsync_pipeline():
     import time
     from plexapi.server import PlexServer as PS
 
-    log_file = open(FULLSYNC_LOG_PATH, 'w')
+    log_file = open(FULLSYNC_LOG_PATH, "w")
+
     def log_line(text):
         log_file.write(text + "\n")
         log_file.flush()
@@ -1294,35 +1504,61 @@ def _run_fullsync_pipeline():
             if not music.refreshing:
                 break
             if waited >= max_wait_iterations:
-                log_line("⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background).")
+                log_line(
+                    "⚠️ Scan wait exceeded 30 minutes — proceeding anyway (Plex may still be finishing in the background)."
+                )
                 break
             log_line("⏳ Still scanning...")
         log_line("✅ Plex scan complete.")
 
         # Steps 3-5: Run scripts in sequence
         scripts = [
-            ('🔄 Syncing Plex Library...', os.path.join(BASE_DIR, 'musicmind_ingest.py')),
-            ('🔗 Fingerprinting new tracks...', os.path.join(BASE_DIR, 'fingerprint_tracks.py')),
-            ('♻️ Checking for known duplicates...', os.path.join(BASE_DIR, 'copy_forward_analysis.py')),
-            ('🎭 Resolving Various Artists tracks...', os.path.join(BASE_DIR, 'va_resolve.py')),
-            ('🏷️ Enriching compilations (ID3 fallback)...', os.path.join(BASE_DIR, 'enrich_compilations.py')),
-            ('🎼 Resolving recording IDs...', os.path.join(BASE_DIR, 'resolve_recording_mbids.py')),
-            ('🎵 Syncing Last.fm...', os.path.join(BASE_DIR, 'lastfm_sync.py')),
-            ('🔍 Enriching artists (MusicBrainz)...', os.path.join(BASE_DIR, 'mb_enrich_artists.py')),
-            ('🤖 Enriching artists (AI fallback)...', os.path.join(BASE_DIR, 'enrich_artists.py')),
-            ('🏷️ Tagging new tracks...', os.path.join(BASE_DIR, 'plex_tag_tracks.py')),
-            ('🧠 Analyzing audio (Synapse: BPM/key/danceability)...', os.path.join(BASE_DIR, 'synapse_analyze.py')),
+            ("🔄 Syncing Plex Library...", MODULES["ingest.py"]),
+            (
+                "🔗 Fingerprinting new tracks...",
+                MODULES["fingerprint_tracks.py"],
+            ),
+            (
+                "♻️ Checking for known duplicates...",
+                MODULES["copy_forward_analysis.py"],
+            ),
+            (
+                "🎭 Resolving Various Artists tracks...",
+                MODULES["va_resolve.py"],
+            ),
+            (
+                "🏷️ Enriching compilations (ID3 fallback)...",
+                MODULES["enrich_compilations.py"],
+            ),
+            (
+                "🎼 Resolving recording IDs...",
+                MODULES["resolve_recording_mbids.py"],
+            ),
+            ("🎵 Syncing Last.fm...", MODULES["sync.py"]),
+            (
+                "🔍 Enriching artists (MusicBrainz)...",
+                MODULES["mb_enrich_artists.py"],
+            ),
+            (
+                "🤖 Enriching artists (AI fallback)...",
+                MODULES["enrich_artists.py"],
+            ),
+            ("🏷️ Tagging new tracks...", MODULES["tag_tracks.py"]),
+            (
+                "🧠 Analyzing audio (Synapse: BPM/key/danceability)...",
+                MODULES["synapse_analyze.py"],
+            ),
         ]
         for label, script in scripts:
             log_line(label)
             sync_result = {}
             for line in tail_subprocess(
-                ['python3.12', '-u', script],
+                [sys.executable, "-u", "-m", script],
                 sync_result,
-                extra_popen_kwargs={'start_new_session': True},
+                extra_popen_kwargs={"start_new_session": True},
             ):
                 log_line(line)
-            if sync_result.get('returncode', 1) != 0:
+            if sync_result.get("returncode", 1) != 0:
                 log_line(f"❌ Error in {script}")
                 return
 
@@ -1331,20 +1567,20 @@ def _run_fullsync_pipeline():
     except Exception as e:
         log_line(f"❌ Exception: {e}")
     finally:
-        running['fullsync'] = False
+        running["fullsync"] = False
         log_file.close()
 
 
-@app.route('/run/fullsync')
+@app.route("/run/fullsync")
 def run_fullsync():
     # Found real (July 2026): a genuine race condition -- the OLD
     # code checked `running.get('fullsync')` here in the route
     # function, but only SET `running['fullsync'] = True` later,
     # inside generate(). Check AND claim now happen together,
     # synchronously, before any response is returned at all.
-    if running.get('fullsync'):
-        return jsonify({'error': 'Already running'}), 400
-    running['fullsync'] = True
+    if running.get("fullsync"):
+        return jsonify({"error": "Already running"}), 400
+    running["fullsync"] = True
     # Aug 2026: the actual pipeline now runs in a background thread
     # (see _run_fullsync_pipeline's own docstring for why) -- this
     # route just starts it, then reuses run_fullsync_tail()'s own
@@ -1354,7 +1590,7 @@ def run_fullsync():
     return run_fullsync_tail()
 
 
-@app.route('/run/fullsync-tail')
+@app.route("/run/fullsync-tail")
 def run_fullsync_tail():
     """
     Reconnects to an ALREADY-RUNNING Full Sync's output after a
@@ -1381,7 +1617,7 @@ def run_fullsync_tail():
             yield "data: __DONE__\n\n"
             return
 
-        with open(FULLSYNC_LOG_PATH, 'r') as f:
+        with open(FULLSYNC_LOG_PATH, "r") as f:
             # Show everything already written first, for real context.
             for line in f:
                 yield f"data: {line.rstrip()}\n\n"
@@ -1396,28 +1632,30 @@ def run_fullsync_tail():
                     continue
 
                 f.seek(pos)
-                if not running.get('fullsync') and stale_seconds >= 3:
+                if not running.get("fullsync") and stale_seconds >= 3:
                     break
                 time.sleep(1)
                 stale_seconds += 1
 
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
 
-@app.route('/run/gaps')
+@app.route("/run/gaps")
 def run_gaps():
     import subprocess
+
     def generate():
-        running['gaps'] = True
+        running["gaps"] = True
         try:
             proc = subprocess.Popen(
-                ['python3.12', '-u', os.path.join(BASE_DIR, 'lastfm_gaps.py')],
+                [sys.executable, "-u", "-m", MODULES["gaps.py"]],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=BASE_DIR,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -1429,19 +1667,22 @@ def run_gaps():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['gaps'] = False
+            running["gaps"] = False
         yield "data: __DONE__\n\n"
-    return app.response_class(generate(), mimetype='text/event-stream')
 
-@app.route('/query', methods=['POST'])
+    return app.response_class(generate(), mimetype="text/event-stream")
+
+
+@app.route("/query", methods=["POST"])
 def query():
     import sqlite3
-    sql = request.json.get('sql', '').strip()
+
+    sql = request.json.get("sql", "").strip()
     if not sql:
-        return jsonify({'error': 'No query provided'}), 400
+        return jsonify({"error": "No query provided"}), 400
     # Safety — only allow SELECT
-    if not sql.lower().startswith('select'):
-        return jsonify({'error': 'Only SELECT queries allowed'}), 400
+    if not sql.lower().startswith("select"):
+        return jsonify({"error": "Only SELECT queries allowed"}), 400
     try:
         conn = sqlite3.connect(DB_PATH, timeout=30)
         conn.execute("PRAGMA busy_timeout=30000")
@@ -1450,85 +1691,95 @@ def query():
         rows = cur.fetchall()
         columns = [d[0] for d in cur.description] if cur.description else []
         conn.close()
-        return jsonify({
-            'columns': columns,
-            'rows': [list(r) for r in rows],
-            'count': len(rows)
-        })
+        return jsonify(
+            {"columns": columns, "rows": [list(r) for r in rows], "count": len(rows)}
+        )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/scan')
+
+@app.route("/scan")
 def scan():
     try:
         plex = PlexServer(PLEX_URL, PLEX_TOKEN)
         music = plex.library.section(MUSIC_LIB)
         music.update()
-        return jsonify({'success': True, 'message': 'Library scan triggered in Plex.'})
+        return jsonify({"success": True, "message": "Library scan triggered in Plex."})
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
-@app.route('/playlists')
+
+@app.route("/playlists")
 def playlists():
     import urllib.request, json
+
     try:
         # Fetch the server's own machine identifier so playlist links work
         # correctly regardless of which Plex server this instance connects
         # to. No auth token required for /identity.
         identity_req = urllib.request.Request(
-            f"{PLEX_URL}/identity",
-            headers={'Accept': 'application/json'}
+            f"{PLEX_URL}/identity", headers={"Accept": "application/json"}
         )
         identity_data = json.loads(urllib.request.urlopen(identity_req).read())
-        machine_id = identity_data.get('MediaContainer', {}).get('machineIdentifier', '')
+        machine_id = identity_data.get("MediaContainer", {}).get(
+            "machineIdentifier", ""
+        )
 
         req = urllib.request.Request(
             f"{PLEX_URL}/playlists?X-Plex-Token={PLEX_TOKEN}&playlistType=audio",
-            headers={'Accept': 'application/json'}
+            headers={"Accept": "application/json"},
         )
         data = json.loads(urllib.request.urlopen(req).read())
-        items = data['MediaContainer'].get('Metadata', [])
-        return jsonify({
-            'machineId': machine_id,
-            'playlists': [{
-                'title':      p['title'],
-                'key':        p['ratingKey'],
-                'trackCount': p.get('leafCount', 0),
-                'addedAt':    p.get('addedAt', 0),
-            } for p in items]
-        })
+        items = data["MediaContainer"].get("Metadata", [])
+        return jsonify(
+            {
+                "machineId": machine_id,
+                "playlists": [
+                    {
+                        "title": p["title"],
+                        "key": p["ratingKey"],
+                        "trackCount": p.get("leafCount", 0),
+                        "addedAt": p.get("addedAt", 0),
+                    }
+                    for p in items
+                ],
+            }
+        )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/genres')
+
+@app.route("/genres")
 def genres():
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
-    rows = conn.execute('''
+    rows = conn.execute("""
         SELECT tag, COUNT(*) as cnt
         FROM track_tags
         GROUP BY tag
         ORDER BY cnt DESC
         LIMIT 200
-    ''').fetchall()
+    """).fetchall()
     conn.close()
-    return jsonify([{'tag': r[0], 'count': r[1]} for r in rows])
+    return jsonify([{"tag": r[0], "count": r[1]} for r in rows])
 
-@app.route('/countries')
+
+@app.route("/countries")
 def countries():
     import sqlite3
     from collections import Counter
-    from country_aliases import canonicalize_country
+    from musicmind.enrichment.country_aliases import canonicalize_country
 
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
-    rows = conn.execute('''
+    rows = conn.execute("""
         SELECT country, COUNT(*) as cnt
         FROM artist_meta
         WHERE country IS NOT NULL AND country != 'unknown'
         GROUP BY country
-    ''').fetchall()
+    """).fetchall()
     conn.close()
 
     # Fold raw variants (e.g. "United States" / "US" / "New York")
@@ -1541,113 +1792,154 @@ def countries():
         if canonical:
             canonical_counts[canonical] += cnt
 
-    result = [
-        {'country': name, 'count': cnt}
-        for name, cnt in canonical_counts.items()
-    ]
+    result = [{"country": name, "count": cnt} for name, cnt in canonical_counts.items()]
     return jsonify(result)
 
-@app.route('/update')
+
+@app.route("/update")
 def update():
     import subprocess
-    import os
 
     # Get local git info
-    git_info = {'is_git_repo': False}
+    git_info = {"is_git_repo": False}
     try:
-        commit = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL
-        ).decode().strip()
+        commit = (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
         short = commit[:7]
-        date = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%ci'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL
-        ).decode().strip()[:10]
-        message = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%s'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL
-        ).decode().strip()
-        branch = subprocess.check_output(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL
-        ).decode().strip()
+        date = (
+            subprocess.check_output(
+                ["git", "log", "-1", "--format=%ci"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()[:10]
+        )
+        message = (
+            subprocess.check_output(
+                ["git", "log", "-1", "--format=%s"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+        branch = (
+            subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
         git_info = {
-            'is_git_repo': True,
-            'commit':  short,
-            'date':    date,
-            'message': message,
-            'branch':  branch,
-            'path':    BASE_DIR,
+            "is_git_repo": True,
+            "commit": short,
+            "date": date,
+            "message": message,
+            "branch": branch,
+            "path": BASE_DIR,
         }
     except:
         git_info = {
-            'is_git_repo': False,
-            'path': BASE_DIR,
+            "is_git_repo": False,
+            "path": BASE_DIR,
         }
 
-    return render_template('update.html', git=git_info, is_master=IS_MASTER, year=datetime.now().year)
+    return render_template(
+        "update.html", git=git_info, is_master=IS_MASTER, year=datetime.now().year
+    )
 
 
-@app.route('/check-update')
+@app.route("/check-update")
 def check_update():
     import subprocess
+
     if IS_MASTER:
-        return jsonify({'error': 'Updates are managed manually on this installation.'}), 400
+        return jsonify(
+            {"error": "Updates are managed manually on this installation."}
+        ), 400
     try:
         subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL
+            ["git", "rev-parse", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL
         )
     except Exception:
-        return jsonify({'error': 'Not a git repository.', 'is_git_repo': False}), 200
+        return jsonify({"error": "Not a git repository.", "is_git_repo": False}), 200
 
     try:
         subprocess.check_call(
-            ['git', 'fetch', 'origin'],
-            cwd=BASE_DIR, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=30
+            ["git", "fetch", "origin"],
+            cwd=BASE_DIR,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            timeout=30,
         )
-        local = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'], cwd=BASE_DIR
-        ).decode().strip()
-        remote = subprocess.check_output(
-            ['git', 'rev-parse', 'origin/main'], cwd=BASE_DIR
-        ).decode().strip()
+        local = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=BASE_DIR)
+            .decode()
+            .strip()
+        )
+        remote = (
+            subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=BASE_DIR)
+            .decode()
+            .strip()
+        )
         if local == remote:
-            return jsonify({'up_to_date': True, 'local': local[:7]})
-        message = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%s', 'origin/main'], cwd=BASE_DIR
-        ).decode().strip()
-        date = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%ci', 'origin/main'], cwd=BASE_DIR
-        ).decode().strip()[:10]
-        return jsonify({
-            'up_to_date': False,
-            'local': local[:7],
-            'remote': remote[:7],
-            'message': message,
-            'date': date,
-        })
+            return jsonify({"up_to_date": True, "local": local[:7]})
+        message = (
+            subprocess.check_output(
+                ["git", "log", "-1", "--format=%s", "origin/main"], cwd=BASE_DIR
+            )
+            .decode()
+            .strip()
+        )
+        date = (
+            subprocess.check_output(
+                ["git", "log", "-1", "--format=%ci", "origin/main"], cwd=BASE_DIR
+            )
+            .decode()
+            .strip()[:10]
+        )
+        return jsonify(
+            {
+                "up_to_date": False,
+                "local": local[:7],
+                "remote": remote[:7],
+                "message": message,
+                "date": date,
+            }
+        )
     except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Timed out reaching GitHub.'}), 200
+        return jsonify({"error": "Timed out reaching GitHub."}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 200
+        return jsonify({"error": str(e)}), 200
 
 
-@app.route('/run/update')
+@app.route("/run/update")
 def run_update():
     import subprocess
+
     if IS_MASTER:
-        return jsonify({'error': 'Updates are managed manually on this installation.'}), 400
-    if running.get('update'):
-        return jsonify({'error': 'Already running'}), 400
+        return jsonify(
+            {"error": "Updates are managed manually on this installation."}
+        ), 400
+    if running.get("update"):
+        return jsonify({"error": "Already running"}), 400
 
     def generate():
-        running['update'] = True
+        running["update"] = True
         try:
-            status = subprocess.check_output(
-                ['git', 'status', '--porcelain'], cwd=BASE_DIR
-            ).decode().strip()
+            status = (
+                subprocess.check_output(["git", "status", "--porcelain"], cwd=BASE_DIR)
+                .decode()
+                .strip()
+            )
             if status:
                 yield "data: Update cancelled: you have local file changes.\n\n"
                 yield "data: Commit, stash, or discard them before updating.\n\n"
@@ -1658,9 +1950,12 @@ def run_update():
                 return
 
             proc = subprocess.Popen(
-                ['git', 'pull', 'origin', 'main'],
-                cwd=BASE_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1
+                ["git", "pull", "origin", "main"],
+                cwd=BASE_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
             for line in proc.stdout:
                 yield f"data: {line.rstrip()}\n\n"
@@ -1673,55 +1968,69 @@ def run_update():
         except Exception as e:
             yield f"data: ❌ Exception: {e}\n\n"
         finally:
-            running['update'] = False
+            running["update"] = False
         yield "data: __DONE__\n\n"
 
-    return app.response_class(generate(), mimetype='text/event-stream')
+    return app.response_class(generate(), mimetype="text/event-stream")
 
-@app.route('/tests')
+
+@app.route("/tests")
 def tests():
-    return render_template('tests.html', year=datetime.now().year)
+    return render_template("tests.html", year=datetime.now().year)
 
-@app.route('/guide')
+
+@app.route("/guide")
 def guide():
-    return render_template('guide.html', year=datetime.now().year)
+    return render_template("guide.html", year=datetime.now().year)
 
-@app.route('/playlist-audit')
+
+@app.route("/playlist-audit")
 def playlist_audit_page():
-    return render_template('playlist_audit.html', year=datetime.now().year)
+    return render_template("playlist_audit.html", year=datetime.now().year)
 
 
-@app.route('/playlist-audit-data/<int:playlist_key>')
+@app.route("/playlist-audit-data/<int:playlist_key>")
 def playlist_audit_data(playlist_key):
     import sqlite3
+
     try:
         plex = PlexServer(PLEX_URL, PLEX_TOKEN)
         playlist = plex.fetchItem(playlist_key)
         items = playlist.items()
     except Exception as e:
-        return jsonify({'error': f'Could not load playlist: {e}'}), 404
+        return jsonify({"error": f"Could not load playlist: {e}"}), 404
 
     rating_keys = [str(t.ratingKey) for t in items]
 
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
-    has_vi_results = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
-    ).fetchone() is not None
+    has_vi_results = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone()
+        is not None
+    )
 
     data_by_key = {}
     if rating_keys:
         placeholders = ",".join("?" for _ in rating_keys)
         vi_select = "vi.p_voice, vi.verdict" if has_vi_results else "NULL, NULL"
-        vi_join = "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key" if has_vi_results else ""
-        rows = conn.execute(f"""
+        vi_join = (
+            "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key"
+            if has_vi_results
+            else ""
+        )
+        rows = conn.execute(
+            f"""
             SELECT t.rating_key, COALESCE(t.real_artist, t.artist) as artist,
                    taf.bpm, taf.danceability, {vi_select}
             FROM tracks t
             LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key
             {vi_join}
             WHERE t.rating_key IN ({placeholders})
-        """, rating_keys).fetchall()
+        """,
+            rating_keys,
+        ).fetchall()
         for row in rows:
             data_by_key[row[0]] = row
     conn.close()
@@ -1732,25 +2041,33 @@ def playlist_audit_data(playlist_key):
     for t in items:
         rk = str(t.ratingKey)
         row = data_by_key.get(rk)
-        tracks_out.append({
-            'title':        t.title,
-            'artist':       (row[1] if row else t.grandparentTitle) or t.grandparentTitle,
-            'bpm':          round(row[2], 1) if row and row[2] is not None else None,
-            'danceability': round(row[3], 2) if row and row[3] is not None else None,
-            'p_voice':      round(row[4], 3) if row and row[4] is not None else None,
-            'vi_verdict':   row[5] if row else None,
-        })
+        tracks_out.append(
+            {
+                "title": t.title,
+                "artist": (row[1] if row else t.grandparentTitle) or t.grandparentTitle,
+                "bpm": round(row[2], 1) if row and row[2] is not None else None,
+                "danceability": round(row[3], 2)
+                if row and row[3] is not None
+                else None,
+                "p_voice": round(row[4], 3) if row and row[4] is not None else None,
+                "vi_verdict": row[5] if row else None,
+            }
+        )
 
-    return jsonify({
-        'title':   playlist.title,
-        'summary': playlist.summary or None,  # the stored prompt, if this playlist was created after this feature shipped
-        'tracks':  tracks_out,
-    })
+    return jsonify(
+        {
+            "title": playlist.title,
+            "summary": playlist.summary
+            or None,  # the stored prompt, if this playlist was created after this feature shipped
+            "tracks": tracks_out,
+        }
+    )
 
 
-@app.route('/logs')
+@app.route("/logs")
 def logs():
     import sqlite3, json
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     rows = conn.execute("""
@@ -1764,30 +2081,33 @@ def logs():
     conn.close()
     entries = []
     for row in rows:
-        entries.append({
-            'id':                row[0],
-            'timestamp':         row[1],
-            'prompt':            row[2] or '',
-            'tags':              json.loads(row[3] or '[]'),
-            'filters':           json.loads(row[4] or '{}'),
-            'result_count':      row[5] or 0,
-            'duration_ms':       row[6] or 0,
-            'error':             row[7],
-            'openai_request':    row[8] or '',
-            'openai_response':   row[9] or '',
-            'prompt_tokens':     row[10] or 0,
-            'completion_tokens': row[11] or 0,
-            'cost_usd':          row[12] or 0,
-            'intent':            row[13] or '',
-        })
-    return render_template('logs.html', entries=entries, year=datetime.now().year)
+        entries.append(
+            {
+                "id": row[0],
+                "timestamp": row[1],
+                "prompt": row[2] or "",
+                "tags": json.loads(row[3] or "[]"),
+                "filters": json.loads(row[4] or "{}"),
+                "result_count": row[5] or 0,
+                "duration_ms": row[6] or 0,
+                "error": row[7],
+                "openai_request": row[8] or "",
+                "openai_response": row[9] or "",
+                "prompt_tokens": row[10] or 0,
+                "completion_tokens": row[11] or 0,
+                "cost_usd": row[12] or 0,
+                "intent": row[13] or "",
+            }
+        )
+    return render_template("logs.html", entries=entries, year=datetime.now().year)
 
-@app.route('/stats')
+
+@app.route("/stats")
 def stats():
-    return render_template('stats.html', year=datetime.now().year)
+    return render_template("stats.html", year=datetime.now().year)
 
 
-@app.route('/export-csv')
+@app.route("/export-csv")
 def export_csv():
     """
     Dumps the enriched library data as a downloadable CSV -- AI tags,
@@ -1801,12 +2121,21 @@ def export_csv():
 
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
-    has_vi_results = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
-    ).fetchone() is not None
+    has_vi_results = (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone()
+        is not None
+    )
 
-    vi_select = "vi.verdict, vi.p_voice, vi.p_inst" if has_vi_results else "NULL, NULL, NULL"
-    vi_join = "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key" if has_vi_results else ""
+    vi_select = (
+        "vi.verdict, vi.p_voice, vi.p_inst" if has_vi_results else "NULL, NULL, NULL"
+    )
+    vi_join = (
+        "LEFT JOIN vi_results vi ON vi.rating_key = t.rating_key"
+        if has_vi_results
+        else ""
+    )
 
     rows = conn.execute(f"""
         SELECT
@@ -1836,33 +2165,52 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        'rating_key', 'title', 'artist', 'album', 'genre', 'year',
-        'play_count', 'user_rating', 'popularity_rating_count', 'tags',
-        'bpm', 'key', 'scale', 'danceability',
-        'vi_verdict', 'vi_p_voice', 'vi_p_inst'
-    ])
+    writer.writerow(
+        [
+            "rating_key",
+            "title",
+            "artist",
+            "album",
+            "genre",
+            "year",
+            "play_count",
+            "user_rating",
+            "popularity_rating_count",
+            "tags",
+            "bpm",
+            "key",
+            "scale",
+            "danceability",
+            "vi_verdict",
+            "vi_p_voice",
+            "vi_p_inst",
+        ]
+    )
     writer.writerows(rows)
 
     response = app.response_class(
         output.getvalue(),
-        mimetype='text/csv',
-        headers={'Content-Disposition': 'attachment; filename=musicmind_library_export.csv'}
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=musicmind_library_export.csv"
+        },
     )
     return response
 
-@app.route('/stats/data')
+
+@app.route("/stats/data")
 def stats_data():
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
 
     # Tile row-count limits — configurable per-tile from the Stats page
     # (persisted client-side in localStorage, not the database, so a
     # future code sync can never silently revert someone's preference).
-    genre_limit = request.args.get('genre_limit', 10, type=int)
-    artist_limit = request.args.get('artist_limit', 10, type=int)
-    country_limit = request.args.get('country_limit', 10, type=int)
+    genre_limit = request.args.get("genre_limit", 10, type=int)
+    artist_limit = request.args.get("artist_limit", 10, type=int)
+    country_limit = request.args.get("country_limit", 10, type=int)
 
     listening_by_year = conn.execute(
         "SELECT strftime('%Y', datetime(timestamp, 'unixepoch', 'localtime')) as year, COUNT(*) as plays FROM lastfm_scrobbles GROUP BY year ORDER BY year"
@@ -1870,12 +2218,12 @@ def stats_data():
 
     top_artists = conn.execute(
         "SELECT COALESCE(real_artist, artist) as artist, SUM(play_count) as plays FROM tracks WHERE play_count > 0 AND artist IS NOT NULL AND artist != '' AND LOWER(COALESCE(real_artist, artist)) NOT IN ('various artists', 'va') GROUP BY COALESCE(real_artist, artist) ORDER BY plays DESC LIMIT ?",
-        (artist_limit,)
+        (artist_limit,),
     ).fetchall()
 
     top_genres = conn.execute(
         "SELECT tag, COUNT(*) as cnt FROM track_tags GROUP BY tag ORDER BY cnt DESC LIMIT ?",
-        (genre_limit,)
+        (genre_limit,),
     ).fetchall()
 
     by_era = conn.execute(
@@ -1896,14 +2244,21 @@ def stats_data():
     ).fetchall()
 
     total_tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
-    total_artists = conn.execute("SELECT COUNT(DISTINCT COALESCE(real_artist, artist)) FROM tracks WHERE artist IS NOT NULL AND artist != ''").fetchone()[0]
-    total_scrobbles = conn.execute("SELECT COUNT(*) FROM lastfm_scrobbles").fetchone()[0]
-    total_instrumental = conn.execute("SELECT COUNT(*) FROM tracks WHERE is_instrumental = 1").fetchone()[0]
+    total_artists = conn.execute(
+        "SELECT COUNT(DISTINCT COALESCE(real_artist, artist)) FROM tracks WHERE artist IS NOT NULL AND artist != ''"
+    ).fetchone()[0]
+    total_scrobbles = conn.execute("SELECT COUNT(*) FROM lastfm_scrobbles").fetchone()[
+        0
+    ]
+    total_instrumental = conn.execute(
+        "SELECT COUNT(*) FROM tracks WHERE is_instrumental = 1"
+    ).fetchone()[0]
 
     conn.close()
 
     from collections import Counter
-    from country_aliases import canonicalize_country
+    from musicmind.enrichment.country_aliases import canonicalize_country
+
     canonical_counts = Counter()
     for raw_country, cnt in by_country_raw:
         canonical = canonicalize_country(raw_country)
@@ -1911,47 +2266,57 @@ def stats_data():
             canonical_counts[canonical] += cnt
     by_country = sorted(canonical_counts.items(), key=lambda kv: -kv[1])[:country_limit]
 
-    return jsonify({
-        'listening_by_year': [{'year': r[0], 'plays': r[1]} for r in listening_by_year],
-        'top_artists':       [{'artist': r[0], 'plays': r[1]} for r in top_artists],
-        'top_genres':        [{'tag': r[0], 'cnt': r[1]} for r in top_genres],
-        'by_era':            [{'era': r[0], 'cnt': r[1]} for r in by_era],
-        'by_country':        [{'country': r[0], 'cnt': r[1]} for r in by_country],
-        'by_gender':         [{'gender': r[0], 'cnt': r[1]} for r in by_gender],
-        'stats': {
-            'total_tracks':       total_tracks,
-            'total_artists':      total_artists,
-            'total_scrobbles':    total_scrobbles,
-            'total_instrumental': total_instrumental,
+    return jsonify(
+        {
+            "listening_by_year": [
+                {"year": r[0], "plays": r[1]} for r in listening_by_year
+            ],
+            "top_artists": [{"artist": r[0], "plays": r[1]} for r in top_artists],
+            "top_genres": [{"tag": r[0], "cnt": r[1]} for r in top_genres],
+            "by_era": [{"era": r[0], "cnt": r[1]} for r in by_era],
+            "by_country": [{"country": r[0], "cnt": r[1]} for r in by_country],
+            "by_gender": [{"gender": r[0], "cnt": r[1]} for r in by_gender],
+            "stats": {
+                "total_tracks": total_tracks,
+                "total_artists": total_artists,
+                "total_scrobbles": total_scrobbles,
+                "total_instrumental": total_instrumental,
+            },
         }
-    })
+    )
 
-@app.route('/db')
+
+@app.route("/db")
 def db_console():
-    return render_template('query.html', year=datetime.now().year)
+    return render_template("query.html", year=datetime.now().year)
 
-@app.route('/gaps')
+
+@app.route("/gaps")
 def gaps():
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     buckets = []
     for cat_key, cat_label in [
-        ('worth_acquiring',    '🎵 Worth Acquiring'),
-        ('classical',          '🎼 Classical'),
-        ('ambient_meditation', '🧘 Ambient / Meditation'),
-        ('unknown',            '❓ Unknown'),
+        ("worth_acquiring", "🎵 Worth Acquiring"),
+        ("classical", "🎼 Classical"),
+        ("ambient_meditation", "🧘 Ambient / Meditation"),
+        ("unknown", "❓ Unknown"),
     ]:
         rows = conn.execute(
             "SELECT artist, scrobbles FROM artist_gaps WHERE category=? ORDER BY scrobbles DESC",
-            (cat_key,)
+            (cat_key,),
         ).fetchall()
-        buckets.append({
-            'label': cat_label,
-            'artists': [{'artist': r[0], 'scrobbles': r[1]} for r in rows]
-        })
+        buckets.append(
+            {
+                "label": cat_label,
+                "artists": [{"artist": r[0], "scrobbles": r[1]} for r in rows],
+            }
+        )
     conn.close()
-    return render_template('gaps.html', buckets=buckets, year=datetime.now().year)
+    return render_template("gaps.html", buckets=buckets, year=datetime.now().year)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8787, debug=False)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8787, debug=False)

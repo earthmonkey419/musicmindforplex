@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "musicmindforplex"
+version = "3.1.1"
+description = "MusicMind for Plex music library companion"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "flask",
+    "plexapi",
+    "openai",
+    "mutagen",
+    "requests",
+    "pycountry",
+]
+
+[project.scripts]
+musicmind = "musicmind_cli.cli:main"
+
+[project.optional-dependencies]
+slim = ["essentia"]
+full = ["essentia-tensorflow", "numpy"]
+
+test = [
+    "pytest",
+    "coverage[toml]"
+]
+
+[tool.setuptools.packages.find]
+include = ["musicmind", "musicmind.*", "musicmind_cli", "musicmind_cli.*", "web"]
+
+[tool.setuptools.package-data]
+web = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+command_line = "-m pytest"
+source = ["musicmind", "musicmind_cli", "web"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

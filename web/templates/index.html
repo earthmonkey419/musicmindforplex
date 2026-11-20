@@ -1,186 +1,463 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
     <title>MusicMind for Plex</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-<div class="page-wrap">
-    <div class="sidebar" id="sidebar">
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="page-wrap">
+      <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <span>🎵 Playlists</span>
-            <select id="sidebar-sort" onchange="sortPlaylists(this.value)" style="font-size:0.7rem;border:none;background:transparent;color:#c9b99a;cursor:pointer;">
-                <option value="recent">Recent</option>
-                <option value="name">A-Z</option>
-                <option value="tracks">Tracks</option>
-            </select>
+          <span>🎵 Playlists</span>
+          <select
+            id="sidebar-sort"
+            onchange="sortPlaylists(this.value)"
+            style="
+              font-size: 0.7rem;
+              border: none;
+              background: transparent;
+              color: #c9b99a;
+              cursor: pointer;
+            "
+          >
+            <option value="recent">Recent</option>
+            <option value="name">A-Z</option>
+            <option value="tracks">Tracks</option>
+          </select>
         </div>
         <div id="playlist-list" class="playlist-list">
-            <div class="playlist-loading">Loading...</div>
+          <div class="playlist-loading">Loading...</div>
         </div>
-    </div>
-    <div class="container">
-        <div class="mobile-note">🖥️ MusicMind for Plex is optimized for desktop. Some features may not work well on mobile.</div>
+      </div>
+      <div class="container">
+        <div class="mobile-note">
+          🖥️ MusicMind for Plex is optimized for desktop. Some features may not
+          work well on mobile.
+        </div>
         <div class="site-header">
-            <h1><img src="https://musicmind.vp-fun.com/assets/logo.png" alt="🎵" style="width:44px;height:44px;border-radius:50%;vertical-align:middle;margin-right:0.5rem;position:relative;top:-2px;">MusicMind for Plex</h1>
-            <div class="tagline">Dig into your stacks.</div>
+          <h1>
+            <img
+              src="https://musicmind.vp-fun.com/assets/logo.png"
+              alt="🎵"
+              style="
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                vertical-align: middle;
+                margin-right: 0.5rem;
+                position: relative;
+                top: -2px;
+              "
+            />MusicMind for Plex
+          </h1>
+          <div class="tagline">Dig into your stacks.</div>
         </div>
         <div class="nav">
-            <a href="/stats">📊 The Collection</a>
-            {% if lastfm_enabled %}<a href="/gaps">📋 Missing From Your Collection</a>{% endif %}
-            <a href="/admin">⚙️ Admin</a>
-            <a href="/guide">📖 Guide</a>
+          <a href="/stats">📊 The Collection</a>
+          {% if lastfm_enabled %}<a href="/gaps"
+            >📋 Missing From Your Collection</a
+          >{% endif %}
+          <a href="/admin">⚙️ Admin</a>
+          <a href="/guide">📖 Guide</a>
         </div>
 
         <div class="prompt-box">
-            <input type="text" id="prompt" placeholder="sunny day driving with the windows down..." autofocus>
+          <input
+            type="text"
+            id="prompt"
+            placeholder="sunny day driving with the windows down..."
+            autofocus
+          />
         </div>
 
-        <div class="filters" id="bucket-filters" style="margin-top:0.5rem;">
-            <span style="font-weight:600; margin-right:0.5rem;">Genre focus (optional — leave all unchecked for the full library):</span>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="New Wave / Post-Punk / Synth" id="bucket-new-wave"> New Wave / Post-Punk / Synth</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Psych / Art Rock / Experimental" id="bucket-psych"> Psych / Art Rock / Experimental</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Classic / Garage / Alt / Punk Rock" id="bucket-classic-rock"> Classic / Garage / Alt / Punk Rock</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Soul / Funk / R&B" id="bucket-soul"> Soul / Funk / R&B</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Jazz" id="bucket-jazz"> Jazz</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="World / Reggae / Latin / Afro" id="bucket-world"> World / Reggae / Latin / Afro</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Hip-Hop / Rap" id="bucket-hiphop"> Hip-Hop / Rap</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Pop" id="bucket-pop"> Pop</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Classical / Orchestral / Cinematic" id="bucket-classical"> Classical / Orchestral / Cinematic</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Folk / Singer-Songwriter / Acoustic / Blues" id="bucket-folk"> Folk / Singer-Songwriter / Acoustic / Blues</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Country / Americana / Bluegrass" id="bucket-country"> Country / Americana / Bluegrass</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Electronic / House / Techno / Downtempo" id="bucket-electronic"> Electronic / House / Techno / Downtempo</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Gospel" id="bucket-gospel"> Gospel</label>
-                <label class="bucket-label"><input type="checkbox" class="bucket-checkbox" data-bucket="Chant / Choral / Sacred" id="bucket-chant-choral"> Chant / Choral / Sacred</label>
+        <div class="filters" id="bucket-filters" style="margin-top: 0.5rem">
+          <span style="font-weight: 600; margin-right: 0.5rem"
+            >Genre focus (optional — leave all unchecked for the full
+            library):</span
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="New Wave / Post-Punk / Synth"
+              id="bucket-new-wave"
+            />
+            New Wave / Post-Punk / Synth</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Psych / Art Rock / Experimental"
+              id="bucket-psych"
+            />
+            Psych / Art Rock / Experimental</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Classic / Garage / Alt / Punk Rock"
+              id="bucket-classic-rock"
+            />
+            Classic / Garage / Alt / Punk Rock</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Soul / Funk / R&B"
+              id="bucket-soul"
+            />
+            Soul / Funk / R&B</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Jazz"
+              id="bucket-jazz"
+            />
+            Jazz</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="World / Reggae / Latin / Afro"
+              id="bucket-world"
+            />
+            World / Reggae / Latin / Afro</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Hip-Hop / Rap"
+              id="bucket-hiphop"
+            />
+            Hip-Hop / Rap</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Pop"
+              id="bucket-pop"
+            />
+            Pop</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Classical / Orchestral / Cinematic"
+              id="bucket-classical"
+            />
+            Classical / Orchestral / Cinematic</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Folk / Singer-Songwriter / Acoustic / Blues"
+              id="bucket-folk"
+            />
+            Folk / Singer-Songwriter / Acoustic / Blues</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Country / Americana / Bluegrass"
+              id="bucket-country"
+            />
+            Country / Americana / Bluegrass</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Electronic / House / Techno / Downtempo"
+              id="bucket-electronic"
+            />
+            Electronic / House / Techno / Downtempo</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Gospel"
+              id="bucket-gospel"
+            />
+            Gospel</label
+          >
+          <label class="bucket-label"
+            ><input
+              type="checkbox"
+              class="bucket-checkbox"
+              data-bucket="Chant / Choral / Sacred"
+              id="bucket-chant-choral"
+            />
+            Chant / Choral / Sacred</label
+          >
         </div>
 
         <div class="filters">
-            <label><input type="checkbox" id="unplayed"> Unplayed only</label>
-            {% if vi_status == 'ready' %}
-            <label><input type="checkbox" id="instrumental" onchange="document.getElementById('vocal-tolerance-wrap').style.display = this.checked ? 'inline-block' : 'none'"> Instrumental only</label>
-            {% elif vi_status == 'no_essentia' %}
-            <label style="color:#999;" title="Instrumental detection needs the essentia library, which isn't installed on this server. Ask your admin to install it (pip install essentia)."><input type="checkbox" id="instrumental" disabled> Instrumental only <span style="font-size:0.8em;">(unavailable)</span></label>
-            {% else %}
-            <label style="color:#999;" title="No tracks have been analyzed for voice/instrumental content yet. Run VI verification from the Admin page first."><input type="checkbox" id="instrumental" disabled> Instrumental only <span style="font-size:0.8em;">(run VI verification first)</span></label>
-            {% endif %}
-            <span id="vocal-tolerance-wrap" style="display:none;">
-                Vocal tolerance
-                <input type="range" id="vocal_tolerance" min="0.1" max="0.9" value="0.55" step="0.05" style="width:100px; vertical-align:middle;" oninput="document.getElementById('vocal_tolerance_label').textContent = this.value">
-                <span id="vocal_tolerance_label" style="font-size:0.85rem; color:#999;">0.55</span>
-            </span>
-            <label>Genre
-                <select id="genre">
-                    <option value="">Any</option>
-                </select>
-            </label>
+          <label><input type="checkbox" id="unplayed" /> Unplayed only</label>
+          {% if vi_status == 'ready' %}
+          <label
+            ><input
+              type="checkbox"
+              id="instrumental"
+              onchange="document.getElementById('vocal-tolerance-wrap').style.display = this.checked ? 'inline-block' : 'none'"
+            />
+            Instrumental only</label
+          >
+          {% elif vi_status == 'no_essentia' %}
+          <label
+            style="color: #999"
+            title="Instrumental detection needs the essentia library, which isn't installed on this server. Ask your admin to install it (pip install essentia)."
+            ><input type="checkbox" id="instrumental" disabled /> Instrumental
+            only <span style="font-size: 0.8em">(unavailable)</span></label
+          >
+          {% else %}
+          <label
+            style="color: #999"
+            title="No tracks have been analyzed for voice/instrumental content yet. Run VI verification from the Admin page first."
+            ><input type="checkbox" id="instrumental" disabled /> Instrumental
+            only
+            <span style="font-size: 0.8em"
+              >(run VI verification first)</span
+            ></label
+          >
+          {% endif %}
+          <span id="vocal-tolerance-wrap" style="display: none">
+            Vocal tolerance
+            <input
+              type="range"
+              id="vocal_tolerance"
+              min="0.1"
+              max="0.9"
+              value="0.55"
+              step="0.05"
+              style="width: 100px; vertical-align: middle"
+              oninput="document.getElementById('vocal_tolerance_label').textContent = this.value"
+            />
+            <span
+              id="vocal_tolerance_label"
+              style="font-size: 0.85rem; color: #999"
+              >0.55</span
+            >
+          </span>
+          <label
+            >Genre
+            <select id="genre">
+              <option value="">Any</option>
+            </select>
+          </label>
 
-            <label>From year <input type="number" id="min_year" placeholder="1970"></label>
-            <label>To year <input type="number" id="max_year" placeholder="2024"></label>
-            <label>Limit <input type="number" id="limit" value="30"></label>
-            <label>Tracks per artist <input type="number" id="max_per_artist" value="1"></label>
-            <label>Min BPM
-                <input type="number" id="bpm_min" placeholder="60" style="width:60px;" oninput="document.getElementById('bpm_min_slider').value = this.value">
-                <input type="range" id="bpm_min_slider" min="40" max="220" value="60" step="1" style="width:80px; vertical-align:middle;" oninput="document.getElementById('bpm_min').value = this.value">
-            </label>
-            <label>Max BPM
-                <input type="number" id="bpm_max" placeholder="180" style="width:60px;" oninput="document.getElementById('bpm_max_slider').value = this.value">
-                <input type="range" id="bpm_max_slider" min="40" max="220" value="180" step="1" style="width:80px; vertical-align:middle;" oninput="document.getElementById('bpm_max').value = this.value">
-            </label>
-            <label>Danceability
-                <select id="danceability">
-                    <option value="">Any</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                </select>
-            </label>
-            <label>Min rating
-                <select id="min_rating">
-                    <option value="">Any</option>
-                    <option value="2">1★</option>
-                    <option value="4">2★</option>
-                    <option value="6">3★</option>
-                    <option value="8">4★</option>
-                    <option value="10">5★</option>
-                </select>
-            </label>
-            <label>Gender
-                <select id="gender">
-                    <option value="">Any</option>
-                    <option value="female">Female</option>
-                    <option value="male">Male</option>
-                    <option value="mixed">Mixed</option>
-                </select>
-            </label>
-            <label>Country
-                <select id="country">
-                    <option value="">Any</option>
-                </select>
-            </label>
-            <label>Era
-                <select id="era">
-                    <option value="">Any</option>
-                    <option value="50s">50s</option>
-                    <option value="60s">60s</option>
-                    <option value="70s">70s</option>
-                    <option value="80s">80s</option>
-                    <option value="90s">90s</option>
-                    <option value="00s">00s</option>
-                    <option value="10s">10s</option>
-                    <option value="20s">20s</option>
-                </select>
-            </label>
+          <label
+            >From year <input type="number" id="min_year" placeholder="1970"
+          /></label>
+          <label
+            >To year <input type="number" id="max_year" placeholder="2024"
+          /></label>
+          <label>Limit <input type="number" id="limit" value="30" /></label>
+          <label
+            >Tracks per artist
+            <input type="number" id="max_per_artist" value="1"
+          /></label>
+          <label
+            >Min BPM
+            <input
+              type="number"
+              id="bpm_min"
+              placeholder="60"
+              style="width: 60px"
+              oninput="document.getElementById('bpm_min_slider').value = this.value"
+            />
+            <input
+              type="range"
+              id="bpm_min_slider"
+              min="40"
+              max="220"
+              value="60"
+              step="1"
+              style="width: 80px; vertical-align: middle"
+              oninput="document.getElementById('bpm_min').value = this.value"
+            />
+          </label>
+          <label
+            >Max BPM
+            <input
+              type="number"
+              id="bpm_max"
+              placeholder="180"
+              style="width: 60px"
+              oninput="document.getElementById('bpm_max_slider').value = this.value"
+            />
+            <input
+              type="range"
+              id="bpm_max_slider"
+              min="40"
+              max="220"
+              value="180"
+              step="1"
+              style="width: 80px; vertical-align: middle"
+              oninput="document.getElementById('bpm_max').value = this.value"
+            />
+          </label>
+          <label
+            >Danceability
+            <select id="danceability">
+              <option value="">Any</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label
+            >Min rating
+            <select id="min_rating">
+              <option value="">Any</option>
+              <option value="2">1★</option>
+              <option value="4">2★</option>
+              <option value="6">3★</option>
+              <option value="8">4★</option>
+              <option value="10">5★</option>
+            </select>
+          </label>
+          <label
+            >Gender
+            <select id="gender">
+              <option value="">Any</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </label>
+          <label
+            >Country
+            <select id="country">
+              <option value="">Any</option>
+            </select>
+          </label>
+          <label
+            >Era
+            <select id="era">
+              <option value="">Any</option>
+              <option value="50s">50s</option>
+              <option value="60s">60s</option>
+              <option value="70s">70s</option>
+              <option value="80s">80s</option>
+              <option value="90s">90s</option>
+              <option value="00s">00s</option>
+              <option value="10s">10s</option>
+              <option value="20s">20s</option>
+            </select>
+          </label>
         </div>
 
         <div class="actions">
-            <button id="preview-btn" onclick="preview()">Preview</button>
+          <button id="preview-btn" onclick="preview()">Preview</button>
         </div>
 
-        <div class="admin-card" style="margin: 1rem 0; position:relative;">
-            <h3>🎯 Based On</h3>
-            <p style="font-size:0.85rem;">Pick a track for similar-sounding songs (real tag + measured-audio matching, no AI), or an artist for similar musicians (real Last.fm listening data).</p>
-            <input type="text" id="based-on-input" placeholder="Type a song or artist name..." autocomplete="off" style="width:100%; max-width:400px;" oninput="basedOnSearch(this.value)">
-            <div id="based-on-suggestions" style="display:none; position:absolute; background:#fff; border:1px solid #ddd0b8; border-radius:4px; max-width:400px; z-index:10; max-height:250px; overflow-y:auto;"></div>
-            <div class="status" id="status-basedon"></div>
+        <div class="admin-card" style="margin: 1rem 0; position: relative">
+          <h3>🎯 Based On</h3>
+          <p style="font-size: 0.85rem">
+            Pick a track for similar-sounding songs (real tag + measured-audio
+            matching, no AI), or an artist for similar musicians (real Last.fm
+            listening data).
+          </p>
+          <input
+            type="text"
+            id="based-on-input"
+            placeholder="Type a song or artist name..."
+            autocomplete="off"
+            style="width: 100%; max-width: 400px"
+            oninput="basedOnSearch(this.value)"
+          />
+          <div
+            id="based-on-suggestions"
+            style="
+              display: none;
+              position: absolute;
+              background: #fff;
+              border: 1px solid #ddd0b8;
+              border-radius: 4px;
+              max-width: 400px;
+              z-index: 10;
+              max-height: 250px;
+              overflow-y: auto;
+            "
+          ></div>
+          <div class="status" id="status-basedon"></div>
         </div>
 
-        <div class="admin-card" style="margin: 1rem 0;">
-            <h3>📻 On This Day</h3>
-            <p style="font-size:0.85rem;">Pick a date to see what you were actually listening to around that time — an 8-day window centered on your choice, pulled directly from your Last.fm history.</p>
-            <input type="date" id="onthisday_date">
-            <button onclick="findOnThisDay(this)">Find Tracks</button>
-            <div class="status" id="status-onthisday"></div>
-            <div id="onthisday-missing" style="display:none; margin-top:1rem;"></div>
+        <div class="admin-card" style="margin: 1rem 0">
+          <h3>📻 On This Day</h3>
+          <p style="font-size: 0.85rem">
+            Pick a date to see what you were actually listening to around that
+            time — an 8-day window centered on your choice, pulled directly from
+            your Last.fm history.
+          </p>
+          <input type="date" id="onthisday_date" />
+          <button onclick="findOnThisDay(this)">Find Tracks</button>
+          <div class="status" id="status-onthisday"></div>
+          <div
+            id="onthisday-missing"
+            style="display: none; margin-top: 1rem"
+          ></div>
         </div>
 
-        <div id="tags-row" class="tags-row" style="display:none"></div>
+        <div id="tags-row" class="tags-row" style="display: none"></div>
 
-        <div id="results" style="display:none">
-            <div class="results-header">
-                <span id="result-count"></span>
-                <input type="text" id="playlist-name" placeholder="Playlist name">
-                <button id="create-btn" onclick="createPlaylist()">Create in Plex</button>
-            </div>
-            <ol id="track-list"></ol>
+        <div id="results" style="display: none">
+          <div class="results-header">
+            <span id="result-count"></span>
+            <input type="text" id="playlist-name" placeholder="Playlist name" />
+            <button id="create-btn" onclick="createPlaylist()">
+              Create in Plex
+            </button>
+          </div>
+          <ol id="track-list"></ol>
         </div>
 
-        <div id="toast" class="toast" style="display:none"></div>
-    </div>
+        <div id="toast" class="toast" style="display: none"></div>
+      </div>
 
-    <script>
+      <script>
         let currentTracks = [];
 
         /**
@@ -193,12 +470,14 @@
          * discoverable, without taking down the feature.
          */
         function getChecked(id) {
-            const el = document.getElementById(id);
-            if (!el) {
-                console.warn(`Expected checkbox #${id} was not found on the page — treating as unchecked.`);
-                return false;
-            }
-            return el.checked;
+          const el = document.getElementById(id);
+          if (!el) {
+            console.warn(
+              `Expected checkbox #${id} was not found on the page — treating as unchecked.`,
+            );
+            return false;
+          }
+          return el.checked;
         }
 
         /**
@@ -214,388 +493,471 @@
          * code, before ever trying to parse the body as JSON.
          */
         async function friendlyFetchJSON(url, options) {
-            let res;
-            try {
-                res = await fetch(url, options);
-            } catch (e) {
-                return { ok: false, message: '⚠️ Could not reach the server at all — check your connection and try again.' };
-            }
+          let res;
+          try {
+            res = await fetch(url, options);
+          } catch (e) {
+            return {
+              ok: false,
+              message:
+                "⚠️ Could not reach the server at all — check your connection and try again.",
+            };
+          }
 
-            if (!res.ok) {
-                // Upstream (OpenAI) failures come back as 429/502/504 with a
-                // JSON {error, code} body written for humans -- show it
-                // instead of a generic status message.
-                if ([429, 502, 504].includes(res.status)) {
-                    try {
-                        const body = await res.json();
-                        if (body && body.error) {
-                            return { ok: false, message: '⚠️ ' + body.error };
-                        }
-                    } catch (e) { /* not JSON -- fall through to generic message */ }
+          if (!res.ok) {
+            // Upstream (OpenAI) failures come back as 429/502/504 with a
+            // JSON {error, code} body written for humans -- show it
+            // instead of a generic status message.
+            if ([429, 502, 504].includes(res.status)) {
+              try {
+                const body = await res.json();
+                if (body && body.error) {
+                  return { ok: false, message: "⚠️ " + body.error };
                 }
-                if (res.status === 500) {
-                    return { ok: false, message: '⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.' };
-                }
-                if (res.status === 404) {
-                    return { ok: false, message: '⚠️ That feature is not available on this server yet — try refreshing the page, or check that the latest version is deployed.' };
-                }
-                return { ok: false, message: `⚠️ The server returned an unexpected error (HTTP ${res.status}). Try again in a moment.` };
+              } catch (e) {
+                /* not JSON -- fall through to generic message */
+              }
             }
+            if (res.status === 500) {
+              return {
+                ok: false,
+                message:
+                  "⚠️ The server hit an internal error — this often means another process (like a Full Sync, or a separately-scheduled job) was using the database at the same moment. Wait a few seconds and try again.",
+              };
+            }
+            if (res.status === 404) {
+              return {
+                ok: false,
+                message:
+                  "⚠️ That feature is not available on this server yet — try refreshing the page, or check that the latest version is deployed.",
+              };
+            }
+            return {
+              ok: false,
+              message: `⚠️ The server returned an unexpected error (HTTP ${res.status}). Try again in a moment.`,
+            };
+          }
 
-            try {
-                const data = await res.json();
-                return { ok: true, data };
-            } catch (e) {
-                return { ok: false, message: '⚠️ The server responded, but not with the data expected — this usually means a real bug. Worth checking the server logs.' };
-            }
+          try {
+            const data = await res.json();
+            return { ok: true, data };
+          } catch (e) {
+            return {
+              ok: false,
+              message:
+                "⚠️ The server responded, but not with the data expected — this usually means a real bug. Worth checking the server logs.",
+            };
+          }
         }
 
         let basedOnDebounce = null;
         async function basedOnSearch(query) {
-            clearTimeout(basedOnDebounce);
-            const box = document.getElementById('based-on-suggestions');
-            if (query.trim().length < 2) {
-                box.style.display = 'none';
+          clearTimeout(basedOnDebounce);
+          const box = document.getElementById("based-on-suggestions");
+          if (query.trim().length < 2) {
+            box.style.display = "none";
+            return;
+          }
+          basedOnDebounce = setTimeout(async () => {
+            try {
+              const res = await fetch(
+                `/based-on-search?q=${encodeURIComponent(query)}`,
+              );
+              const data = await res.json();
+              if (!data.results.length) {
+                box.style.display = "none";
                 return;
-            }
-            basedOnDebounce = setTimeout(async () => {
-                try {
-                    const res = await fetch(`/based-on-search?q=${encodeURIComponent(query)}`);
-                    const data = await res.json();
-                    if (!data.results.length) {
-                        box.style.display = 'none';
-                        return;
-                    }
-                    box.innerHTML = data.results.map(r =>
-                        `<div style="padding:0.5rem 0.8rem; cursor:pointer; border-bottom:1px solid #eee;"
+              }
+              box.innerHTML = data.results
+                .map(
+                  (r) =>
+                    `<div style="padding:0.5rem 0.8rem; cursor:pointer; border-bottom:1px solid #eee;"
                               onmouseover="this.style.background='#f0e8d8'" onmouseout="this.style.background='#fff'"
                               onclick='basedOnSelect(${JSON.stringify(r).replace(/'/g, "&apos;")})'>
                             ${r.label}
-                         </div>`
-                    ).join('');
-                    box.style.display = 'block';
-                } catch (e) {
-                    box.style.display = 'none';
-                }
-            }, 250);
+                         </div>`,
+                )
+                .join("");
+              box.style.display = "block";
+            } catch (e) {
+              box.style.display = "none";
+            }
+          }, 250);
         }
 
         async function basedOnSelect(item) {
-            document.getElementById('based-on-suggestions').style.display = 'none';
-            document.getElementById('based-on-input').value = item.label;
-            const status = document.getElementById('status-basedon');
-            status.textContent = '⏳ Finding similar tracks...';
-            status.className = 'status';
+          document.getElementById("based-on-suggestions").style.display =
+            "none";
+          document.getElementById("based-on-input").value = item.label;
+          const status = document.getElementById("status-basedon");
+          status.textContent = "⏳ Finding similar tracks...";
+          status.className = "status";
 
-            try {
-                const payload = item.type === 'track'
-                    ? { type: 'track', rating_key: item.rating_key, seed_label: item.label, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value }
-                    : { type: 'artist', value: item.value, limit: document.getElementById('limit').value, max_per_artist: document.getElementById('max_per_artist').value };
+          try {
+            const payload =
+              item.type === "track"
+                ? {
+                    type: "track",
+                    rating_key: item.rating_key,
+                    seed_label: item.label,
+                    limit: document.getElementById("limit").value,
+                    max_per_artist:
+                      document.getElementById("max_per_artist").value,
+                  }
+                : {
+                    type: "artist",
+                    value: item.value,
+                    limit: document.getElementById("limit").value,
+                    max_per_artist:
+                      document.getElementById("max_per_artist").value,
+                  };
 
-                const result = await friendlyFetchJSON('/based-on', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
+            const result = await friendlyFetchJSON("/based-on", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
 
-                if (!result.ok) {
-                    status.textContent = result.message;
-                    status.className = 'status error';
-                    return;
-                }
-                const data = result.data;
+            if (!result.ok) {
+              status.textContent = result.message;
+              status.className = "status error";
+              return;
+            }
+            const data = result.data;
 
-                if (data.error) {
-                    status.textContent = '❌ ' + data.error;
-                    status.className = 'status error';
-                    return;
-                }
-                if (!data.tracks.length) {
-                    status.textContent = '⚠️ No similar tracks found in your library.';
-                    status.className = 'status error';
-                    return;
-                }
+            if (data.error) {
+              status.textContent = "❌ " + data.error;
+              status.className = "status error";
+              return;
+            }
+            if (!data.tracks.length) {
+              status.textContent =
+                "⚠️ No similar tracks found in your library.";
+              status.className = "status error";
+              return;
+            }
 
-                if (data.mode === 'artist' && data.source === 'ai_fallback_no_lastfm') {
-                    status.textContent = 'ℹ️ Last.fm is not configured on this install — used AI instead.';
-                } else if (data.mode === 'artist' && data.source === 'ai_fallback_lastfm_empty') {
-                    status.textContent = 'ℹ️ Last.fm had no data for this artist — used AI as a fallback.';
-                } else {
-                    status.textContent = '';
-                }
-                status.className = 'status';
+            if (
+              data.mode === "artist" &&
+              data.source === "ai_fallback_no_lastfm"
+            ) {
+              status.textContent =
+                "ℹ️ Last.fm is not configured on this install — used AI instead.";
+            } else if (
+              data.mode === "artist" &&
+              data.source === "ai_fallback_lastfm_empty"
+            ) {
+              status.textContent =
+                "ℹ️ Last.fm had no data for this artist — used AI as a fallback.";
+            } else {
+              status.textContent = "";
+            }
+            status.className = "status";
 
-                currentTracks = data.tracks;
-                const list = document.getElementById('track-list');
-                list.innerHTML = data.tracks.map(t => `
+            currentTracks = data.tracks;
+            const list = document.getElementById("track-list");
+            list.innerHTML = data.tracks
+              .map(
+                (t) => `
                     <li>
                         <span class="track-title">${t.artist} — ${t.title}</span>
-                        <span class="track-meta">${t.year || '?'} &bull; ${t.play_count || 0} plays</span>
+                        <span class="track-meta">${t.year || "?"} &bull; ${t.play_count || 0} plays</span>
                     </li>
-                `).join('');
-                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-                const tagsRow = document.getElementById('tags-row');
-                tagsRow.innerHTML = `<span class="tag">🎯 Based on: ${item.label}</span>`;
-                tagsRow.style.display = 'flex';
-                document.getElementById('results').style.display = 'block';
-            } catch (e) {
-                status.textContent = '❌ Unexpected error: ' + e;
-                status.className = 'status error';
-            }
+                `,
+              )
+              .join("");
+            document.getElementById("result-count").textContent =
+              `${data.tracks.length} tracks matched`;
+            const tagsRow = document.getElementById("tags-row");
+            tagsRow.innerHTML = `<span class="tag">🎯 Based on: ${item.label}</span>`;
+            tagsRow.style.display = "flex";
+            document.getElementById("results").style.display = "block";
+          } catch (e) {
+            status.textContent = "❌ Unexpected error: " + e;
+            status.className = "status error";
+          }
         }
 
         async function findOnThisDay(btn) {
-            const dateVal = document.getElementById('onthisday_date').value;
-            const status = document.getElementById('status-onthisday');
-            if (!dateVal) {
-                status.textContent = 'Pick a date first.';
-                status.className = 'status error';
-                return;
+          const dateVal = document.getElementById("onthisday_date").value;
+          const status = document.getElementById("status-onthisday");
+          if (!dateVal) {
+            status.textContent = "Pick a date first.";
+            status.className = "status error";
+            return;
+          }
+
+          btn.disabled = true;
+          status.textContent = "⏳ Searching...";
+          status.className = "status running";
+
+          try {
+            const result = await friendlyFetchJSON("/onthisday", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                date: dateVal,
+                limit: document.getElementById("limit").value,
+                max_per_artist: document.getElementById("max_per_artist").value,
+              }),
+            });
+
+            if (!result.ok) {
+              status.textContent = result.message;
+              status.className = "status error";
+              return;
+            }
+            const data = result.data;
+
+            if (data.error) {
+              status.textContent = "❌ " + data.error;
+              status.className = "status error";
+              return;
             }
 
-            btn.disabled = true;
-            status.textContent = '⏳ Searching...';
-            status.className = 'status running';
+            status.textContent = "";
+            currentTracks = data.tracks;
 
-            try {
-                const result = await friendlyFetchJSON('/onthisday', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        date: dateVal,
-                        limit: document.getElementById('limit').value,
-                        max_per_artist: document.getElementById('max_per_artist').value,
-                    })
-                });
-
-                if (!result.ok) {
-                    status.textContent = result.message;
-                    status.className = 'status error';
-                    return;
-                }
-                const data = result.data;
-
-                if (data.error) {
-                    status.textContent = '❌ ' + data.error;
-                    status.className = 'status error';
-                    return;
-                }
-
-                status.textContent = '';
-                currentTracks = data.tracks;
-
-                const list = document.getElementById('track-list');
-                list.innerHTML = data.tracks.map((t, i) => `
+            const list = document.getElementById("track-list");
+            list.innerHTML = data.tracks
+              .map(
+                (t, i) => `
                     <li>
                         <span class="track-title">${t.artist} — ${t.title}</span>
-                        <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays</span>
+                        <span class="track-meta">${t.year || "?"} &bull; ${t.genre || "?"} &bull; ${t.play_count} plays</span>
                     </li>
-                `).join('');
+                `,
+              )
+              .join("");
 
-                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
+            document.getElementById("result-count").textContent =
+              `${data.tracks.length} tracks matched`;
 
-                const tagsRow = document.getElementById('tags-row');
-                tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
-                tagsRow.style.display = 'flex';
+            const tagsRow = document.getElementById("tags-row");
+            tagsRow.innerHTML = `<span class="tag">📻 ${data.search_term}</span>`;
+            tagsRow.style.display = "flex";
 
-                // Real Last.fm scrobbles from this window that never matched
-                // a local track -- shown separately, deliberately never
-                // added to currentTracks, so they can never end up in the
-                // created playlist.
-                const missingDiv = document.getElementById('onthisday-missing');
-                if (data.missing && data.missing.length > 0) {
-                    missingDiv.style.display = 'block';
-                    missingDiv.innerHTML = `
+            // Real Last.fm scrobbles from this window that never matched
+            // a local track -- shown separately, deliberately never
+            // added to currentTracks, so they can never end up in the
+            // created playlist.
+            const missingDiv = document.getElementById("onthisday-missing");
+            if (data.missing && data.missing.length > 0) {
+              missingDiv.style.display = "block";
+              missingDiv.innerHTML = `
                         <div style="font-size:0.85rem; color:#8b6914; margin-bottom:0.4rem;">
-                            🚫 ${data.missing.length} track${data.missing.length !== 1 ? 's' : ''} you actually scrobbled in this window, but missing from your library:
+                            🚫 ${data.missing.length} track${data.missing.length !== 1 ? "s" : ""} you actually scrobbled in this window, but missing from your library:
                         </div>
                         <ul style="list-style:none; padding:0; margin:0; font-size:0.85rem;">
-                            ${data.missing.map(m => `
+                            ${data.missing
+                              .map(
+                                (m) => `
                                 <li style="padding:0.3rem 0; border-bottom:1px solid #eee; color:#8b6914;">
-                                    ${m.artist} — ${m.title}${m.count > 1 ? ` <span style="opacity:0.7;">(played ${m.count}×)</span>` : ''}
+                                    ${m.artist} — ${m.title}${m.count > 1 ? ` <span style="opacity:0.7;">(played ${m.count}×)</span>` : ""}
                                 </li>
-                            `).join('')}
+                            `,
+                              )
+                              .join("")}
                         </ul>
                     `;
-                } else {
-                    missingDiv.style.display = 'none';
-                    missingDiv.innerHTML = '';
-                }
-
-                document.getElementById('results').style.display = 'block';
-            } catch (e) {
-                status.textContent = '❌ Unexpected error: ' + e;
-                status.className = 'status error';
-            } finally {
-                btn.disabled = false;
+            } else {
+              missingDiv.style.display = "none";
+              missingDiv.innerHTML = "";
             }
+
+            document.getElementById("results").style.display = "block";
+          } catch (e) {
+            status.textContent = "❌ Unexpected error: " + e;
+            status.className = "status error";
+          } finally {
+            btn.disabled = false;
+          }
         }
 
         async function preview() {
-            const prompt = document.getElementById('prompt').value.trim();
+          const prompt = document.getElementById("prompt").value.trim();
 
-            const btn = document.getElementById('preview-btn');
-            btn.textContent = 'Thinking...';
-            btn.disabled = true;
+          const btn = document.getElementById("preview-btn");
+          btn.textContent = "Thinking...";
+          btn.disabled = true;
 
-            document.getElementById('results').style.display = 'none';
-            document.getElementById('tags-row').style.display = 'none';
+          document.getElementById("results").style.display = "none";
+          document.getElementById("tags-row").style.display = "none";
 
-            try {
-                const payload = {
-                    prompt,
-                    unplayed:       getChecked('unplayed'),
-                    genre:          document.getElementById('genre').value,
-                    min_year:       document.getElementById('min_year').value,
-                    max_year:       document.getElementById('max_year').value,
-                    limit:          document.getElementById('limit').value,
-                    max_per_artist: document.getElementById('max_per_artist').value,
-                    min_rating:     document.getElementById('min_rating').value || null,
-                    bpm_min:        document.getElementById('bpm_min').value || null,
-                    bpm_max:        document.getElementById('bpm_max').value || null,
-                    danceability:   document.getElementById('danceability').value || null,
-                    instrumental:   getChecked('instrumental') ? 1 : null,
-                    vocal_tolerance: getChecked('instrumental') ? (document.getElementById('vocal_tolerance')?.value ?? null) : null,
+          try {
+            const payload = {
+              prompt,
+              unplayed: getChecked("unplayed"),
+              genre: document.getElementById("genre").value,
+              min_year: document.getElementById("min_year").value,
+              max_year: document.getElementById("max_year").value,
+              limit: document.getElementById("limit").value,
+              max_per_artist: document.getElementById("max_per_artist").value,
+              min_rating: document.getElementById("min_rating").value || null,
+              bpm_min: document.getElementById("bpm_min").value || null,
+              bpm_max: document.getElementById("bpm_max").value || null,
+              danceability:
+                document.getElementById("danceability").value || null,
+              instrumental: getChecked("instrumental") ? 1 : null,
+              vocal_tolerance: getChecked("instrumental")
+                ? (document.getElementById("vocal_tolerance")?.value ?? null)
+                : null,
 
-                    gender:         document.getElementById('gender').value || null,
-                    country:        document.getElementById('country').value || null,
-                    era:            document.getElementById('era').value || null,
-                    buckets:        Array.from(document.querySelectorAll('.bucket-checkbox:checked')).map(el => el.dataset.bucket),
-                };
+              gender: document.getElementById("gender").value || null,
+              country: document.getElementById("country").value || null,
+              era: document.getElementById("era").value || null,
+              buckets: Array.from(
+                document.querySelectorAll(".bucket-checkbox:checked"),
+              ).map((el) => el.dataset.bucket),
+            };
 
-                const result = await friendlyFetchJSON('/preview', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
+            const result = await friendlyFetchJSON("/preview", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
 
-                if (!result.ok) {
-                    showToast(result.message, 'error');
-                    return;
-                }
-                const data = result.data;
+            if (!result.ok) {
+              showToast(result.message, "error");
+              return;
+            }
+            const data = result.data;
 
-                if (data.error) {
-                    showToast('Error: ' + data.error, 'error');
-                    return;
-                }
-                if (data.warning) {
-                    showToast(data.warning, 'error');
-                }
+            if (data.error) {
+              showToast("Error: " + data.error, "error");
+              return;
+            }
+            if (data.warning) {
+              showToast(data.warning, "error");
+            }
 
-                // Show tags or intent info
-                const tagsRow = document.getElementById('tags-row');
-                const pills = [];
+            // Show tags or intent info
+            const tagsRow = document.getElementById("tags-row");
+            const pills = [];
 
-                // Intent pills
-                if (data.intent === 'title_search' && data.search_term)
-                    pills.push(`🔍 Title: "${data.search_term}"`);
-                else if (data.intent === 'artist_search' && data.search_term)
-                    pills.push(`🎤 Artist: "${data.search_term}"`);
-                else if (data.intent === 'year_search' && data.search_term)
-                    pills.push(`📅 Year: "${data.search_term}"`);
-                else if (data.intent === 'lastfm_range' && data.search_term)
-                    pills.push(`📻 Last.fm: ${data.search_term}`);
+            // Intent pills
+            if (data.intent === "title_search" && data.search_term)
+              pills.push(`🔍 Title: "${data.search_term}"`);
+            else if (data.intent === "artist_search" && data.search_term)
+              pills.push(`🎤 Artist: "${data.search_term}"`);
+            else if (data.intent === "year_search" && data.search_term)
+              pills.push(`📅 Year: "${data.search_term}"`);
+            else if (data.intent === "lastfm_range" && data.search_term)
+              pills.push(`📻 Last.fm: ${data.search_term}`);
 
-                // Detected filter pills
-                const df = data.detected_filters || {};
-                if (df.gender)  pills.push(`👤 ${df.gender}`);
-                if (df.country) pills.push(`🌍 ${df.country}`);
-                if (df.era)     pills.push(`📅 ${df.era}`);
+            // Detected filter pills
+            const df = data.detected_filters || {};
+            if (df.gender) pills.push(`👤 ${df.gender}`);
+            if (df.country) pills.push(`🌍 ${df.country}`);
+            if (df.era) pills.push(`📅 ${df.era}`);
 
-                // Mood tags
-                if (data.tags && data.tags.length > 0)
-                    data.tags.forEach(t => pills.push(t));
+            // Mood tags
+            if (data.tags && data.tags.length > 0)
+              data.tags.forEach((t) => pills.push(t));
 
-                if (pills.length > 0) {
-                    tagsRow.innerHTML = pills.map(p => `<span class="tag">${p}</span>`).join('');
-                    tagsRow.style.display = 'flex';
-                } else {
-                    tagsRow.style.display = 'none';
-                }
+            if (pills.length > 0) {
+              tagsRow.innerHTML = pills
+                .map((p) => `<span class="tag">${p}</span>`)
+                .join("");
+              tagsRow.style.display = "flex";
+            } else {
+              tagsRow.style.display = "none";
+            }
 
-                // Show tracks
-                currentTracks = data.tracks;
-                const list = document.getElementById('track-list');
-                list.innerHTML = data.tracks.map((t, i) => `
+            // Show tracks
+            currentTracks = data.tracks;
+            const list = document.getElementById("track-list");
+            list.innerHTML = data.tracks
+              .map(
+                (t, i) => `
                     <li>
                         <span class="track-title">${t.artist} — ${t.title}</span>
-                        <span class="track-meta">${t.year || '?'} &bull; ${t.genre || '?'} &bull; ${t.play_count} plays &bull; ${t.match_score} match</span>
+                        <span class="track-meta">${t.year || "?"} &bull; ${t.genre || "?"} &bull; ${t.play_count} plays &bull; ${t.match_score} match</span>
                     </li>
-                `).join('');
+                `,
+              )
+              .join("");
 
-                document.getElementById('result-count').textContent = `${data.tracks.length} tracks matched`;
-                const bucketSuffix = payload.buckets && payload.buckets.length ? ` (${payload.buckets.join(', ')})` : '';
-                const countrySuffix = payload.country ? `(${payload.country})` : '';
-                document.getElementById('playlist-name').value = (prompt || 'My Playlist') + bucketSuffix + countrySuffix;
-                document.getElementById('results').style.display = 'block';
-            } catch (e) {
-                // Found real (July 2026): removing this safety net
-                // during the friendlyFetchJSON rewrite left ANY
-                // unexpected exception -- not just a fetch failure --
-                // uncaught, permanently stuck on "Thinking...". This
-                // catches anything friendlyFetchJSON itself can't
-                // (a DOM element unexpectedly missing, a malformed
-                // response shape, etc.) so the button always recovers.
-                showToast('Unexpected error: ' + e, 'error');
-            } finally {
-                btn.textContent = 'Preview';
-                btn.disabled = false;
-            }
+            document.getElementById("result-count").textContent =
+              `${data.tracks.length} tracks matched`;
+            const bucketSuffix =
+              payload.buckets && payload.buckets.length
+                ? ` (${payload.buckets.join(", ")})`
+                : "";
+            const countrySuffix = payload.country ? `(${payload.country})` : "";
+            document.getElementById("playlist-name").value =
+              (prompt || "My Playlist") + bucketSuffix + countrySuffix;
+            document.getElementById("results").style.display = "block";
+          } catch (e) {
+            // Found real (July 2026): removing this safety net
+            // during the friendlyFetchJSON rewrite left ANY
+            // unexpected exception -- not just a fetch failure --
+            // uncaught, permanently stuck on "Thinking...". This
+            // catches anything friendlyFetchJSON itself can't
+            // (a DOM element unexpectedly missing, a malformed
+            // response shape, etc.) so the button always recovers.
+            showToast("Unexpected error: " + e, "error");
+          } finally {
+            btn.textContent = "Preview";
+            btn.disabled = false;
+          }
         }
 
         async function createPlaylist() {
-            const name = document.getElementById('playlist-name').value.trim();
-            if (!name || !currentTracks.length) return;
+          const name = document.getElementById("playlist-name").value.trim();
+          if (!name || !currentTracks.length) return;
 
-            const btn = document.getElementById('create-btn');
-            btn.textContent = 'Creating...';
-            btn.disabled = true;
+          const btn = document.getElementById("create-btn");
+          btn.textContent = "Creating...";
+          btn.disabled = true;
 
-            try {
-                const result = await friendlyFetchJSON('/create', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        name,
-                        rating_keys: currentTracks.map(t => t.rating_key),
-                        prompt: document.getElementById('prompt').value
-                    })
-                });
+          try {
+            const result = await friendlyFetchJSON("/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name,
+                rating_keys: currentTracks.map((t) => t.rating_key),
+                prompt: document.getElementById("prompt").value,
+              }),
+            });
 
-                if (!result.ok) {
-                    showToast(result.message, 'error');
-                } else if (result.data.success) {
-                    showToast(`✅ "${result.data.name}" created in Plex with ${result.data.count} tracks!`, 'success');
-                    loadPlaylists();
-                } else {
-                    showToast('Error: ' + result.data.error, 'error');
-                }
-            } catch (e) {
-                showToast('Unexpected error: ' + e, 'error');
-            } finally {
-                btn.textContent = 'Create in Plex';
-                btn.disabled = false;
+            if (!result.ok) {
+              showToast(result.message, "error");
+            } else if (result.data.success) {
+              showToast(
+                `✅ "${result.data.name}" created in Plex with ${result.data.count} tracks!`,
+                "success",
+              );
+              loadPlaylists();
+            } else {
+              showToast("Error: " + result.data.error, "error");
             }
+          } catch (e) {
+            showToast("Unexpected error: " + e, "error");
+          } finally {
+            btn.textContent = "Create in Plex";
+            btn.disabled = false;
+          }
         }
 
         // Load genre tags on page load
         async function loadGenres() {
-            const result = await friendlyFetchJSON('/genres');
-            if (!result.ok) {
-                console.warn('Could not load genre list:', result.message);
-                return;
-            }
-            const data = result.data;
-            // Sort alphabetically after fetching by count
-            data.sort((a, b) => a.tag.localeCompare(b.tag));
-            const select = document.getElementById('genre');
-            data.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.tag;
-                opt.textContent = g.tag + ' (' + g.count + ')';
-                select.appendChild(opt);
-            });
+          const result = await friendlyFetchJSON("/genres");
+          if (!result.ok) {
+            console.warn("Could not load genre list:", result.message);
+            return;
+          }
+          const data = result.data;
+          // Sort alphabetically after fetching by count
+          data.sort((a, b) => a.tag.localeCompare(b.tag));
+          const select = document.getElementById("genre");
+          data.forEach((g) => {
+            const opt = document.createElement("option");
+            opt.value = g.tag;
+            opt.textContent = g.tag + " (" + g.count + ")";
+            select.appendChild(opt);
+          });
         }
 
         // Load real country data on page load -- same pattern as
@@ -603,82 +965,88 @@
         // (e.g. "United Kingdom"), not 2-letter codes, matching what
         // the /countries endpoint returns.
         async function loadCountries() {
-            const result = await friendlyFetchJSON('/countries');
-            if (!result.ok) {
-                console.warn('Could not load country list:', result.message);
-                return;
-            }
-            const data = result.data;
-            data.sort((a, b) => a.country.localeCompare(b.country));
-            const select = document.getElementById('country');
-            data.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.country;
-                opt.textContent = c.country + ' (' + c.count + ')';
-                select.appendChild(opt);
-            });
+          const result = await friendlyFetchJSON("/countries");
+          if (!result.ok) {
+            console.warn("Could not load country list:", result.message);
+            return;
+          }
+          const data = result.data;
+          data.sort((a, b) => a.country.localeCompare(b.country));
+          const select = document.getElementById("country");
+          data.forEach((c) => {
+            const opt = document.createElement("option");
+            opt.value = c.country;
+            opt.textContent = c.country + " (" + c.count + ")";
+            select.appendChild(opt);
+          });
         }
 
         // Enter key triggers preview
-        document.addEventListener('DOMContentLoaded', () => {
-            loadGenres();
-            loadCountries();
-            document.getElementById('prompt').addEventListener('keydown', e => {
-                if (e.key === 'Enter') preview();
-            });
+        document.addEventListener("DOMContentLoaded", () => {
+          loadGenres();
+          loadCountries();
+          document.getElementById("prompt").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") preview();
+          });
         });
 
         function showToast(msg, type) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.className = 'toast ' + type;
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 4000);
+          const toast = document.getElementById("toast");
+          toast.textContent = msg;
+          toast.className = "toast " + type;
+          toast.style.display = "block";
+          setTimeout(() => (toast.style.display = "none"), 4000);
         }
-    </script>
-</div><!-- page-wrap -->
-{% include "footer.html" %}
-<script>
-let PLEX_MACHINE_ID = '';
-let allPlaylists = [];
+      </script>
+    </div>
+    <!-- page-wrap -->
+    {% include "footer.html" %}
+    <script>
+      let PLEX_MACHINE_ID = "";
+      let allPlaylists = [];
 
-async function loadPlaylists() {
-    const result = await friendlyFetchJSON('/playlists');
-    if (!result.ok) {
-        document.getElementById('playlist-list').innerHTML =
+      async function loadPlaylists() {
+        const result = await friendlyFetchJSON("/playlists");
+        if (!result.ok) {
+          document.getElementById("playlist-list").innerHTML =
             `<div class="playlist-loading">${result.message}</div>`;
-        return;
-    }
-    const data = result.data;
-    PLEX_MACHINE_ID = data.machineId || '';
-    allPlaylists = data.playlists || [];
-    allPlaylists.sort((a,b) => b.addedAt - a.addedAt);
-    renderPlaylists(allPlaylists);
-}
+          return;
+        }
+        const data = result.data;
+        PLEX_MACHINE_ID = data.machineId || "";
+        allPlaylists = data.playlists || [];
+        allPlaylists.sort((a, b) => b.addedAt - a.addedAt);
+        renderPlaylists(allPlaylists);
+      }
 
-function renderPlaylists(list) {
-    const el = document.getElementById('playlist-list');
-    if (!list.length) {
-        el.innerHTML = '<div class="playlist-loading">No playlists found.</div>';
-        return;
-    }
-    el.innerHTML = list.map(p => {
-        const url = `https://app.plex.tv/desktop/#!/server/${PLEX_MACHINE_ID}/playlist?key=%2Fplaylists%2F${p.key}&context=source%3Acontent.playlists.music~2~4&shuffle=1`;
-        return `<a class="playlist-item" href="${url}" target="_blank" title="${p.title}">
+      function renderPlaylists(list) {
+        const el = document.getElementById("playlist-list");
+        if (!list.length) {
+          el.innerHTML =
+            '<div class="playlist-loading">No playlists found.</div>';
+          return;
+        }
+        el.innerHTML = list
+          .map((p) => {
+            const url = `https://app.plex.tv/desktop/#!/server/${PLEX_MACHINE_ID}/playlist?key=%2Fplaylists%2F${p.key}&context=source%3Acontent.playlists.music~2~4&shuffle=1`;
+            return `<a class="playlist-item" href="${url}" target="_blank" title="${p.title}">
             <span class="playlist-name">${p.title}</span>
             <span class="playlist-count">${p.trackCount}</span>
         </a>`;
-    }).join('');
-}
+          })
+          .join("");
+      }
 
-function sortPlaylists(by) {
-    let sorted = [...allPlaylists];
-    if (by === 'name')   sorted.sort((a,b) => a.title.localeCompare(b.title));
-    if (by === 'tracks') sorted.sort((a,b) => b.trackCount - a.trackCount);
-    if (by === 'recent') sorted.sort((a,b) => b.addedAt - a.addedAt);
-    renderPlaylists(sorted);
-}
+      function sortPlaylists(by) {
+        let sorted = [...allPlaylists];
+        if (by === "name")
+          sorted.sort((a, b) => a.title.localeCompare(b.title));
+        if (by === "tracks") sorted.sort((a, b) => b.trackCount - a.trackCount);
+        if (by === "recent") sorted.sort((a, b) => b.addedAt - a.addedAt);
+        renderPlaylists(sorted);
+      }
 
-loadPlaylists();
-</script>
-</body>
+      loadPlaylists();
+    </script>
+  </body>
+</html>

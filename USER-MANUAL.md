@@ -1,7 +1,7 @@
 # MusicMind for Plex — User Manual
 
-*The AI-enhanced music companion your Plex library deserves.*
-*Dig into your stacks.*
+_The AI-enhanced music companion your Plex library deserves._
+_Dig into your stacks._
 
 ---
 
@@ -28,42 +28,52 @@ You type "late night psychedelic soul" and get a playlist. You ask for "female B
 
 ### Installation
 
-**1. Install Python dependencies**
-```bash
-sudo python3.12 -m pip install plexapi openai flask mutagen --break-system-packages
-```
+**1. Clone the repo**
 
-**2. Clone the repo**
 ```bash
 git clone https://github.com/earthmonkey419/musicmindforplex.git ~/musicmind
 ```
 
+**2. Install Python dependencies**
+
+```bash
+cd ~/musicmind
+sudo python3.12 -m pip install '.[slim]' --break-system-packages
+```
+
+Use `'.[full]'` for TensorFlow-backed voice/instrumental detection.
+
 **3. Configure**
+
 ```bash
 cp ~/musicmind/config.example.py ~/musicmind/config.py
 # Edit config.py with your credentials
+cd ~/musicmind
 ```
 
 **4. Run initial setup (in order)**
+
 ```bash
-python3.12 ~/musicmind/musicmind_ingest.py             # Pull library into database
-python3.12 ~/musicmind/plex_tag_tracks.py              # AI-tag your tracks
-python3.12 ~/musicmind/enrich_artists.py               # Artist metadata
-sudo python3.12 ~/musicmind/enrich_compilations.py     # Fix Various Artists
-python3.12 ~/musicmind/lastfm_sync.py                  # Sync Last.fm (if configured)
-python3.12 ~/musicmind/lastfm_gaps.py                  # Gap analysis (if Last.fm)
-python3.12 ~/musicmind/listening_context.py            # Context playlists (if Last.fm)
-sudo python3.12 ~/musicmind/write_genres_to_plex.py --test   # Preview genre write
-sudo python3.12 ~/musicmind/write_genres_to_plex.py --run    # Write genres to Plex
+python3.12 -m musicmind.ingest             # Pull library into database
+python3.12 -m musicmind.plex.tag_tracks              # AI-tag your tracks
+python3.12 -m musicmind.enrichment.enrich_artists               # Artist metadata
+sudo python3.12 -m musicmind.enrichment.enrich_compilations     # Fix Various Artists
+python3.12 -m musicmind.lastfm.sync                  # Sync Last.fm (if configured)
+python3.12 -m musicmind.lastfm.gaps                  # Gap analysis (if Last.fm)
+python3.12 -m musicmind.analysis.listening_context            # Context playlists (if Last.fm)
+sudo python3.12 -m musicmind.plex.write_genres_to_plex --test   # Preview genre write
+sudo python3.12 -m musicmind.plex.write_genres_to_plex --run    # Write genres to Plex
 ```
 
 **5. Start the web app**
+
 ```bash
 sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
 sudo pm2 save
 ```
 
 **6. Open in browser**
+
 ```
 http://YOUR_NAS_IP:8787
 ```
@@ -74,7 +84,7 @@ Give MusicMind its own token rather than copying one out of Plex Web --
 a browser-session token stops working the moment you sign that browser
 out of Plex.
 
-1. From the MusicMind folder, run `python3.12 make_plex_token.py`
+1. From the MusicMind folder, run `python3.12 -m musicmind.plex.auth`
 2. Open the link it prints, sign in to Plex, and approve
 3. Put the printed token in `config.py` as `PLEX_TOKEN`, or re-run with
    `--write` to have it update `config.py` for you (the old file is kept
@@ -100,18 +110,18 @@ value from the URL.
 
 The top navigation bar has links to all sections:
 
-| Link | Page | What it does |
-|---|---|---|
-| 📋 Missing From Your Collection | /gaps | Artists you scrobble heavily but don't own |
-| 📊 The Collection | /stats | Your library and listening history at a glance |
-| ⚙️ Admin | /admin | Back Office — sync, tag, and maintain your library |
-| 🗄️ DB Console | /db | The Ledger — run SQL queries on your music database |
-| 📋 Logs | /logs | Query logs with full OpenAI API detail |
-| 🔄 Update | /update | Version info and update tools |
+| Link                            | Page    | What it does                                        |
+| ------------------------------- | ------- | --------------------------------------------------- |
+| 📋 Missing From Your Collection | /gaps   | Artists you scrobble heavily but don't own          |
+| 📊 The Collection               | /stats  | Your library and listening history at a glance      |
+| ⚙️ Admin                        | /admin  | Back Office — sync, tag, and maintain your library  |
+| 🗄️ DB Console                   | /db     | The Ledger — run SQL queries on your music database |
+| 📋 Logs                         | /logs   | Query logs with full OpenAI API detail              |
+| 🔄 Update                       | /update | Version info and update tools                       |
 
 ### Playlist Sidebar
 
-On the left side of the main page is a scrollable list of all your Plex music playlists. 
+On the left side of the main page is a scrollable list of all your Plex music playlists.
 
 - **Sort** by Recent (default), A-Z, or Track count using the dropdown
 - **Click any playlist** to open it in the Plex web player
@@ -126,6 +136,7 @@ On the left side of the main page is a scrollable list of all your Plex music pl
 Type anything into the prompt box and hit **Preview**. MusicMind analyzes your prompt and figures out what you want:
 
 **Mood or vibe:**
+
 > "late night psychedelic soul"
 > "grandma's birthday party"
 > "driving to the airport to pick up my friend"
@@ -135,18 +146,21 @@ Type anything into the prompt box and hit **Preview**. MusicMind analyzes your p
 MusicMind identifies 2-3 specific vibes in your prompt and generates a tightly focused set of music tags. It searches your library for tracks that match those tags and returns the best results.
 
 **Title search:**
+
 > "songs with ocean in the name"
 > "tracks with love in the title"
 
 MusicMind detects that you're looking for specific words in track titles and searches directly — no AI tag expansion needed.
 
 **Artist search:**
+
 > "tracks by Miles Davis"
 > "songs by The Beatles"
 
 Searches your library for tracks by that specific artist.
 
 **Demographic or filter queries:**
+
 > "female artists from the 1970s"
 > "female Brazilian artists"
 > "jazz from the 50s"
@@ -157,18 +171,18 @@ MusicMind detects gender, country, era, and genre in your prompt and applies the
 
 Below the prompt box are filters you can set manually. These combine with your prompt:
 
-| Filter | What it does |
-|---|---|
-| **Unplayed only** | Only return tracks with 0 plays |
-| **Instrumental only** | Only return tracks classified as instrumental |
-| **Genre** | Filter or boost by genre tag. Decades (50s, 60s, 70s...) search artist era. Genres search AI tags. |
-| **From year / To year** | Restrict to tracks from a year range |
-| **Limit** | Maximum number of tracks to return (default 30) |
-| **Tracks per artist** | Cap how many tracks from any one artist appear (default 1) |
-| **Min rating** | Minimum star rating |
-| **Gender** | Filter by artist gender (female, male, mixed) |
-| **Country** | Filter by artist country of origin |
-| **Era** | Filter by artist era (50s through 90s, 00s, 10s, 20s) |
+| Filter                  | What it does                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| **Unplayed only**       | Only return tracks with 0 plays                                                                    |
+| **Instrumental only**   | Only return tracks classified as instrumental                                                      |
+| **Genre**               | Filter or boost by genre tag. Decades (50s, 60s, 70s...) search artist era. Genres search AI tags. |
+| **From year / To year** | Restrict to tracks from a year range                                                               |
+| **Limit**               | Maximum number of tracks to return (default 30)                                                    |
+| **Tracks per artist**   | Cap how many tracks from any one artist appear (default 1)                                         |
+| **Min rating**          | Minimum star rating                                                                                |
+| **Gender**              | Filter by artist gender (female, male, mixed)                                                      |
+| **Country**             | Filter by artist country of origin                                                                 |
+| **Era**                 | Filter by artist era (50s through 90s, 00s, 10s, 20s)                                              |
 
 > **Tip:** Filters combine with your prompt. "late night jazz" + Gender=female + Era=60s will find late night jazz tracks from female artists of the 60s.
 
@@ -182,11 +196,12 @@ After previewing results you like, type a name in the playlist name box and clic
 
 ## Missing From Your Collection
 
-*Navigate: 📋 Missing From Your Collection*
+_Navigate: 📋 Missing From Your Collection_
 
 Shows artists you've scrobbled 50 or more times on Last.fm that aren't in your Plex library. Time to go digging.
 
 Artists are grouped into categories:
+
 - **Worth Acquiring** — mainstream and well-known artists
 - **Classical** — classical composers and performers
 - **Ambient / Meditation** — ambient, new age, meditation music
@@ -194,24 +209,24 @@ Artists are grouped into categories:
 
 Click any category header to expand or collapse it. Artists are sorted by scrobble count — most played first.
 
-*Requires Last.fm to be configured.*
+_Requires Last.fm to be configured._
 
 ---
 
 ## The Collection
 
-*Navigate: 📊 The Collection*
+_Navigate: 📊 The Collection_
 
 Your library and listening history at a glance — six charts:
 
-| Chart | What it shows |
-|---|---|
+| Chart                         | What it shows                                          |
+| ----------------------------- | ------------------------------------------------------ |
 | **Listening History by Year** | Your scrobble count per year — your musical life story |
-| **Top 10 Artists** | Most played artists in your library |
-| **Top Genres** | Your top AI genre tags by track count |
-| **Library by Era** | How many tracks from each decade |
-| **Library by Country** | Top 10 countries of origin in your library |
-| **Artists by Gender** | Breakdown of female, male, mixed, and unknown artists |
+| **Top 10 Artists**            | Most played artists in your library                    |
+| **Top Genres**                | Your top AI genre tags by track count                  |
+| **Library by Era**            | How many tracks from each decade                       |
+| **Library by Country**        | Top 10 countries of origin in your library             |
+| **Artists by Gender**         | Breakdown of female, male, mixed, and unknown artists  |
 
 Hero stats at the top show total tracks, artists, scrobbles, and instrumentals.
 
@@ -219,36 +234,37 @@ Hero stats at the top show total tracks, artists, scrobbles, and instrumentals.
 
 ## Back Office (Admin)
 
-*Navigate: ⚙️ Admin*
+_Navigate: ⚙️ Admin_
 
 One-click maintenance jobs. Each streams live output so you can watch progress.
 
 > **Note:** Long-running jobs (Full Sync, Tag New Tracks) may time out if accessed through a reverse proxy or Cloudflare tunnel. For long jobs, use the direct IP address: `http://YOUR_NAS_IP:8787/admin`
 
-| Button | What it does |
-|---|---|
-| **⚡ Full Sync** | Complete pipeline: scan Plex → ingest → sync Last.fm → tag new tracks |
-| **🔍 Scan Plex Library** | Tells Plex to scan for new or changed files on disk |
-| **🔄 Sync Plex Library** | Pulls all tracks from Plex into the database. Safe to re-run. |
-| **🎵 Sync Last.fm** | Pulls new scrobbles since last sync. Updates play counts and loved tracks. |
-| **🏷️ Tag New Tracks** | AI-tags any untagged tracks via OpenAI. Skips already-tagged tracks. |
-| **🔗 Refresh Context Playlists** | Rebuilds Your Afternoon, Weekend Flow, and Often Together playlists |
-| **🎼 Tag Instrumentals** | Uses OpenAI to classify tracks as instrumental or vocal |
-| **📋 Refresh Gap Analysis** | Re-runs gap analysis against current library |
+| Button                           | What it does                                                               |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| **⚡ Full Sync**                 | Complete pipeline: scan Plex → ingest → sync Last.fm → tag new tracks      |
+| **🔍 Scan Plex Library**         | Tells Plex to scan for new or changed files on disk                        |
+| **🔄 Sync Plex Library**         | Pulls all tracks from Plex into the database. Safe to re-run.              |
+| **🎵 Sync Last.fm**              | Pulls new scrobbles since last sync. Updates play counts and loved tracks. |
+| **🏷️ Tag New Tracks**            | AI-tags any untagged tracks via OpenAI. Skips already-tagged tracks.       |
+| **🔗 Refresh Context Playlists** | Rebuilds Your Afternoon, Weekend Flow, and Often Together playlists        |
+| **🎼 Tag Instrumentals**         | Uses OpenAI to classify tracks as instrumental or vocal                    |
+| **📋 Refresh Gap Analysis**      | Re-runs gap analysis against current library                               |
 
-*Last.fm buttons only appear if Last.fm is configured in config.py.*
+_Last.fm buttons only appear if Last.fm is configured in config.py._
 
 ---
 
 ## The Ledger (DB Console)
 
-*Navigate: 🗄️ DB Console*
+_Navigate: 🗄️ DB Console_
 
 A direct SQL console for your music database. SELECT queries only — no destructive queries allowed.
 
 Click any **Example Query** to load it, then press **Ctrl+Enter** or click **Run Query** to execute.
 
 Useful for exploring your data:
+
 - What tags does a specific artist have?
 - Which tracks have the most plays?
 - How many tracks by country?
@@ -257,7 +273,7 @@ Useful for exploring your data:
 
 ## Query Logs
 
-*Navigate: 📋 Logs*
+_Navigate: 📋 Logs_
 
 Shows the last 100 preview requests with full detail. Click any entry to expand:
 
@@ -273,11 +289,12 @@ Useful for understanding why a query returned unexpected results, or for seeing 
 
 ## Update
 
-*Navigate: 🔄 Update*
+_Navigate: 🔄 Update_
 
 Shows your current installation version and update options.
 
 **If installed via git clone:**
+
 - **Check for Updates** — compares your version to the latest on GitHub
 - **Update Now** — runs `git pull` and restarts the app (streams output)
 - **Restart App** — restarts without pulling
@@ -292,15 +309,18 @@ Manual update instructions are shown with step-by-step guidance.
 These playlists are created in Plex automatically when you run **Refresh Context Playlists**:
 
 ### 🌅 Your Afternoon
+
 Tracks you actually listen to between 1pm and 5pm, based on your Last.fm scrobble history. Weighted by how often each track appears in that time window.
 
 ### 🌊 Weekend Flow
+
 Tracks you listen to on Saturdays and Sundays. Captures your weekend listening personality.
 
 ### 🔗 Often Together
+
 Tracks that frequently appear in the same listening session, cross-artist. Album pairs are excluded so this captures genuine cross-genre affinities — the tracks that feel right together even though they're by different artists.
 
-*All context playlists require Last.fm to be configured.*
+_All context playlists require Last.fm to be configured._
 
 ---
 
@@ -314,17 +334,17 @@ The tags power the Genre dropdown, the playlist generator's tag matching, and Th
 
 ### Optional: Write Genres Back to Plex
 
-If you *also* want to enrich the Plexamp genre browser, you can optionally write the top 3 AI tags back into each track's Plex genre field:
+If you _also_ want to enrich the Plexamp genre browser, you can optionally write the top 3 AI tags back into each track's Plex genre field:
 
 ```bash
-sudo python3.12 write_genres_to_plex.py --test   # preview only — nothing written
-sudo python3.12 write_genres_to_plex.py --run    # actually writes to Plex
+sudo python3.12 -m musicmind.plex.write_genres_to_plex --test   # preview only — nothing written
+sudo python3.12 -m musicmind.plex.write_genres_to_plex --run    # actually writes to Plex
 ```
 
 This is **completely optional** and **fully revertable**:
 
 ```bash
-sudo python3.12 write_genres_to_plex.py --revert
+sudo python3.12 -m musicmind.plex.write_genres_to_plex --revert
 ```
 
 Most users will want to skip this step and let MusicMind use its own database tags without touching Plex metadata.
@@ -339,6 +359,7 @@ Running `tag_instrumentals.py` (or Tag Instrumentals in Back Office) classifies 
 2. **OpenAI classification** — sends artist + title to gpt-4o-mini for AI classification
 
 Once classified, you can:
+
 - Check **Instrumental only** in the filters to restrict results
 - Include "instrumental" or "no vocals" in your prompt — MusicMind detects this automatically
 
@@ -372,10 +393,11 @@ Set up Task Scheduler (on Synology DSM) or cron to run the sync pipeline automat
 
 ```bash
 # Runs every 2 hours — ingest, Last.fm sync, tag new tracks, context playlists
-python3.12 /path/to/musicmind/musicmind_ingest.py >> ~/ingest.log 2>&1 && \
-python3.12 /path/to/musicmind/lastfm_sync.py >> ~/lastfm.log 2>&1 && \
-python3.12 /path/to/musicmind/plex_tag_tracks.py >> ~/tagger.log 2>&1 && \
-python3.12 /path/to/musicmind/listening_context.py >> ~/context.log 2>&1
+cd /path/to/musicmind && \
+python3.12 -m musicmind.ingest >> ~/ingest.log 2>&1 && \
+python3.12 -m musicmind.lastfm.sync >> ~/lastfm.log 2>&1 && \
+python3.12 -m musicmind.plex.tag_tracks >> ~/tagger.log 2>&1 && \
+python3.12 -m musicmind.analysis.listening_context >> ~/context.log 2>&1
 ```
 
 ---
@@ -413,6 +435,7 @@ Use the direct IP address for admin jobs instead of a domain/tunnel URL:
 Run `enrich_compilations.py` with `sudo` — it needs filesystem access to read ID3 tags.
 
 **0 tracks matched**
+
 - Try removing filters
 - Try a more specific mood prompt
 - Check the Logs page to see what tags were generated
@@ -420,8 +443,9 @@ Run `enrich_compilations.py` with `sudo` — it needs filesystem access to read 
 
 **Last.fm not syncing**
 Check your `LASTFM_KEY` and `LASTFM_USER` in `config.py`. Test with:
+
 ```bash
-python3.12 lastfm_sync.py
+python3.12 -m musicmind.lastfm.sync
 ```
 
 **Database locked error**
@@ -442,4 +466,4 @@ Part of the [Verbena Projects](https://verbenaprojects.com) family · [vp-fun.co
 
 ---
 
-*MusicMind for Plex is not affiliated with or endorsed by Plex. Plex is a trademark of Plex, Inc.*
+_MusicMind for Plex is not affiliated with or endorsed by Plex. Plex is a trademark of Plex, Inc._

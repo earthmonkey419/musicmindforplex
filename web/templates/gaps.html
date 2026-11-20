@@ -1,58 +1,78 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicMind for Plex — Library Gaps</title>
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="MusicMind for Plex — Library Gaps">
-    <meta property="og:description" content="MusicMind for Plex — AI-powered playlist generation for your Plex music library.">
-    <meta property="og:image" content="/static/og-image.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#8b6914">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MusicMind for Plex — Library Gaps" />
+    <meta
+      property="og:description"
+      content="MusicMind for Plex — AI-powered playlist generation for your Plex music library."
+    />
+    <meta property="og:image" content="/static/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/favicon-16x16.png"
+    />
+    <link rel="icon" href="/static/favicon.ico" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#8b6914" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
     <div class="container">
-        <div class="nav"><a href="/">← Back to the Stacks</a></div>
-        <h1 class="page-title">📋 Missing From Your Collection</h1>
-        <p class="page-subtitle">Artists you've played 50+ times on Last.fm that aren't in your library. Time to go digging.</p>
+      <div class="nav"><a href="/">← Back to the Stacks</a></div>
+      <h1 class="page-title">📋 Missing From Your Collection</h1>
+      <p class="page-subtitle">
+        Artists you've played 50+ times on Last.fm that aren't in your library.
+        Time to go digging.
+      </p>
 
-        {% for bucket in buckets %}
-        <div class="bucket">
-            <div class="bucket-header" onclick="toggle(this)">
-                <span class="chevron">▶</span>
-                <h2>{{ bucket.label }}</h2>
-                <span class="count">{{ bucket.artists|length }} artists</span>
-            </div>
-            <div class="bucket-body">
-                {% for artist in bucket.artists %}
-                <div class="artist-row">
-                    <span class="artist-name">{{ artist.artist }}</span>
-                    <span class="artist-plays">{{ artist.scrobbles }}x</span>
-                </div>
-                {% endfor %}
-            </div>
+      {% for bucket in buckets %}
+      <div class="bucket">
+        <div class="bucket-header" onclick="toggle(this)">
+          <span class="chevron">▶</span>
+          <h2>{{ bucket.label }}</h2>
+          <span class="count">{{ bucket.artists|length }} artists</span>
         </div>
-        {% endfor %}
+        <div class="bucket-body">
+          {% for artist in bucket.artists %}
+          <div class="artist-row">
+            <span class="artist-name">{{ artist.artist }}</span>
+            <span class="artist-plays">{{ artist.scrobbles }}x</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
     </div>
 
     <script>
-        function toggle(header) {
-            header.classList.toggle('open');
-            header.nextElementSibling.classList.toggle('open');
-        }
-        // Open first bucket by default
-        document.addEventListener('DOMContentLoaded', () => {
-            const first = document.querySelector('.bucket-header');
-            if (first) toggle(first);
-        });
+      function toggle(header) {
+        header.classList.toggle("open");
+        header.nextElementSibling.classList.toggle("open");
+      }
+      // Open first bucket by default
+      document.addEventListener("DOMContentLoaded", () => {
+        const first = document.querySelector(".bucket-header");
+        if (first) toggle(first);
+      });
     </script>
-{% include "footer.html" %}
-</body>
+    {% include "footer.html" %}
+  </body>
 </html>

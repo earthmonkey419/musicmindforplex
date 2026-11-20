@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+MusicMind for Plex - Artist Metadata Enrichment
+Enriches artist records with gender, country, era, and group type via OpenAI.
+"""
+
+import sqlite3
+import json
+import sys
+import time
+from openai import OpenAI
+from datetime import datetime
+from config import DB_PATH, OPENAI_KEY
+from musicmind.config_check import check_config
+
+check_config(OPENAI_KEY=OPENAI_KEY)
+
+BATCH_SIZE = 20
+
+client = OpenAI(api_key=OPENAI_KEY)
+
+
+def init_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS artist_meta (
+            artist        TEXT PRIMARY KEY,
+            gender        TEXT,
+            country       TEXT,
+            era           TEXT,
+            group_type    TEXT,
+            active_since  INTEGER,
+            mbid          TEXT,
+            enriched_at   TEXT
+        )
+    """)
+    try:
+        conn.execute("ALTER TABLE artist_meta ADD COLUMN mbid TEXT")
+    except Exception:
+        pass  # column already exists (or table just created with it)
+    conn.commit()
+    print("Table ready.\n")
+
+
+def get_unenriched_artists(conn):
+    """
+    Returns list of (artist, mbid) tuples needing OpenAI enrichment.
+    Includes brand-new artists (mbid=None) and MusicBrainz-matched
+    artists still missing an era or country value (mbid populated).
+    The country condition covers a real, confirmed gap (2026-08-29):
+    MusicBrainz can confidently match an artist (mbid set) while
+    having no area/country data on its own side for that entity --
+    without this, those artists were silently invisible to this
+    fallback pipeline despite its whole purpose being exactly this
+    kind of gap-filling.
+
+    Also excludes known Plex/MusicMind placeholder artist strings
+    (e.g. "Various Artists", "Unknown Artist") -- these aren't real
+    artists and enriching them wastes an OpenAI call while writing
+    a meaningless all-"unknown" row (confirmed real case, 2026-08-30).
+    """
+    return [
+        (row[0], row[1])
+        for row in conn.execute("""
+        SELECT DISTINCT COALESCE(t.real_artist, t.artist) as effective_artist, am.mbid
+        FROM tracks t
+        LEFT JOIN artist_meta am ON am.artist = COALESCE(t.real_artist, t.artist)
+        WHERE COALESCE(t.real_artist, t.artist) IS NOT NULL
+          AND COALESCE(t.real_artist, t.artist) != ''
+          AND COALESCE(t.real_artist, t.artist) NOT IN ('Various Artists', 'Unknown Artist')
+          AND (am.artist IS NULL OR am.era IS NULL OR am.country IS NULL)
+        ORDER BY effective_artist
+    """).fetchall()
+    ]
+
+
+def enrich_batch(batch):
+    """batch is a list of (artist, mbid) tuples."""
+    lines = []
+    for i, (artist, mbid) in enumerate(batch):
+        if mbid:
+            lines.append(f"{i + 1}. {artist} [MusicBrainz ID: {mbid}]")
+        else:
+            lines.append(f"{i + 1}. {artist}")
+    artist_list = "\n".join(lines)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0.2,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""For each musician/artist/band below, return metadata.
+Some entries include a MusicBrainz ID in brackets — use it to identify the
+specific correct artist and improve accuracy if you recognize it, but every
+artist still needs a full response regardless.
+
+Fields:
+- gender: "female", "male", "mixed" (band with multiple genders), "unknown"
+- country: full country name matching MusicBrainz's own convention (e.g. "United States", "United Kingdom", "Brazil", "France") or "unknown"
+- era: primary decade of activity — "50s", "60s", "70s", "80s", "90s", "00s", "10s", "20s", or "unknown"
+- group_type: "solo", "duo", "band", "orchestra", "dj", "unknown"
+- active_since: year as integer, or null if unknown
+
+Respond ONLY with a JSON array, one object per artist in order.
+Format: [{{"artist": "name", "gender": "...", "country": "...", "era": "...", "group_type": "...", "active_since": null}}, ...]
+
+Artists:
+{artist_list}""",
+            }
+        ],
+    )
+    raw = response.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+    return json.loads(raw)
+
+
+def enrich_batch_with_retry(batch, max_attempts=3):
+    """
+    Found real (July 2026): a batch that failed outright (a genuine
+    OpenAI-side 500 error, or a raw connection reset -- confirmed
+    real, not caused by anything wrong with the request itself) was
+    just skipped entirely with no retry, requiring a whole separate
+    re-run to pick up the stragglers. These are exactly the kind of
+    transient upstream hiccup a short retry with backoff resolves
+    most of the time. 3 attempts, backoff 2s/8s/20s -- generous
+    enough to ride out a brief outage without turning a real,
+    persistent failure into an excessively long hang.
+    """
+    delays = [2, 8, 20]
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            return enrich_batch(batch)
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Batch attempt {attempt + 1} failed ({e}) — retrying in {delays[attempt]}s..."
+                )
+                time.sleep(delays[attempt])
+    raise last_error
+
+
+def main():
+    test_mode = "--test" in sys.argv
+    limit = None
+    if "--limit" in sys.argv:
+        idx = sys.argv.index("--limit")
+        if idx + 1 < len(sys.argv):
+            limit = int(sys.argv[idx + 1])
+
+    print("MusicMind for Plex - Artist Metadata Enrichment")
+    print("=" * 50)
+
+    conn = sqlite3.connect(DB_PATH, timeout=60)
+    conn.execute("PRAGMA busy_timeout=60000")
+    init_table(conn)
+
+    artists = get_unenriched_artists(conn)
+    total = len(artists)
+
+    if test_mode:
+        artists = artists[: limit or 10]
+        total = len(artists)
+        print("=" * 50)
+        print("DRY RUN — nothing will be written to the database")
+        print("=" * 50)
+    elif limit:
+        artists = artists[:limit]
+        total = len(artists)
+        print(f"LIMITED RUN — processing only {total} artists\n")
+
+    print(f"Artists to enrich: {total}\n")
+
+    if total == 0:
+        print("All artists already enriched!")
+        conn.close()
+        return
+
+    done = 0
+    now = datetime.now().isoformat()
+
+    for i in range(0, total, BATCH_SIZE):
+        batch = artists[i : i + BATCH_SIZE]
+        try:
+            results = enrich_batch_with_retry(batch)
+            for j, result in enumerate(results):
+                if j >= len(batch):
+                    break
+                artist_name = batch[j][0]
+
+                if test_mode:
+                    print(f"  ✅ WOULD ENRICH: {artist_name}")
+                    print(f"       gender:       {result.get('gender', 'unknown')}")
+                    print(f"       country:      {result.get('country', 'unknown')}")
+                    print(f"       era:          {result.get('era', 'unknown')}")
+                    print(f"       group_type:   {result.get('group_type', 'unknown')}")
+                    print(f"       active_since: {result.get('active_since')}")
+                    continue
+
+                # Create a full row only if one doesn't already exist
+                # (no-op if MusicBrainz already wrote a row for this artist)
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO artist_meta
+                        (artist, gender, country, era, group_type, active_since, enriched_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        artist_name,
+                        result.get("gender", "unknown"),
+                        result.get("country", "unknown"),
+                        result.get("era", "unknown"),
+                        result.get("group_type", "unknown"),
+                        result.get("active_since"),
+                        now,
+                    ),
+                )
+                # Always fill in era/group_type/active_since — never touches
+                # gender/country/mbid, so MusicBrainz data is preserved.
+                conn.execute(
+                    """
+                    UPDATE artist_meta
+                    SET era = ?, group_type = ?, active_since = ?, enriched_at = ?
+                    WHERE artist = ?
+                """,
+                    (
+                        result.get("era", "unknown"),
+                        result.get("group_type", "unknown"),
+                        result.get("active_since"),
+                        now,
+                        artist_name,
+                    ),
+                )
+
+            if not test_mode:
+                conn.commit()
+                done += len(batch)
+                print(f"  {done}/{total} artists enriched")
+            else:
+                done += len(batch)
+
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"  Batch failed: {e}")
+            time.sleep(2)
+
+    if test_mode:
+        print("\n" + "=" * 50)
+        print(f"DRY RUN COMPLETE — {done} artists checked")
+        print("Nothing was written to the database.")
+        print("=" * 50)
+        conn.close()
+        return
+
+    print(f"\nDone. Enriched {done} artists.")
+
+    # Quick summary
+    from musicmind.enrichment.country_aliases import get_country_aliases
+
+    print("\n=== Summary ===")
+    for label, field, val in [
+        ("Female artists", "gender", "female"),
+        ("Male artists", "gender", "male"),
+        ("Mixed bands", "gender", "mixed"),
+        ("US artists", "country", "United States"),
+        ("UK artists", "country", "United Kingdom"),
+        ("Solo artists", "group_type", "solo"),
+        ("Bands", "group_type", "band"),
+    ]:
+        if field == "country":
+            # Count every known raw variant (e.g. "United States" and
+            # legacy "US" rows both), not just the canonical spelling.
+            aliases = get_country_aliases(val)
+            placeholders = ", ".join("?" for _ in aliases)
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} IN ({placeholders})",
+                aliases,
+            ).fetchone()[0]
+        else:
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM artist_meta WHERE {field} = ?", (val,)
+            ).fetchone()[0]
+        print(f"  {label:20s}  {count}")
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

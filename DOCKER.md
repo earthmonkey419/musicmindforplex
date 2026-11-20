@@ -8,7 +8,7 @@ immediately. Voice/Instrumental detection (VI) is unavailable.
 
 **Full**: adds `essentia-tensorflow` (a genuinely large dependency —
 real TensorFlow, hundreds of MB) so VI becomes capable. The actual
-VI model file is *not* baked into either image — it's a CC BY-NC-SA
+VI model file is _not_ baked into either image — it's a CC BY-NC-SA
 licensed file, downloaded automatically on first boot directly from
 essentia.upf.edu (the original source) into a persistent volume,
 never redistributed as part of this image.
@@ -27,7 +27,7 @@ keeping the two fully isolated by default is safer for real testing.
 **Use the Repository method, not Web editor.** This compose file
 builds its own image from the Dockerfile in this repo (`build:
 context: .`) — that build needs the actual `Dockerfile`,
-`requirements.txt`, and `docker-entrypoint.sh` files on disk, not
+`pyproject.toml`, and `docker-entrypoint.sh` files on disk, not
 just the compose YAML's text. Pasting the compose file into
 Portainer's Web editor gives Portainer only that text, with none of
 the files the build actually needs — it'll fail with an error like
@@ -57,7 +57,7 @@ every file the build needs is actually present.
    paste the YAML's own `environment:` block instead (the part
    inside the compose file that looks like `- PLEX_URL=${PLEX_URL}`)
    — don't do that; it'll fail with an error like `key cannot
-   contain a space`, since Portainer is reading `- PLEX_URL` as one
+contain a space`, since Portainer is reading `- PLEX_URL` as one
    malformed key. Correct format looks like this:
 
    ```
@@ -79,10 +79,10 @@ every file the build needs is actually present.
      reported path). **If Plex itself also runs in its own Docker
      container** (not natively on this host), the path Plex reports
      for a track (via Get Info → View XML, look for the `file="..."`
-     attribute) is very likely *not* a real host path — it's whatever
+     attribute) is very likely _not_ a real host path — it's whatever
      internal mount name Plex's own container uses (commonly
      `/music`). In that case, run `docker inspect <your-plex-
-     container-name>` and look for the `Mounts` section — the real
+container-name>` and look for the `Mounts` section — the real
      host path is the `Source` value paired with a `Destination` of
      whatever Plex reported (e.g. `/music`). Use that real `Source`
      path as `MUSIC_PATH`, and see `PATH_MAP_JSON` below to bridge
@@ -117,6 +117,7 @@ every file the build needs is actually present.
    thing: `MUSIC_PATH` was left empty. Go back to the Environment
    variables section, fill it in with the real path (e.g.
    `/volume1/music`), and redeploy.
+
 5. **Deploy the stack.** Watch the container's logs from Portainer's
    own Containers view for the first-run output — on full, you
    should see the VI model download happen automatically.
@@ -127,26 +128,27 @@ every file the build needs is actually present.
    Logs) will show `sqlite3.OperationalError: no such table: tracks`.
    That error means exactly this — run initial setup, not a sign
    anything is broken. From Portainer's Console (or `docker exec -it
-   musicmind-slim sh` from the command line), run once, in order:
+musicmind-slim sh` from the command line), run once, in order:
 
    ```bash
-   python3 musicmind_ingest.py
-   python3 plex_tag_tracks.py
-   python3 mb_enrich_artists.py
-   python3 enrich_artists.py
-   python3 enrich_compilations.py
-   python3 lastfm_sync.py
-   python3 lastfm_gaps.py
-   python3 listening_context.py
+   python3 -m musicmind.ingest
+   python3 -m musicmind.plex.tag_tracks
+   python3 -m musicmind.enrichment.mb_enrich_artists
+   python3 -m musicmind.enrichment.enrich_artists
+   python3 -m musicmind.enrichment.enrich_compilations
+   python3 -m musicmind.lastfm.sync
+   python3 -m musicmind.lastfm.gaps
+   python3 -m musicmind.analysis.listening_context
    ```
 
-   The 500 error clears as soon as `musicmind_ingest.py` finishes
+   The 500 error clears as soon as `musicmind.ingest` finishes
    (it's the one that creates the `tracks` table) — you don't need
    to wait for the rest to reload the page, though the rest fill in
    tagging, enrichment, and Last.fm data and are worth letting run
    to completion before real use. Same commands, same order, as the
    native README's Quick Start — just run inside the container
    instead of directly on the host.
+
 7. Visit `http://YOUR_HOST:PORT` and `.../admin` to run your first
    Full Sync.
 
@@ -162,6 +164,7 @@ export MUSIC_PATH=/path/to/your/real/music/folder
 docker compose -f docker-compose.slim.yml up -d --build
 docker compose -f docker-compose.slim.yml logs -f
 ```
+
 (swap in `docker-compose.full.yml` for the full variant)
 
 ## Getting your Plex token
@@ -172,17 +175,17 @@ web app, or Plex's own support article on the subject).
 
 ## Environment variables reference
 
-| Variable | Required | Notes |
-|---|---|---|
-| `PLEX_URL` | Yes | e.g. `http://10.0.0.251:32400` |
-| `PLEX_TOKEN` | Yes | Create a dedicated one with `make_plex_token.py` (run it on any machine with Python + plexapi; see README, "Getting your Plex token"). After changing it, **recreate** the container -- a plain restart keeps the old generated `config.py` |
-| `OPENAI_KEY` | Yes | `sk-proj-...` |
-| `MUSIC_PATH` | Yes | The real folder on this host where your music lives — see the mount note in the compose file for the one detail that actually matters (needs to match Plex's own reported path) |
-| `MUSICMIND_PORT` | No | Defaults to `8787`. Only set this if something else on this host already uses that port (e.g. an existing native install) |
-| `MUSIC_LIB` | No | Defaults to `Music` |
-| `LASTFM_KEY` | No | Leave unset to disable Last.fm features |
-| `LASTFM_USER` | No | |
-| `PATH_MAP_JSON` | No | Only needed if Plex's reported paths can't match this container's mount directly — see the compose file's comment. JSON object, e.g. `{"J:\\Music": "/mnt/j/Music"}` |
+| Variable         | Required | Notes                                                                                                                                                                                                                                       |
+| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PLEX_URL`       | Yes      | e.g. `http://10.0.0.251:32400`                                                                                                                                                                                                              |
+| `PLEX_TOKEN`     | Yes      | Create a dedicated one with `make_plex_token.py` (run it on any machine with Python + plexapi; see README, "Getting your Plex token"). After changing it, **recreate** the container -- a plain restart keeps the old generated `config.py` |
+| `OPENAI_KEY`     | Yes      | `sk-proj-...`                                                                                                                                                                                                                               |
+| `MUSIC_PATH`     | Yes      | The real folder on this host where your music lives — see the mount note in the compose file for the one detail that actually matters (needs to match Plex's own reported path)                                                             |
+| `MUSICMIND_PORT` | No       | Defaults to `8787`. Only set this if something else on this host already uses that port (e.g. an existing native install)                                                                                                                   |
+| `MUSIC_LIB`      | No       | Defaults to `Music`                                                                                                                                                                                                                         |
+| `LASTFM_KEY`     | No       | Leave unset to disable Last.fm features                                                                                                                                                                                                     |
+| `LASTFM_USER`    | No       |                                                                                                                                                                                                                                             |
+| `PATH_MAP_JSON`  | No       | Only needed if Plex's reported paths can't match this container's mount directly — see the compose file's comment. JSON object, e.g. `{"J:\\Music": "/mnt/j/Music"}`                                                                        |
 
 If you'd rather manage `config.py` yourself instead of environment
 variables, mount your own pre-filled file directly to `/app/config.py`
@@ -209,8 +212,8 @@ same way here, just prefixed with `docker exec` (container name is
 `musicmind-slim` or `musicmind-full`, matching whichever you deployed):
 
 ```bash
-docker exec -it musicmind-slim python3 resolve_recording_mbids.py --dry-run
-docker exec -it musicmind-slim python3 lastfm_sync.py --rematch
+docker exec -it musicmind-slim python3 -m musicmind.enrichment.resolve_recording_mbids --dry-run
+docker exec -it musicmind-slim python3 -m musicmind.lastfm.sync --rematch
 ```
 
 ## Troubleshooting
@@ -222,9 +225,11 @@ build documentation lists real system dependencies (`libfftw3`,
 The Dockerfile deliberately doesn't guess at these package names up
 front, since a wrong version number would break the entire build.
 If you hit this:
+
 ```bash
 docker exec -it musicmind-full python3 -c "import essentia"
 ```
+
 Whatever the real error names as missing, install the runtime
 package for it (not the `-dev` version) in the Dockerfile's
 `apt-get install` line and rebuild. Worth reporting back what was

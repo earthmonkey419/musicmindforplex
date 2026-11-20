@@ -1,5 +1,6 @@
 # 🎵 MusicMind for Plex
-*formerly Plex Music Brain*
+
+_formerly Plex Music Brain_
 
 ![MusicMind for Plex — Dig into your stacks.](assets/og-image.jpg)
 
@@ -45,7 +46,7 @@ Type "late night psychedelic soul" and get a playlist. Ask for an upbeat running
 - Plex Media Server
 - OpenAI API key (see [OpenAI pricing](https://openai.com/pricing) for current rates)
 - Last.fm account + free API key
-- Essentia (for Synapse audio analysis) — `pip install essentia`
+- Essentia (for Synapse audio analysis) — included in the `slim` install option below
 - PM2 (for running the web app as a service)
 
 ---
@@ -61,95 +62,129 @@ Start below is for a direct, native install instead.
 
 ## Quick Start
 
+For a local virtual environment, run `make install`, copy
+`config.example.py` to `config.py`, then run `make run`. Use
+`make install-full` for TensorFlow-backed voice/instrumental detection.
+The Makefile requires `uv` and uses `python3.12` by default; set
+`PYTHON` to another compatible interpreter if needed.
+
+The installable `musicmind_cli` package provides a `musicmind` command.
+Run it from the directory containing your `config.py`:
+
+```bash
+uv run musicmind db init   # create all database tables without contacting Plex
+uv run musicmind ingest    # import your Plex music library
+uv run musicmind serve     # start the web server on port 8787
+```
+
+The database command is safe to repeat: it adds missing tables and columns
+without importing data.
+
 1. Install dependencies
 
-    ```bash
-    sudo python3.12 -m pip install plexapi openai flask mutagen pycountry essentia --break-system-packages
-    ```
+   ```bash
+   sudo python3.12 -m pip install '.[slim]' --break-system-packages
+   ```
+
+   Run this from the cloned MusicMind directory. Use `'.[full]'` for
+   TensorFlow-backed voice/instrumental detection. Both options and the
+   shared dependencies are defined in `pyproject.toml`.
 
 2. Configure
 
-    ```bash
-    cp config.example.py config.py
-    # Edit config.py with your Plex token, OpenAI key, Last.fm key
-    ```
+   ```bash
+   cp config.example.py config.py
+   # Edit config.py with your Plex token, OpenAI key, Last.fm key
+   ```
 
 3. Initial setup (run once, in order — each is its own command)
 
-    ```bash
-    python3.12 musicmind_ingest.py
-    ```
-    ```bash
-    python3.12 plex_tag_tracks.py
-    ```
-    ```bash
-    python3.12 mb_enrich_artists.py
-    ```
-    ```bash
-    python3.12 enrich_artists.py
-    ```
-    ```bash
-    sudo python3.12 enrich_compilations.py
-    ```
-    ```bash
-    python3.12 lastfm_sync.py
-    ```
-    ```bash
-    python3.12 lastfm_gaps.py
-    ```
-    ```bash
-    python3.12 listening_context.py
-    ```
+   ```bash
+   python3.12 -m musicmind.ingest
+   ```
 
-    Synapse audio analysis (BPM / key / danceability) — start with an estimate:
+   ```bash
+   python3.12 -m musicmind.plex.tag_tracks
+   ```
 
-    ```bash
-    python3.12 synapse_analyze.py --estimate
-    ```
-    ```bash
-    python3.12 synapse_analyze.py
-    ```
-    (or run Synapse from the admin page instead of the command line)
+   ```bash
+   python3.12 -m musicmind.enrichment.mb_enrich_artists
+   ```
 
-    Optional — writes AI genres back into Plex (Plexamp genre browser).
-    Skip this block entirely if you don't want to modify your Plex metadata:
+   ```bash
+   python3.12 -m musicmind.enrichment.enrich_artists
+   ```
 
-    ```bash
-    sudo python3.12 write_genres_to_plex.py --test  # preview only, nothing written
-    ```
-    ```bash
-    sudo python3.12 write_genres_to_plex.py --run    # actually writes to Plex
-    ```
-    ```bash
-    sudo python3.12 write_genres_to_plex.py --revert  # to undo
-    ```
+   ```bash
+   sudo python3.12 -m musicmind.enrichment.enrich_compilations
+   ```
+
+   ```bash
+   python3.12 -m musicmind.lastfm.sync
+   ```
+
+   ```bash
+   python3.12 -m musicmind.lastfm.gaps
+   ```
+
+   ```bash
+   python3.12 -m musicmind.analysis.listening_context
+   ```
+
+   Synapse audio analysis (BPM / key / danceability) — start with an estimate:
+
+   ```bash
+   python3.12 -m musicmind.analysis.synapse_analyze --estimate
+   ```
+
+   ```bash
+   python3.12 -m musicmind.analysis.synapse_analyze
+   ```
+
+   (or run Synapse from the admin page instead of the command line)
+
+   Optional — writes AI genres back into Plex (Plexamp genre browser).
+   Skip this block entirely if you don't want to modify your Plex metadata:
+
+   ```bash
+   sudo python3.12 -m musicmind.plex.write_genres_to_plex --test  # preview only, nothing written
+   ```
+
+   ```bash
+   sudo python3.12 -m musicmind.plex.write_genres_to_plex --run    # actually writes to Plex
+   ```
+
+   ```bash
+   sudo python3.12 -m musicmind.plex.write_genres_to_plex --revert  # to undo
+   ```
 
 4. Start the web app
 
-    ```bash
-    sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
-    sudo pm2 save
-    ```
+   ```bash
+   sudo pm2 start python3.12 --name "musicmind" -- ~/musicmind/web/app.py
+   sudo pm2 save
+   ```
 
-    **Viewing logs**
+   **Viewing logs**
 
-    ```bash
-    pm2 logs musicmind                          # live, everything the app outputs
-    tail -f ~/.pm2/logs/musicmind-out.log        # same thing, direct file
-    tail -f ~/.pm2/logs/musicmind-error.log      # errors only
-    ```
-    ```bash
-    tail -f ~/musicmind/fullsync_live.log        # just the current Full Sync run —
-                                                  # survives a dropped connection, so
-                                                  # this keeps updating even if the
-                                                  # admin page loses its connection
-    ```
+   ```bash
+   pm2 logs musicmind                          # live, everything the app outputs
+   tail -f ~/.pm2/logs/musicmind-out.log        # same thing, direct file
+   tail -f ~/.pm2/logs/musicmind-error.log      # errors only
+   ```
+
+   ```bash
+   tail -f ~/musicmind/fullsync_live.log        # just the current Full Sync run —
+                                                 # survives a dropped connection, so
+                                                 # this keeps updating even if the
+                                                 # admin page loses its connection
+   ```
 
 5. Open in browser
 
-    ```
-    http://YOUR_NAS_IP:8787
-    ```
+   ```
+   http://YOUR_NAS_IP:8787
+   ```
 
 ---
 
@@ -161,7 +196,7 @@ install.** v3 renamed the default database filename
 and database file still use the old name until you migrate them.
 
 ```bash
-python3.12 migrate_v2_to_v3.py
+python3.12 -m musicmind.migrations.migrate_v2_to_v3
 ```
 
 This renames your real database file, updates `DB_PATH` in
@@ -223,11 +258,11 @@ Give MusicMind its own token rather than copying one out of Plex Web
 (a browser-session token stops working the moment you sign that
 browser out of Plex, taking MusicMind with it):
 
-1. From the MusicMind folder, run `python3.12 make_plex_token.py`
+1. From the MusicMind folder, run `python3.12 -m musicmind.plex.auth`
    (needs `plexapi` and `requests`, which MusicMind already installs)
 2. Open the link it prints, sign in to Plex, and approve
 3. Put the token it prints in `config.py` as `PLEX_TOKEN` -- or run
-   `python3.12 make_plex_token.py --write` to have it update `config.py`
+   `python3.12 -m musicmind.plex.auth --write` to have it update `config.py`
    for you (the old file is kept as `config.py.bak-<timestamp>`)
 4. Restart: `sudo pm2 restart musicmind` (Docker: put it in your
    `PLEX_TOKEN` variable and recreate the container)
@@ -247,29 +282,20 @@ OpenAI API costs are low. In real day-to-day use — including frequent testing 
 
 ## Project Structure
 
-musicmind/
-    config.py                    Your credentials (never commit this)
-    config.example.py            Template — copy to config.py
-    brain.py                     Core engine: prompt expansion, search, playlist creation
-    musicmind_ingest.py          Pulls library from Plex into SQLite
-    plex_tag_tracks.py           AI tags tracks via OpenAI
-    synapse_analyze.py           Synapse: BPM / key / danceability from audio (Essentia)
-    mb_enrich_artists.py         MusicBrainz artist enrichment
-    enrich_artists.py            AI fallback artist enrichment (gender, country, era)
-    enrich_compilations.py       Recovers real artists from ID3 tags
-    tag_instrumentals.py         Instrumental tagging
-    lastfm_sync.py               Syncs Last.fm scrobble history
-    lastfm_gaps.py               Gap analysis
-    listening_context.py         Context-aware playlists
-    write_genres_to_plex.py      Writes AI genres back to Plex
-    country_aliases.py           Canonical country names (pycountry-based)
-    make_plex_token.py           Creates a dedicated Plex token for MusicMind
-    resync_item.py               Re-pulls one artist/album's metadata without a full re-ingest
-    plex_playlist.py             CLI playlist generator
-    web/
-        app.py                   Flask web app (port 8787)
-        templates/               HTML pages
-        static/                  CSS
+| Path                    | Purpose                                                    |
+| ----------------------- | ---------------------------------------------------------- |
+| `config.example.py`     | Copy to root level `config.py` for credentials             |
+| `musicmind/brain.py`    | Prompt expansion, search, and playlist creation            |
+| `musicmind/ingest.py`   | Plex library ingest                                        |
+| `musicmind/analysis/`   | Fingerprints, Synapse audio analysis, context, and reports |
+| `musicmind/enrichment/` | Artist, recording, and compilation enrichment              |
+| `musicmind/lastfm/`     | Scrobble sync and gap analysis                             |
+| `musicmind/plex/`       | Plex tagging, playlists, genres, and authentication        |
+| `musicmind/db/`         | Database maintenance commands                              |
+| `musicmind/migrations/` | Database migrations                                        |
+| `web/`                  | Flask app, templates, and static assets                    |
+
+Run commands from the repository root with `python3.12 -m musicmind.<module>`.
 
 ---
 
@@ -287,7 +313,7 @@ for a date):
 - Pipeline controls — a clean Stop button for running admin jobs, and a lock so a restart can't interrupt a Full Sync mid-run
 - Date-range playlists — "what I added in the summer of 2019", combinable with mood and genre filters
 - MusicBrainz artist aliases — so Mos Def and Yasiin Bey count as the same artist in gap analysis
-- Thematic relevance — an AI pass so "breakup songs" returns songs *about* breakups, not just songs that sound sad
+- Thematic relevance — an AI pass so "breakup songs" returns songs _about_ breakups, not just songs that sound sad
 - Tracklist import — paste in an `Artist - Title` list and match it against your library
 - Ollama support for local AI tagging (no OpenAI cost), as an opt-in beta
 
